@@ -3,10 +3,21 @@ name = "bootcontrol-gui"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "bootcontrol_gui"
+path = "src/lib.rs"
+
 [dependencies]
 slint = "1.8"
-zbus = { version = "5", default-features = false, features = ["tokio"] }
-tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }
+bootcontrol-core = { workspace = true }
+zbus = { workspace = true }
+tokio = { workspace = true }
 
 [build-dependencies]
 slint-build = "1.8"
+
+[dev-dependencies]
+anyhow = { workspace = true }
+nix = { workspace = true, features = ["signal", "process"] }
+tempfile = { workspace = true }
+

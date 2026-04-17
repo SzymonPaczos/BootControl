@@ -1,10 +1,6 @@
 slint::include_modules!();
 
-mod dbus;
-mod view_model;
-
-use view_model::ViewModel;
-
+use bootcontrol_gui::{dbus, view_model::ViewModel};
 use tokio::sync::mpsc;
 
 enum UiMessage {
@@ -15,6 +11,7 @@ enum UiMessage {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
+
     let (tx, mut rx) = mpsc::channel::<UiMessage>(32);
     let tx_clone = tx.clone();
 
@@ -68,12 +65,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match view_model.load().await {
                         Ok(_) => {
                             // Map to Slint Model
-                            let mut entries: Vec<GrubEntry> = view_model.entries
+                            let mut entries: Vec<GrubEntry> = view_model
+                                .entries
                                 .iter()
                                 .map(|(k, v)| GrubEntry {
-                                    key: k.into(),
-                                    value: v.clone().into(),
-                                    original_value: v.into(),
+                                    key: k.as_str().into(),
+                                    value: v.as_str().into(),
+                                    original_value: v.as_str().into(),
                                     is_modified: false,
                                 })
                                 .collect();
@@ -85,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             });
                         }
                         Err(e) => {
-                            let err_msg = format!("Failed to read GRUB config: {}", e);
+                            let err_msg = format!("Failed to read GRUB config: {:?}", e);
                             show_toast(&ui_handle_async, err_msg, "error");
                         }
                     }
