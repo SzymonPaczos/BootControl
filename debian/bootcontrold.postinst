@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    systemctl daemon-reload || true
+    systemctl enable bootcontrold.socket || true
+    # We purposefully don't start the service directly because it's socket-activated,
+    # but starting the socket is standard.
+    systemctl start bootcontrold.socket || true
+fi
+
+#DEBHELPER#
+
+exit 0
