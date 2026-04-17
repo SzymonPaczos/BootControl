@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::time::{sleep, timeout};
 use zbus::Connection;
@@ -142,7 +142,7 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
 /// Returns an error if the kill signal cannot be sent or the process does not
 /// exit within a reasonable time after SIGTERM.
 pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
-    use nix::sys::signal::{kill, Signal};
+    use nix::sys::signal::{Signal, kill};
     use nix::unistd::Pid;
 
     let pid = handle.process.id().context("daemon process has no PID")?;
@@ -189,9 +189,14 @@ fn write_temp_grub(content: &str) -> anyhow::Result<NamedTempFile> {
 ///
 /// Returns an error if `cargo build` exits with a non-zero status.
 fn build_daemon_binary() -> anyhow::Result<PathBuf> {
-    // Resolve the workspace root: the manifest dir of this test binary is the
-    // workspace root because the [[test]] section is declared there.
-    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Resolve the workspace root: the manifest dir of this test crate is crates/gui,
+    // so we go up two levels.
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
 
     let status = Command::new(env!("CARGO"))
         .args([

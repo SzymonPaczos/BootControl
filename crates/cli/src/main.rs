@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             let (config, etag) = proxy.read_grub_config().await?;
-            
+
             println!("ETag: {}", etag);
             println!("\nConfiguration:");
             for (key, value) in config {
@@ -90,14 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             let etag = proxy.get_etag().await?;
-            
+
             println!("{}", etag);
         }
         Commands::Set { key, value, etag } => {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             proxy.set_grub_value(&key, &value, &etag).await?;
-            
+
             println!("Successfully set {}={}", key, value);
         }
     }

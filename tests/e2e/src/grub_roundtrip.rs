@@ -42,8 +42,7 @@ trait BootControlManager {
 async fn grub_roundtrip_write_verify_etag_changes() -> anyhow::Result<()> {
     let handle = spawn_daemon(MINIMAL_GRUB).await?;
 
-    let proxy = BootControlManagerProxy::new(&handle.conn)
-        .await?;
+    let proxy = BootControlManagerProxy::new(&handle.conn).await?;
 
     // ── Step 2: ReadGrubConfig — initial state ────────────────────────────────
     let (config_before, etag_1) = proxy.read_grub_config().await?;

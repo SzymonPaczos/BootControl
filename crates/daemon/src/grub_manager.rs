@@ -195,8 +195,8 @@ pub fn set_grub_value(
     // TOCTOU safety: the lock is held from this point until the end of the
     // function (when `locked` is dropped). No other BootControl instance or
     // package manager can modify the file while we hold it.
-    let mut locked = Flock::lock(lock_file, FlockArg::LockExclusiveNonblock).map_err(
-        |(_file, errno)| {
+    let mut locked =
+        Flock::lock(lock_file, FlockArg::LockExclusiveNonblock).map_err(|(_file, errno)| {
             if errno == nix::errno::Errno::EWOULDBLOCK {
                 warn!(?path, "flock EWOULDBLOCK — package manager holds the lock");
                 BootControlError::ConcurrentModification {
@@ -208,8 +208,7 @@ pub fn set_grub_value(
                     reason: format!("flock error: {errno}"),
                 }
             }
-        },
-    )?;
+        })?;
 
     // ── Step 3: Read content THROUGH the locked file handle ─────────────────
     //
@@ -251,7 +250,11 @@ pub fn set_grub_value(
     // first occurrence while a later duplicate exists would leave a stale value
     // as the effective one.
     let new_line = build_assignment_line(key, value);
-    match config.lines.iter().rposition(|l| is_assignment_for_key(l, key)) {
+    match config
+        .lines
+        .iter()
+        .rposition(|l| is_assignment_for_key(l, key))
+    {
         Some(idx) => config.lines[idx] = new_line,
         None => config.lines.push(new_line),
     }
@@ -333,14 +336,12 @@ fn write_file_atomically(
         }
     })?;
 
-    tmp_file
-        .write_all(new_content.as_bytes())
-        .map_err(|e| {
-            error!(?tmp_path, io_error = %e, "failed to write temp file");
-            BootControlError::EspScanFailed {
-                reason: format!("temp file write failed: {e}"),
-            }
-        })?;
+    tmp_file.write_all(new_content.as_bytes()).map_err(|e| {
+        error!(?tmp_path, io_error = %e, "failed to write temp file");
+        BootControlError::EspScanFailed {
+            reason: format!("temp file write failed: {e}"),
+        }
+    })?;
 
     // fsync ensures the data reaches persistent storage before the rename.
     tmp_file.sync_all().map_err(|e| {
@@ -560,7 +561,10 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
 
         // Próba zapisu ze starym ETag musi się nie udać.
         let result = set_grub_value(f.path(), "GRUB_DEFAULT", "1", &etag_before, &failsafe_path);
-        assert!(matches!(result, Err(BootControlError::StateMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::StateMismatch { .. })
+        ));
     }
 
     // ── Helper unit tests ─────────────────────────────────────────────────────

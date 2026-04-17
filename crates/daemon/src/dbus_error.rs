@@ -102,9 +102,7 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
         BootControlError::SecurityPolicyViolation { .. } => {
             DaemonError::SecurityPolicyViolation(msg)
         }
-        BootControlError::ConcurrentModification { .. } => {
-            DaemonError::ConcurrentModification(msg)
-        }
+        BootControlError::ConcurrentModification { .. } => DaemonError::ConcurrentModification(msg),
         // #[non_exhaustive] — przyszłe warianty mapują na Failed
         _ => DaemonError::Failed(msg),
     }
@@ -248,15 +246,11 @@ mod tests {
             ),
             (
                 "SecurityPolicyViolation",
-                to_daemon_error(BootControlError::SecurityPolicyViolation {
-                    reason: "i".into(),
-                }),
+                to_daemon_error(BootControlError::SecurityPolicyViolation { reason: "i".into() }),
             ),
             (
                 "ConcurrentModification",
-                to_daemon_error(BootControlError::ConcurrentModification {
-                    path: "/p".into(),
-                }),
+                to_daemon_error(BootControlError::ConcurrentModification { path: "/p".into() }),
             ),
         ];
 

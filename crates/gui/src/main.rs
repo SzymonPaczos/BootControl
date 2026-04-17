@@ -3,8 +3,8 @@ slint::include_modules!();
 mod dbus;
 
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 enum UiMessage {
     FetchEntries,
@@ -18,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, mut rx) = mpsc::channel::<UiMessage>(32);
     let tx_clone = tx.clone();
-    
+
     // Store ETag globally to be used for transactions.
     let etag = Arc::new(Mutex::new(String::new()));
 
@@ -52,15 +52,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let conn = match zbus::Connection::system().await {
             Ok(c) => c,
             Err(e) => {
-                show_toast(&ui_handle_async, format!("Failed to connect to system bus: {}", e), "error");
+                show_toast(
+                    &ui_handle_async,
+                    format!("Failed to connect to system bus: {}", e),
+                    "error",
+                );
                 return;
             }
         };
-        
+
         let manager = match dbus::ManagerProxy::new(&conn).await {
             Ok(m) => m,
             Err(e) => {
-                show_toast(&ui_handle_async, format!("Failed to create D-Bus proxy: {}", e), "error");
+                show_toast(
+                    &ui_handle_async,
+                    format!("Failed to create D-Bus proxy: {}", e),
+                    "error",
+                );
                 return;
             }
         };
@@ -74,16 +82,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match manager.read_grub_config().await {
                         Ok((config, new_etag)) => {
                             *etag.lock().await = new_etag;
-                            
+
                             // Map to Slint Model
-                            let mut entries: Vec<GrubEntry> = config.into_iter().map(|(k, v)| GrubEntry {
-                                key: k.into(),
-                                value: v.clone().into(),
-                                original_value: v.into(),
-                                is_modified: false,
-                            }).collect();
+                            let mut entries: Vec<GrubEntry> = config
+                                .into_iter()
+                                .map(|(k, v)| GrubEntry {
+                                    key: k.into(),
+                                    value: v.clone().into(),
+                                    original_value: v.into(),
+                                    is_modified: false,
+                                })
+                                .collect();
                             entries.sort_by(|a, b| a.key.cmp(&b.key));
-                            
+
                             let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
                                 let model = std::rc::Rc::new(slint::VecModel::from(entries));
                                 ui.set_entries(model.into());
@@ -101,7 +112,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Ok(_) => {
                             // Re-fetch everything to ensure it's in sync and update ETag
                             let _ = tx_clone.send(UiMessage::FetchEntries).await;
-                            show_toast(&ui_handle_async, format!("Saved '{}' successfully", key), "success");
+                            show_toast(
+                                &ui_handle_async,
+                                format!("Saved '{}' successfully", key),
+                                "success",
+                            );
                         }
                         Err(e) => {
                             let err_string = e.to_string();
@@ -111,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 format!("Failed to save: {}", err_string)
                             };
                             show_toast(&ui_handle_async, dmsg, "error");
-                            
+
                             // Re-fetch to revert the UI state to what is physically on disk
                             let _ = tx_clone.send(UiMessage::FetchEntries).await;
                         }

@@ -19,10 +19,15 @@
 //! 3. ETag + flock + atomic write ([`crate::grub_manager::set_grub_value`])
 //!    — weryfikacja ETag odbywa się **pod lockiem** (TOCTOU-safe)
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
-use crate::{dbus_error::{to_daemon_error, DaemonError}, grub_manager, polkit::authorize_with_polkit, sanitize};
+use crate::{
+    dbus_error::{to_daemon_error, DaemonError},
+    grub_manager,
+    polkit::authorize_with_polkit,
+    sanitize,
+};
 use tracing::{info, warn};
 use zbus::interface;
 
@@ -217,8 +222,14 @@ impl GrubManager {
         })?;
 
         // ── Steps 3–7: flock → ETag verify → atomic write → failsafe refresh ──
-        grub_manager::set_grub_value(&self.grub_path, &key, &value, &etag, &self.failsafe_cfg_path)
-            .map_err(to_daemon_error)
+        grub_manager::set_grub_value(
+            &self.grub_path,
+            &key,
+            &value,
+            &etag,
+            &self.failsafe_cfg_path,
+        )
+        .map_err(to_daemon_error)
     }
 
     /// Return the SHA-256 ETag of the current on-disk GRUB configuration.

@@ -25,4 +25,3 @@ pub mod grub_manager;
 pub mod interface;
 pub mod polkit;
 pub mod sanitize;
-
