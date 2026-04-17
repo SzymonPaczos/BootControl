@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>BootControl</vendor>
+  <vendor_url>https://github.com/szymonpaczos/bootcontrol</vendor_url>
+
+  <action id="org.bootcontrol.manage">
+    <description>Manage GRUB bootloader configuration</description>
+    <description xml:lang="pl">Zarządzanie konfiguracją bootloadera GRUB</description>
+    <message>Authentication is required to modify GRUB configuration.</message>
+    <message xml:lang="pl">Wymagane jest uwierzytelnienie, aby zmodyfikować konfigurację GRUB.</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+</policyconfig>
