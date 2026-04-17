@@ -11,6 +11,7 @@
 //! |--------|----------------|
 //! | [`interface`] | D-Bus `org.bootcontrol.Manager` interface implementation. |
 //! | [`grub_manager`] | Filesystem read/write with atomic write and flock. |
+//! | [`failsafe`] | Golden-parachute GRUB entry generator written after every successful write. |
 //! | [`polkit`] | Polkit authorization (mock or real, feature-gated). |
 //! | [`sanitize`] | Payload blacklist enforcement. |
 //! | [`dbus_error`] | `BootControlError` → `zbus::fdo::Error` mapping. |
@@ -19,7 +20,9 @@
 #![deny(missing_docs)]
 
 pub mod dbus_error;
+pub mod failsafe;
 pub mod grub_manager;
 pub mod interface;
 pub mod polkit;
 pub mod sanitize;
+

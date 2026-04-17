@@ -1,6 +1,13 @@
 [package]
 name = "bootcontrol-cli"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition = "2021"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
+bootcontrol-core = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

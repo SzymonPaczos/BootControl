@@ -51,7 +51,9 @@ use bootcontrol_core::{
     hash::{compute_etag_str, verify_etag},
 };
 use nix::fcntl::{Flock, FlockArg};
-use tracing::{error, warn};
+use tracing::{error, info, warn};
+
+use crate::failsafe;
 
 /// Read `/etc/default/grub` (or any path), parse it, and compute its ETag.
 ///
@@ -128,18 +130,27 @@ pub fn fetch_etag(path: &Path) -> Result<String, BootControlError> {
 /// flock is acquired **before** reading the file content, eliminating the
 /// race window between ETag check and write.
 ///
+/// After the atomic write succeeds, calls
+/// [`failsafe::refresh_failsafe_entry`] to regenerate the golden-parachute
+/// GRUB snippet so that a safe boot option is always available regardless of
+/// the new `GRUB_CMDLINE_LINUX_DEFAULT` value.
+///
 /// # Arguments
 ///
-/// * `path`  — Path to `/etc/default/grub` (injectable for tests).
-/// * `key`   — The GRUB variable name to set (e.g. `"GRUB_TIMEOUT"`).
-/// * `value` — The new value. Pass without surrounding quotes; this function
-///   will quote multi-word values automatically where needed.
-/// * `etag`  — The ETag the caller received from the last `ReadGrubConfig` or
-///   `GetEtag` call. Must match the current file's ETag.
+/// * `path`         — Path to `/etc/default/grub` (injectable for tests).
+/// * `key`          — The GRUB variable name to set (e.g. `"GRUB_TIMEOUT"`).
+/// * `value`        — The new value. Pass without surrounding quotes; this
+///   function will quote multi-word values automatically where needed.
+/// * `etag`         — The ETag the caller received from the last
+///   `ReadGrubConfig` or `GetEtag` call. Must match the current file's ETag.
+/// * `failsafe_cfg` — Path where the failsafe GRUB snippet is written.
+///   Production code passes `/etc/bootcontrol/failsafe.cfg`; tests pass a
+///   path inside a `tempfile::TempDir`.
 ///
 /// # Errors
 ///
-/// - [`BootControlError::EspScanFailed`] — file read/write I/O error.
+/// - [`BootControlError::EspScanFailed`] — file read/write I/O error, or
+///   failsafe entry write failure.
 /// - [`BootControlError::ConcurrentModification`] — another process holds an
 ///   exclusive lock (`flock EWOULDBLOCK`). This is checked **before** reading.
 /// - [`BootControlError::StateMismatch`] — the provided ETag does not match
@@ -154,14 +165,16 @@ pub fn fetch_etag(path: &Path) -> Result<String, BootControlError> {
 /// use std::path::Path;
 ///
 /// let path = Path::new("/etc/default/grub");
+/// let failsafe = Path::new("/etc/bootcontrol/failsafe.cfg");
 /// let (_, etag) = read_grub_config(path).unwrap();
-/// set_grub_value(path, "GRUB_TIMEOUT", "10", &etag).unwrap();
+/// set_grub_value(path, "GRUB_TIMEOUT", "10", &etag, failsafe).unwrap();
 /// ```
 pub fn set_grub_value(
     path: &Path,
     key: &str,
     value: &str,
     etag: &str,
+    failsafe_cfg: &Path,
 ) -> Result<(), BootControlError> {
     // ── Step 1: Open file handle ────────────────────────────────────────────
     // We open the file BEFORE acquiring the lock so we have a fd to flock on.
@@ -247,6 +260,15 @@ pub fn set_grub_value(
     // ── Step 7: Atomic write via temp file + rename ───────────────────────
     let tmp_path = build_tmp_path(path);
     write_file_atomically(&tmp_path, path, &config.lines)?;
+
+    // ── Step 8: Refresh golden-parachute failsafe entry ──────────────────
+    //
+    // Done AFTER the successful atomic write so that a failed failsafe write
+    // does not roll back the user's intended change. The failsafe entry is
+    // best-effort from the user's perspective, but we propagate the error so
+    // callers can log / surface it if the output directory is inaccessible.
+    info!(key, "GRUB config updated — refreshing failsafe entry");
+    failsafe::refresh_failsafe_entry(failsafe_cfg)?;
 
     Ok(())
     // `locked` drops here → flock released automatically via Drop.
@@ -407,8 +429,10 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     #[test]
     fn set_grub_value_rejects_stale_etag() {
         let f = write_temp(SIMPLE_GRUB);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let stale_etag = compute_etag_str("completely different content\n");
-        let result = set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &stale_etag);
+        let result = set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &stale_etag, &failsafe_path);
         assert!(
             matches!(result, Err(BootControlError::StateMismatch { .. })),
             "expected StateMismatch, got {result:?}"
@@ -418,8 +442,11 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     #[test]
     fn set_grub_value_updates_existing_key() {
         let f = write_temp(SIMPLE_GRUB);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &etag).expect("write should succeed");
+        set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &etag, &failsafe_path)
+            .expect("write should succeed");
 
         let (map, _) = read_grub_config(f.path()).expect("re-read");
         assert_eq!(map.get("GRUB_TIMEOUT").map(String::as_str), Some("10"));
@@ -428,8 +455,11 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     #[test]
     fn set_grub_value_appends_new_key() {
         let f = write_temp(SIMPLE_GRUB);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_GFXMODE", "auto", &etag).expect("write should succeed");
+        set_grub_value(f.path(), "GRUB_GFXMODE", "auto", &etag, &failsafe_path)
+            .expect("write should succeed");
 
         let (map, _) = read_grub_config(f.path()).expect("re-read");
         assert_eq!(map.get("GRUB_GFXMODE").map(String::as_str), Some("auto"));
@@ -446,9 +476,11 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         // Parser zwróci 99 jako aktywną wartość ("last wins").
         let content = "GRUB_TIMEOUT=5\nGRUB_DEFAULT=0\nGRUB_TIMEOUT=99\n";
         let f = write_temp(content);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let etag = compute_etag_str(content);
 
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &etag).expect("write");
+        set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &etag, &failsafe_path).expect("write");
 
         let written = fs::read_to_string(f.path()).expect("re-read raw");
 
@@ -478,8 +510,10 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     #[test]
     fn set_grub_value_preserves_comments_exactly() {
         let f = write_temp(SIMPLE_GRUB);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "99", &etag).expect("write");
+        set_grub_value(f.path(), "GRUB_TIMEOUT", "99", &etag, &failsafe_path).expect("write");
 
         let written = fs::read_to_string(f.path()).expect("re-read");
         assert!(
@@ -491,8 +525,10 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     #[test]
     fn set_grub_value_preserves_other_assignments_verbatim() {
         let f = write_temp(SIMPLE_GRUB);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "99", &etag).expect("write");
+        set_grub_value(f.path(), "GRUB_TIMEOUT", "99", &etag, &failsafe_path).expect("write");
 
         let (map, _) = read_grub_config(f.path()).expect("re-read");
         assert_eq!(map.get("GRUB_DEFAULT").map(String::as_str), Some("0"));
@@ -511,6 +547,8 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     #[test]
     fn etag_changes_after_external_modification() {
         let f = write_temp(SIMPLE_GRUB);
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
         let etag_before = compute_etag_str(SIMPLE_GRUB);
 
         // Symulacja zewnętrznej modyfikacji (np. przez apt).
@@ -521,7 +559,7 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         assert_ne!(etag_before, etag_after, "ETag musi się zmienić po mutacji");
 
         // Próba zapisu ze starym ETag musi się nie udać.
-        let result = set_grub_value(f.path(), "GRUB_DEFAULT", "1", &etag_before);
+        let result = set_grub_value(f.path(), "GRUB_DEFAULT", "1", &etag_before, &failsafe_path);
         assert!(matches!(result, Err(BootControlError::StateMismatch { .. })));
     }
 

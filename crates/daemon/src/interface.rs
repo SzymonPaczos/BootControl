@@ -32,17 +32,29 @@ use zbus::interface;
 /// injectable via [`GrubManager::new`] so that integration tests can point
 /// the daemon at a `tempfile` without needing real root access.
 ///
-/// The field is **private** — external code accesses the path only through
-/// [`GrubManager::grub_path`] to prevent accidental mutation after construction.
+/// `failsafe_cfg_path` is the path to the golden-parachute GRUB snippet
+/// written after every successful `SetGrubValue`. It is injectable for tests
+/// via [`GrubManager::with_failsafe_path`].
+///
+/// Both fields are **private** — external code accesses them only through the
+/// corresponding accessor methods to prevent accidental mutation after
+/// construction.
 pub struct GrubManager {
     /// Path to the GRUB default configuration file.
     ///
     /// Private — use [`GrubManager::grub_path`] for read access.
     grub_path: PathBuf,
+    /// Path to the failsafe GRUB snippet.
+    ///
+    /// Private — set during construction; not exposed directly.
+    failsafe_cfg_path: PathBuf,
 }
 
 impl GrubManager {
     /// Create a new [`GrubManager`] pointing at the given `grub_path`.
+    ///
+    /// The failsafe snippet path defaults to `/etc/bootcontrol/failsafe.cfg`.
+    /// Use [`GrubManager::with_failsafe_path`] to override it for tests.
     ///
     /// # Arguments
     ///
@@ -59,7 +71,39 @@ impl GrubManager {
     /// assert_eq!(manager.grub_path(), std::path::Path::new("/etc/default/grub"));
     /// ```
     pub fn new(grub_path: PathBuf) -> Self {
-        Self { grub_path }
+        Self {
+            grub_path,
+            failsafe_cfg_path: PathBuf::from("/etc/bootcontrol/failsafe.cfg"),
+        }
+    }
+
+    /// Create a [`GrubManager`] with a custom failsafe snippet path.
+    ///
+    /// Intended for integration tests that need to avoid writing to system
+    /// paths (`/etc/bootcontrol`) during test runs.
+    ///
+    /// # Arguments
+    ///
+    /// * `grub_path`         — Path to the GRUB configuration file.
+    /// * `failsafe_cfg_path` — Path where the failsafe GRUB snippet is written.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::PathBuf;
+    /// use bootcontrold::interface::GrubManager;
+    ///
+    /// let m = GrubManager::with_failsafe_path(
+    ///     PathBuf::from("/etc/default/grub"),
+    ///     PathBuf::from("/tmp/test-failsafe.cfg"),
+    /// );
+    /// assert_eq!(m.grub_path(), std::path::Path::new("/etc/default/grub"));
+    /// ```
+    pub fn with_failsafe_path(grub_path: PathBuf, failsafe_cfg_path: PathBuf) -> Self {
+        Self {
+            grub_path,
+            failsafe_cfg_path,
+        }
     }
 
     /// Return the path to the GRUB configuration file managed by this instance.
@@ -172,8 +216,8 @@ impl GrubManager {
             to_daemon_error(e)
         })?;
 
-        // ── Steps 3–7: flock → ETag verify → atomic write (TOCTOU-safe) ─────
-        grub_manager::set_grub_value(&self.grub_path, &key, &value, &etag)
+        // ── Steps 3–7: flock → ETag verify → atomic write → failsafe refresh ──
+        grub_manager::set_grub_value(&self.grub_path, &key, &value, &etag, &self.failsafe_cfg_path)
             .map_err(to_daemon_error)
     }
 
