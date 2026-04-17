@@ -137,8 +137,10 @@ version = "0.1.0"
 dependencies = [
  "bootcontrol-core",
  "clap",
+ "tokio",
  "tracing",
  "tracing-subscriber",
+ "zbus",
 ]
 
 [[package]]
