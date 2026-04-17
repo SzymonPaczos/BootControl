@@ -1,6 +1,30 @@
 [package]
+name        = "bootcontrol-tui"
+version.workspace   = true
+edition     = "2024"
+authors.workspace   = true
+license.workspace   = true
+repository.workspace = true
+
+[[bin]]
 name = "bootcontrol-tui"
-version = "0.1.0"
-edition = "2024"
+path = "src/main.rs"
 
 [dependencies]
+# ── TUI rendering ────────────────────────────────────────────────────────────
+ratatui   = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# ── D-Bus client ─────────────────────────────────────────────────────────────
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+
+# ── Async runtime ─────────────────────────────────────────────────────────────
+tokio        = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-stream = "0.1"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# ratatui ships its own TestBackend — no extra crates needed
