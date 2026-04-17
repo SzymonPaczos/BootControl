@@ -1,0 +1,18 @@
+[Unit]
+Description=BootControl D-Bus Daemon
+Documentation=https://github.com/szymonpaczos/bootcontrol
+
+[Service]
+Type=dbus
+BusName=org.bootcontrol.Manager
+ExecStart=/usr/bin/bootcontrold
+User=root
+Group=root
+
+# Security constraints
+ProtectSystem=full
+ProtectHome=yes
+RestrictNamespaces=yes
+
+[Install]
+WantedBy=multi-user.target
