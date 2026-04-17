@@ -1,0 +1,16 @@
+pkgbase = bootcontrol
+	pkgdesc = A modern, memory-safe bootloader manager for Linux - built in Rust.
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/szymonpaczos/bootcontrol
+	arch = x86_64
+	license = GPL3
+	makedepends = rust
+	makedepends = cargo
+	makedepends = dbus
+	depends = dbus
+	depends = polkit
+	source = git+https://github.com/szymonpaczos/bootcontrol.git#tag=v0.1.0
+	md5sums = SKIP
+
+pkgname = bootcontrol
