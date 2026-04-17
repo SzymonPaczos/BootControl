@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+# Disable standard cargo logic assuming it's unconfigured in debhelper
+# We will just run cargo manually
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release
+
+override_dh_auto_test:
+	# Disabled to prevent integration tests from failing without session bus
+
+override_dh_auto_install:
+	# We rely on dh_install with .install files; skip implicit make install
+
+override_dh_auto_clean:
+	cargo clean || true
+	dh_auto_clean

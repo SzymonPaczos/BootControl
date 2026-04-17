@@ -1,0 +1,27 @@
+Source: bootcontrol
+Section: admin
+Priority: optional
+Maintainer: BootControl Contributors <maintainers@bootcontrol.local>
+Build-Depends: debhelper-compat (= 13), cargo, dpkg-dev (>= 1.17.14)
+Standards-Version: 4.6.2
+Homepage: https://github.com/SzymonPaczos/BootControl
+
+Package: bootcontrol
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Modern, memory-safe bootloader manager for Linux (User space)
+ BootControl replaces tools like Grub Customizer with a secure,
+ declarative, and auditable alternative.
+ .
+ This package provides the CLI and TUI frontends for managing boot targets,
+ running as an unprivileged user and talking to the D-Bus daemon.
+
+Package: bootcontrold
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libdbus-1-3, policykit-1
+Description: Modern, memory-safe bootloader manager for Linux (Daemon)
+ BootControl replaces tools like Grub Customizer with a secure,
+ declarative, and auditable alternative.
+ .
+ This package provides the privileged daemon that performs actual operations
+ on the bootloader configuration, protected via Polkit authorization and ETags.
