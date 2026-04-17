@@ -669,6 +669,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bootcontrol-e2e"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "nix 0.29.0",
+ "tempfile",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "bootcontrol-gui"
 version = "0.1.0"
 dependencies = [

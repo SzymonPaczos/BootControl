@@ -60,12 +60,11 @@ pub fn authorize_with_polkit(_caller_uid: u32) -> Result<(), BootControlError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     /// In polkit-mock mode, authorize_with_polkit must always return Ok regardless of uid.
     #[cfg(feature = "polkit-mock")]
     #[test]
     fn mock_always_grants_authorization() {
+        use super::*;
         assert!(authorize_with_polkit(0).is_ok());
         assert!(authorize_with_polkit(1000).is_ok());
         assert!(authorize_with_polkit(u32::MAX).is_ok());
