@@ -1,13 +1,14 @@
 [Unit]
 Description=BootControl D-Bus Daemon
 Documentation=https://github.com/szymonpaczos/bootcontrol
+Requires=bootcontrold.socket
 
 [Service]
-Type=dbus
-BusName=org.bootcontrol.Manager
+Type=notify
 ExecStart=/usr/bin/bootcontrold
 User=root
 Group=root
+IdleTimeoutSec=60
 
 # Security constraints
 ProtectSystem=full

@@ -1,0 +1,8 @@
+[Unit]
+Description=BootControl D-Bus Daemon Socket
+
+[Socket]
+ListenStream=/run/bootcontrold.sock
+
+[Install]
+WantedBy=sockets.target
