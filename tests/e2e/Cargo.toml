@@ -1,0 +1,25 @@
+[package]
+name    = "bootcontrol-e2e"
+version.workspace   = true
+edition             = "2021"
+authors.workspace   = true
+license.workspace   = true
+repository.workspace = true
+# This crate has no library or binary target — it is a pure test harness.
+publish  = false
+autobins = false
+autolib  = false
+
+[dev-dependencies]
+zbus     = { workspace = true }
+tokio    = { workspace = true }
+tempfile = { workspace = true }
+nix      = { workspace = true }
+anyhow   = { workspace = true }
+
+# ── Integration test binary ──────────────────────────────────────────────────
+# Run with: cargo test -p bootcontrol-e2e --test e2e -- --ignored
+[[test]]
+name    = "e2e"
+path    = "src/main.rs"
+harness = true

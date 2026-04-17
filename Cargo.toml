@@ -4,7 +4,8 @@ members = [
     "crates/daemon",
     "crates/cli",
     "crates/tui",
-    "crates/gui"
+    "crates/gui",
+    "tests/e2e"
 ]
 resolver = "2"
 
@@ -17,5 +18,10 @@ repository = "https://github.com/szymonpaczos/bootcontrol"
 
 [workspace.dependencies]
 bootcontrol-core = { path = "crates/core" }
-sha2 = "0.10"
-hex  = "0.4"
+sha2     = "0.10"
+hex      = "0.4"
+zbus     = { version = "5", default-features = false, features = ["tokio"] }
+tokio    = { version = "1", features = ["full"] }
+tempfile = "3"
+nix      = { version = "0.29", features = ["fs"] }
+anyhow   = "1"

@@ -16,6 +16,8 @@
 //! |----------|--------|--------|
 //! | `BOOTCONTROL_BUS` | `session` | Bind to the session bus (for CI / tests). |
 //! | `BOOTCONTROL_BUS` | anything else / unset | Bind to the system bus (production). |
+//! | `BOOTCONTROL_GRUB_PATH` | any path | Override the GRUB config path (E2E tests). |
+//! | `BOOTCONTROL_FAILSAFE_PATH` | any path | Override the failsafe snippet path (E2E tests). |
 //! | `RUST_LOG` | `trace`, `debug`, `info`, `warn`, `error` | Log verbosity filter. |
 
 use std::path::PathBuf;
@@ -26,6 +28,9 @@ use zbus::connection;
 
 /// Default path to the GRUB default configuration file.
 const DEFAULT_GRUB_PATH: &str = "/etc/default/grub";
+
+/// Default path to the golden-parachute failsafe GRUB snippet.
+const DEFAULT_FAILSAFE_PATH: &str = "/etc/bootcontrol/failsafe.cfg";
 
 /// Select the D-Bus connection builder based on the `BOOTCONTROL_BUS`
 /// environment variable.
@@ -44,6 +49,30 @@ fn dbus_connection_builder() -> connection::Builder<'static> {
     }
 }
 
+/// Resolve the GRUB config path from `BOOTCONTROL_GRUB_PATH` env var,
+/// falling back to [`DEFAULT_GRUB_PATH`].
+///
+/// This override is used exclusively by the E2E test helper to point the
+/// daemon at a `tempfile` without needing real root access.
+fn resolve_grub_path() -> PathBuf {
+    match std::env::var("BOOTCONTROL_GRUB_PATH") {
+        Ok(p) if !p.is_empty() => PathBuf::from(p),
+        _ => PathBuf::from(DEFAULT_GRUB_PATH),
+    }
+}
+
+/// Resolve the failsafe snippet path from `BOOTCONTROL_FAILSAFE_PATH` env var,
+/// falling back to [`DEFAULT_FAILSAFE_PATH`].
+///
+/// This override is used exclusively by the E2E test helper to redirect the
+/// golden-parachute write to a temp directory rather than `/etc/bootcontrol/`.
+fn resolve_failsafe_path() -> PathBuf {
+    match std::env::var("BOOTCONTROL_FAILSAFE_PATH") {
+        Ok(p) if !p.is_empty() => PathBuf::from(p),
+        _ => PathBuf::from(DEFAULT_FAILSAFE_PATH),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 1. Initialise structured logging ────────────────────────────────────
@@ -51,15 +80,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    let grub_path = resolve_grub_path();
+    let failsafe_path = resolve_failsafe_path();
+
     info!(
         version = env!("CARGO_PKG_VERSION"),
-        grub_path = DEFAULT_GRUB_PATH,
+        grub_path = %grub_path.display(),
+        failsafe_path = %failsafe_path.display(),
         "bootcontrold starting"
     );
 
     // ── 2. Build D-Bus connection ────────────────────────────────────────────
-    let grub_path = PathBuf::from(DEFAULT_GRUB_PATH);
-    let manager = GrubManager::new(grub_path);
+    let manager = GrubManager::with_failsafe_path(grub_path, failsafe_path);
 
     let _conn = dbus_connection_builder()
         // ── 3. Register the interface object ────────────────────────────────
