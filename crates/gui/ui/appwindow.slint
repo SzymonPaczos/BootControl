@@ -81,7 +81,7 @@ component StyledInput inherits Rectangle {
 component ToastNotification inherits Rectangle {
     in property <string> message;
     in property <string> toast_type: "error"; // "error", "success", "info"
-    in property <bool> visible: false;
+    in property <bool> is_visible: false;
     callback dismiss;
 
     width: 500px;
@@ -92,7 +92,7 @@ component ToastNotification inherits Rectangle {
     drop-shadow-color: #00000060;
     drop-shadow-blur: 16px;
     drop-shadow-offset-y: 8px;
-    opacity: root.visible ? 1.0 : 0.0;
+    opacity: root.is_visible ? 1.0 : 0.0;
     
     animate opacity { duration: 200ms; easing: ease-out; }
     animate y { duration: 200ms; easing: ease-out; }
@@ -242,7 +242,7 @@ export component AppWindow inherits Window {
         y: root.show_toast ? parent.height - self.height - 32px : parent.height + 20px; // animate from bottom
         message: root.toast_message;
         toast_type: root.toast_type;
-        visible: root.show_toast;
+        is_visible: root.show_toast;
         dismiss => { root.dismiss_toast(); }
     }
 }

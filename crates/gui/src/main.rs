@@ -1,9 +1,6 @@
 slint::include_modules!();
 
-mod dbus;
-mod view_model;
-
-use view_model::ViewModel;
+use bootcontrol_gui::{dbus, view_model::ViewModel};
 use tokio::sync::mpsc;
 
 enum UiMessage {
@@ -72,9 +69,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .entries
                                 .iter()
                                 .map(|(k, v)| GrubEntry {
-                                    key: k.into(),
-                                    value: v.clone().into(),
-                                    original_value: v.into(),
+                                    key: k.as_str().into(),
+                                    value: v.as_str().into(),
+                                    original_value: v.as_str().into(),
                                     is_modified: false,
                                 })
                                 .collect();
@@ -86,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             });
                         }
                         Err(e) => {
-                            let err_msg = format!("Failed to read GRUB config: {}", e);
+                            let err_msg = format!("Failed to read GRUB config: {:?}", e);
                             show_toast(&ui_handle_async, err_msg, "error");
                         }
                     }
@@ -103,8 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
                         }
                         Err(e) => {
-                            let err_string = e.to_string();
-                            drop(e); // Ensure non-Send Error is dropped before the .await
+                            let err_string = format!("{:?}", e);
                             let dmsg = if err_string.contains("AccessDenied") {
                                 "Access Denied. You need to authenticate via Polkit.".to_string()
                             } else {
