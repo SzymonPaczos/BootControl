@@ -1,10 +1,11 @@
 slint::include_modules!();
 
 mod dbus;
+mod view_model;
 
-use std::sync::Arc;
+use view_model::ViewModel;
+
 use tokio::sync::mpsc;
-use tokio::sync::Mutex;
 
 enum UiMessage {
     FetchEntries,
@@ -14,13 +15,8 @@ enum UiMessage {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
-    let ui_handle = ui.as_weak();
-
     let (tx, mut rx) = mpsc::channel::<UiMessage>(32);
     let tx_clone = tx.clone();
-    
-    // Store ETag globally to be used for transactions.
-    let etag = Arc::new(Mutex::new(String::new()));
 
     // Bind Slint callbacks
     ui.on_fetch_entries({
@@ -49,21 +45,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn async backend task
     let ui_handle_async = ui.as_weak();
     tokio::spawn(async move {
-        let conn = match zbus::Connection::system().await {
+        let conn = match dbus::connect_bus().await {
             Ok(c) => c,
             Err(e) => {
-                show_toast(&ui_handle_async, format!("Failed to connect to system bus: {}", e), "error");
+                show_toast(
+                    &ui_handle_async,
+                    format!("Failed to connect to D-Bus: {}", e),
+                    "error",
+                );
                 return;
             }
         };
-        
-        let manager = match dbus::ManagerProxy::new(&conn).await {
-            Ok(m) => m,
-            Err(e) => {
-                show_toast(&ui_handle_async, format!("Failed to create D-Bus proxy: {}", e), "error");
-                return;
-            }
-        };
+
+        let mut view_model = ViewModel::new(conn);
 
         // Initial fetch
         let _ = tx_clone.send(UiMessage::FetchEntries).await;
@@ -71,19 +65,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(msg) = rx.recv().await {
             match msg {
                 UiMessage::FetchEntries => {
-                    match manager.read_grub_config().await {
-                        Ok((config, new_etag)) => {
-                            *etag.lock().await = new_etag;
-                            
+                    match view_model.load().await {
+                        Ok(_) => {
                             // Map to Slint Model
-                            let mut entries: Vec<GrubEntry> = config.into_iter().map(|(k, v)| GrubEntry {
-                                key: k.into(),
-                                value: v.clone().into(),
-                                original_value: v.into(),
-                                is_modified: false,
-                            }).collect();
+                            let mut entries: Vec<GrubEntry> = view_model.entries
+                                .iter()
+                                .map(|(k, v)| GrubEntry {
+                                    key: k.into(),
+                                    value: v.clone().into(),
+                                    original_value: v.into(),
+                                    is_modified: false,
+                                })
+                                .collect();
                             entries.sort_by(|a, b| a.key.cmp(&b.key));
-                            
+
                             let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
                                 let model = std::rc::Rc::new(slint::VecModel::from(entries));
                                 ui.set_entries(model.into());
@@ -96,22 +91,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 UiMessage::SaveEntry(key, value) => {
-                    let current_etag = etag.lock().await.clone();
-                    match manager.set_grub_value(&key, &value, &current_etag).await {
+                    match view_model.commit_edit(&key, &value).await {
                         Ok(_) => {
                             // Re-fetch everything to ensure it's in sync and update ETag
                             let _ = tx_clone.send(UiMessage::FetchEntries).await;
-                            show_toast(&ui_handle_async, format!("Saved '{}' successfully", key), "success");
+                            show_toast(
+                                &ui_handle_async,
+                                format!("Saved '{}' successfully", key),
+                                "success",
+                            );
                         }
                         Err(e) => {
                             let err_string = e.to_string();
+                            drop(e); // Ensure non-Send Error is dropped before the .await
                             let dmsg = if err_string.contains("AccessDenied") {
                                 "Access Denied. You need to authenticate via Polkit.".to_string()
                             } else {
                                 format!("Failed to save: {}", err_string)
                             };
                             show_toast(&ui_handle_async, dmsg, "error");
-                            
+
                             // Re-fetch to revert the UI state to what is physically on disk
                             let _ = tx_clone.send(UiMessage::FetchEntries).await;
                         }
