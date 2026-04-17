@@ -111,6 +111,29 @@ cd bootcontrol
 cargo build --workspace
 ```
 
+### Manual Installation (Local Testing / Contributors)
+
+If you are building from source and not using a package manager, you must manually install the configuration files required by D-Bus, Polkit, and systemd. Assuming you have already built the project (`cargo build --release`):
+
+```bash
+# 1. Install the daemon binary
+sudo cp target/release/bootcontrold /usr/bin/
+
+# 2. Install the Polkit action policy
+sudo cp packaging/polkit/org.bootcontrol.policy /usr/share/polkit-1/actions/
+
+# 3. Install the D-Bus system bus policy
+sudo cp packaging/dbus/org.bootcontrol.Manager.conf /usr/share/dbus-1/system.d/
+
+# 4. Install systemd unit and socket files
+sudo cp packaging/systemd/bootcontrold.service /etc/systemd/system/
+sudo cp packaging/systemd/bootcontrold.socket /etc/systemd/system/
+
+# 5. Reload systemd and start the socket
+sudo systemctl daemon-reload
+sudo systemctl enable --now bootcontrold.socket
+```
+
 ### Run tests
 
 ```bash
