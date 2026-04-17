@@ -1,0 +1,248 @@
+import { ScrollView } from "std-widgets.slint";
+
+export struct GrubEntry {
+    key: string,
+    value: string,
+    original_value: string,
+    is_modified: bool,
+}
+
+component GhostButton inherits Rectangle {
+    in-out property <string> text;
+    callback clicked <=> touch.clicked;
+
+    height: 36px;
+    border-radius: 8px;
+    background: touch.pressed ? #313244 : (touch.has-hover ? #45475a : transparent);
+    
+    animate background { duration: 150ms; }
+
+    Text {
+        text: root.text;
+        color: #cdd6f4;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {}
+}
+
+component PrimaryButton inherits Rectangle {
+    in-out property <string> text;
+    callback clicked <=> touch.clicked;
+    in property <bool> enabled: true;
+
+    height: 36px;
+    border-radius: 8px;
+    background: root.enabled ? (touch.pressed ? @linear-gradient(90deg, #cba6f7 0%, #b4befe 100%) : @linear-gradient(90deg, #b4befe 0%, #cba6f7 100%)) : #45475a;
+    
+    animate background { duration: 150ms; }
+
+    Text {
+        text: root.text;
+        color: root.enabled ? #11111b : #a6adc8;
+        font-size: 14px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+    }
+}
+
+component StyledInput inherits Rectangle {
+    in-out property <string> text <=> input.text;
+    callback edited(string);
+    
+    height: 36px;
+    border-radius: 6px;
+    background: #11111b; // deeper inset
+    border-width: 1px;
+    border-color: input.has-focus ? #b4befe : #313244;
+    
+    animate border-color { duration: 150ms; }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        input := TextInput {
+            horizontal-alignment: left;
+            vertical-alignment: center;
+            color: #cdd6f4;
+            font-size: 14px;
+            single-line: true;
+            edited => { root.edited(self.text); }
+        }
+    }
+}
+
+component ToastNotification inherits Rectangle {
+    in property <string> message;
+    in property <string> toast_type: "error"; // "error", "success", "info"
+    in property <bool> visible: false;
+    callback dismiss;
+
+    width: 500px;
+    height: 60px;
+    border-radius: 12px;
+    // error: red-ish, success: green-ish, info: blue-ish
+    background: root.toast_type == "error" ? #f38ba8 : (root.toast_type == "success" ? #a6e3a1 : #89b4fa);
+    drop-shadow-color: #00000060;
+    drop-shadow-blur: 16px;
+    drop-shadow-offset-y: 8px;
+    opacity: root.visible ? 1.0 : 0.0;
+    
+    animate opacity { duration: 200ms; easing: ease-out; }
+    animate y { duration: 200ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding: 16px;
+        spacing: 12px;
+        Text {
+            text: root.message;
+            color: #11111b;
+            font-size: 14px;
+            font-weight: 700;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        GhostButton {
+            text: "✕";
+            width: 32px;
+            clicked => { root.dismiss(); }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "BootControl";
+    width: 900px;
+    height: 700px;
+    background: #1e1e2e;
+    default-font-family: "Inter, Roboto, sans-serif";
+    
+    in-out property <[GrubEntry]> entries: [];
+    in property <string> toast_message: "";
+    in property <string> toast_type: "info";
+    in property <bool> show_toast: false;
+    
+    callback fetch_entries();
+    callback save_entry(string, string);
+    callback dismiss_toast();
+
+    // Background decoration (subtle glow top left)
+    Rectangle {
+        width: 400px;
+        height: 400px;
+        x: -100px;
+        y: -100px;
+        background: @radial-gradient(circle, #89b4fa20 0%, transparent 70%);
+    }
+
+    VerticalLayout {
+        padding: 32px;
+        spacing: 24px;
+
+        // Header
+        HorizontalLayout {
+            alignment: space-between;
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: "BootControl";
+                    font-size: 32px;
+                    font-weight: 800;
+                    color: #cdd6f4;
+                }
+                Text {
+                    text: "Manage GRUB configurations securely";
+                    font-size: 14px;
+                    color: #a6adc8;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                GhostButton {
+                    text: "↻ Refresh";
+                    width: 120px;
+                    clicked => { root.fetch_entries(); }
+                }
+            }
+        }
+
+        // Main List Box
+        Rectangle {
+            background: #181825; // slightly darker panel
+            border-radius: 16px;
+            border-width: 1px;
+            border-color: #313244;
+            
+            ScrollView {
+                width: 100%;
+                height: 100%;
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 12px;
+                    
+                    for entry[i] in root.entries : Rectangle {
+                        height: 64px;
+                        background: #1e1e2e;
+                        border-radius: 12px;
+                        border-width: 1px;
+                        border-color: entry.is_modified ? #f9e2af : #313244; // Yellow border when modified
+                        
+                        animate border-color { duration: 200ms; }
+
+                        HorizontalLayout {
+                            padding-left: 20px;
+                            padding-right: 20px;
+                            spacing: 16px;
+                            alignment: center;
+                            
+                            VerticalLayout {
+                                width: 220px;
+                                alignment: center;
+                                Text {
+                                    text: entry.key;
+                                    color: #89b4fa;
+                                    font-size: 15px;
+                                    font-weight: 700;
+                                }
+                            }
+                            
+                            StyledInput {
+                                horizontal-stretch: 1;
+                                text: entry.value;
+                                edited(tx) => { 
+                                    root.entries[i].value = tx;
+                                    root.entries[i].is_modified = (tx != root.entries[i].original_value);
+                                }
+                            }
+                            
+                            PrimaryButton {
+                                text: "Save";
+                                width: 90px;
+                                enabled: entry.is_modified;
+                                clicked => {
+                                    root.save_entry(entry.key, entry.value);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal Toast Anchor
+    ToastNotification {
+        x: (parent.width - self.width) / 2;
+        y: root.show_toast ? parent.height - self.height - 32px : parent.height + 20px; // animate from bottom
+        message: root.toast_message;
+        toast_type: root.toast_type;
+        visible: root.show_toast;
+        dismiss => { root.dismiss_toast(); }
+    }
+}

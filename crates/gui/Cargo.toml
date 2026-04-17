@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+slint = "1.8"
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }
+
+[build-dependencies]
+slint-build = "1.8"
