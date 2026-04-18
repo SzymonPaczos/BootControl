@@ -5,6 +5,9 @@ edition = "2021"
 description = "Pure parsing, hashing, and ETag logic for BootControl — no I/O, no std side effects"
 license = "GPL-3.0"
 
+[features]
+experimental_paranoia = []
+
 [dependencies]
 sha2 = "0.10"
 hex  = "0.4"

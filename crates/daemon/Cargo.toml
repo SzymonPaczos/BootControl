@@ -8,6 +8,7 @@ repository.workspace = true
 
 [features]
 polkit-mock = []
+experimental_paranoia = ["bootcontrol-core/experimental_paranoia"]
 
 [dependencies]
 bootcontrol-core = { workspace = true }
