@@ -79,7 +79,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             let (config, etag) = proxy.read_grub_config().await?;
-            
+            let active_backend = proxy.get_active_backend().await.unwrap_or_else(|_| "unknown".to_string());
+
+            println!("Active Backend: {}", active_backend);
             println!("ETag: {}", etag);
             println!("\nConfiguration:");
             for (key, value) in config {

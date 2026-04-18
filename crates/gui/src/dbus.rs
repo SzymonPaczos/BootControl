@@ -16,6 +16,9 @@ pub trait Manager {
 
     /// Get the current ETag.
     async fn get_etag(&self) -> zbus::Result<String>;
+
+    /// Get the name of the active bootloader backend.
+    async fn get_active_backend(&self) -> zbus::Result<String>;
 }
 
 /// Connect to the appropriate D-Bus bus based on the `BOOTCONTROL_BUS` environment variable.

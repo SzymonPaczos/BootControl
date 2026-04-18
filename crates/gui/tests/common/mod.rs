@@ -34,9 +34,6 @@ use zbus::Connection;
 /// Well-known D-Bus name that `bootcontrold` registers.
 pub const BUS_NAME: &str = "org.bootcontrol.Manager";
 
-/// D-Bus object path of the `org.bootcontrol.Manager` interface.
-pub const OBJECT_PATH: &str = "/org/bootcontrol/Manager";
-
 /// Maximum time to wait for the daemon to appear on the bus.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -67,7 +64,7 @@ pub struct DaemonHandle {
     /// Temp file used as `/etc/default/grub`. Kept alive while daemon is live.
     pub grub_file: NamedTempFile,
     /// Temp directory for the failsafe GRUB snippet.
-    pub failsafe_dir: TempDir,
+    pub _failsafe_dir: TempDir,
 }
 
 impl Drop for DaemonHandle {
@@ -131,7 +128,7 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
         process,
         conn,
         grub_file,
-        failsafe_dir,
+        _failsafe_dir: failsafe_dir,
     })
 }
 
@@ -156,6 +153,7 @@ pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
     if !waited.success() && waited.code() != Some(0) {
         // SIGTERM causes exit code 143 on Linux — that's expected and OK.
         // Only surface truly unexpected exit codes.
+        #[allow(clippy::collapsible_if)]
         if let Some(code) = waited.code() {
             if code != 143 {
                 bail!("bootcontrold exited with unexpected code {code}");
