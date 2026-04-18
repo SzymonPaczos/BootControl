@@ -125,11 +125,14 @@ sudo cp packaging/polkit/org.bootcontrol.policy /usr/share/polkit-1/actions/
 # 3. Install the D-Bus system bus policy
 sudo cp packaging/dbus/org.bootcontrol.Manager.conf /usr/share/dbus-1/system.d/
 
-# 4. Install systemd unit and socket files
+# 4. Install the D-Bus activation service file
+sudo cp packaging/dbus/org.bootcontrol.Manager.service /usr/share/dbus-1/system-services/
+
+# 5. Install systemd unit and socket files
 sudo cp packaging/systemd/bootcontrold.service /etc/systemd/system/
 sudo cp packaging/systemd/bootcontrold.socket /etc/systemd/system/
 
-# 5. Reload systemd and start the socket
+# 6. Reload systemd and start the socket
 sudo systemctl daemon-reload
 sudo systemctl enable --now bootcontrold.socket
 ```

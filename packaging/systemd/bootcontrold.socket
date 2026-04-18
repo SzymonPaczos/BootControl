@@ -1,8 +1,11 @@
 [Unit]
-Description=BootControl D-Bus Daemon Socket
+Description=BootControl daemon activation socket
+Documentation=https://github.com/YOUR_USERNAME/bootcontrol
 
 [Socket]
+# D-Bus system bus activation — daemon starts when org.bootcontrol.Manager is requested
 ListenStream=/run/bootcontrold.sock
+SocketMode=0600
 
 [Install]
 WantedBy=sockets.target
