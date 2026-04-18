@@ -66,6 +66,9 @@ pub enum DaemonError {
     /// Inny proces trzyma wyłączny lock na pliku (`flock EWOULDBLOCK`).
     ConcurrentModification(String),
 
+    /// Wymagane narzędzie zewnętrzne nie znaleziono na `$PATH`.
+    ToolNotFound(String),
+
     /// Nieznany błąd — catch-all dla wariantów z `#[non_exhaustive]`.
     Failed(String),
 }
@@ -103,6 +106,7 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
             DaemonError::SecurityPolicyViolation(msg)
         }
         BootControlError::ConcurrentModification { .. } => DaemonError::ConcurrentModification(msg),
+        BootControlError::ToolNotFound { .. } => DaemonError::ToolNotFound(msg),
         // #[non_exhaustive] — przyszłe warianty mapują na Failed
         _ => DaemonError::Failed(msg),
     }
