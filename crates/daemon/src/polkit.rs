@@ -121,15 +121,9 @@ mod tests {
     #[cfg(feature = "polkit-mock")]
     #[tokio::test]
     async fn mock_always_grants_authorization() {
-        assert!(authorize_with_polkit(0)
-            .await
-            .is_ok_and(|_| true));
-        assert!(authorize_with_polkit(1000)
-            .await
-            .is_ok_and(|_| true));
-        assert!(authorize_with_polkit(u32::MAX)
-            .await
-            .is_ok_and(|_| true));
+        assert!(authorize_with_polkit(0).await.is_ok_and(|_| true));
+        assert!(authorize_with_polkit(1000).await.is_ok_and(|_| true));
+        assert!(authorize_with_polkit(u32::MAX).await.is_ok_and(|_| true));
     }
 
     /// The mock must grant authorization for the root UID (0), even though
