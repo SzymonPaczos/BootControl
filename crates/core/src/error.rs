@@ -124,6 +124,22 @@ pub enum BootControlError {
         /// Name of the binary that could not be found (e.g. `"mkinitcpio"`).
         tool: String,
     },
+
+    /// MOK key or certificate file not found at the expected path.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.MokKeyNotFound`
+    MokKeyNotFound {
+        /// Path that was expected to contain the key/cert.
+        path: String,
+    },
+
+    /// A binary signing or enrollment operation failed.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.SigningFailed`
+    SigningFailed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
 }
 
 impl fmt::Display for BootControlError {
@@ -165,6 +181,14 @@ impl fmt::Display for BootControlError {
                 "Required tool '{tool}' was not found on $PATH. \
                  Install the package that provides '{tool}' and retry."
             ),
+            BootControlError::MokKeyNotFound { path } => write!(
+                f,
+                "MOK key or certificate not found at '{path}'. \
+                 Ensure the MOK key and certificate are present before signing."
+            ),
+            BootControlError::SigningFailed { reason } => {
+                write!(f, "Signing or enrollment operation failed: {reason}")
+            }
         }
     }
 }
