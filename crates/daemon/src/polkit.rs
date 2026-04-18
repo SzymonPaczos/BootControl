@@ -113,15 +113,23 @@ pub async fn authorize_with_polkit(caller_uid: u32) -> Result<(), BootControlErr
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "polkit-mock")]
+    use super::authorize_with_polkit;
 
     /// In polkit-mock mode, authorize_with_polkit must always return Ok
     /// regardless of uid — including the boundary values 0, 1000, and u32::MAX.
     #[cfg(feature = "polkit-mock")]
     #[tokio::test]
     async fn mock_always_grants_authorization() {
-        assert!(authorize_with_polkit(0).await.is_ok());
-        assert!(authorize_with_polkit(1000).await.is_ok());
-        assert!(authorize_with_polkit(u32::MAX).await.is_ok());
+        assert!(authorize_with_polkit(0)
+            .await
+            .is_ok_and(|_| true));
+        assert!(authorize_with_polkit(1000)
+            .await
+            .is_ok_and(|_| true));
+        assert!(authorize_with_polkit(u32::MAX)
+            .await
+            .is_ok_and(|_| true));
     }
 
     /// The mock must grant authorization for the root UID (0), even though
