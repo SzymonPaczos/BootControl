@@ -82,6 +82,12 @@ pub enum DaemonError {
     /// Operacja podpisywania lub rejestracji certyfikatu zakończyła się błędem.
     SigningFailed(String),
 
+    /// Operacja generowania kluczy nie powiodła się.
+    KeyGenerationFailed(String),
+
+    /// Zapis zmiennej EFI NVRAM nie powiódł się.
+    NvramWriteFailed(String),
+
     /// Nieznany błąd — catch-all dla wariantów z `#[non_exhaustive]`.
     Failed(String),
 }
@@ -123,6 +129,8 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
         BootControlError::NvramBackupFailed { .. } => DaemonError::NvramBackupFailed(msg),
         BootControlError::MokKeyNotFound { .. } => DaemonError::MokKeyNotFound(msg),
         BootControlError::SigningFailed { .. } => DaemonError::SigningFailed(msg),
+        BootControlError::KeyGenerationFailed { .. } => DaemonError::KeyGenerationFailed(msg),
+        BootControlError::NvramWriteFailed { .. } => DaemonError::NvramWriteFailed(msg),
         // #[non_exhaustive] — przyszłe warianty mapują na Failed
         _ => DaemonError::Failed(msg),
     }
@@ -241,6 +249,28 @@ mod tests {
     }
 
     #[test]
+    fn key_generation_failed_maps_to_correct_variant() {
+        let e = BootControlError::KeyGenerationFailed {
+            reason: "openssl failed".into(),
+        };
+        assert!(matches!(
+            to_daemon_error(e),
+            DaemonError::KeyGenerationFailed(_)
+        ));
+    }
+
+    #[test]
+    fn nvram_write_failed_maps_to_correct_variant() {
+        let e = BootControlError::NvramWriteFailed {
+            reason: "efivar error".into(),
+        };
+        assert!(matches!(
+            to_daemon_error(e),
+            DaemonError::NvramWriteFailed(_)
+        ));
+    }
+
+    #[test]
     fn daemon_error_message_contains_original_description() {
         let e = BootControlError::StateMismatch {
             expected: "aabb".into(),
@@ -322,6 +352,18 @@ mod tests {
                 "SigningFailed",
                 to_daemon_error(BootControlError::SigningFailed {
                     reason: "sbsign exited 1".into(),
+                }),
+            ),
+            (
+                "KeyGenerationFailed",
+                to_daemon_error(BootControlError::KeyGenerationFailed {
+                    reason: "openssl failed".into(),
+                }),
+            ),
+            (
+                "NvramWriteFailed",
+                to_daemon_error(BootControlError::NvramWriteFailed {
+                    reason: "efivar error".into(),
                 }),
             ),
         ];

@@ -2,7 +2,7 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::BootControlError;
 
@@ -72,4 +72,21 @@ pub trait MokSigner {
         cert: &Path,
         output: &Path,
     ) -> Result<(), BootControlError>;
+}
+
+/// Paths to a generated custom Secure Boot key set (PK, KEK, db).
+#[derive(Debug, Clone)]
+pub struct ParanoiaKeySet {
+    /// Path to the generated PK (Platform Key) certificate.
+    pub pk_cert: PathBuf,
+    /// Path to the generated KEK (Key Exchange Key) certificate.
+    pub kek_cert: PathBuf,
+    /// Path to the generated db (Signature Database) certificate.
+    pub db_cert: PathBuf,
+    /// Path to the generated PK private key.
+    pub pk_key: PathBuf,
+    /// Path to the generated KEK private key.
+    pub kek_key: PathBuf,
+    /// Path to the generated db private key.
+    pub db_key: PathBuf,
 }
