@@ -124,6 +124,18 @@ pub enum BootControlError {
         /// Name of the binary that could not be found (e.g. `"mkinitcpio"`).
         tool: String,
     },
+
+    /// Backing up EFI NVRAM variables failed.
+    ///
+    /// Returned when reading variables from the sysfs EFI variables interface
+    /// or writing backup files to the target directory fails, or when no
+    /// matching Secure Boot variables (`db-*`, `KEK-*`, `PK-*`) are found.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.NvramBackupFailed`
+    NvramBackupFailed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
 }
 
 impl fmt::Display for BootControlError {
@@ -165,6 +177,9 @@ impl fmt::Display for BootControlError {
                 "Required tool '{tool}' was not found on $PATH. \
                  Install the package that provides '{tool}' and retry."
             ),
+            BootControlError::NvramBackupFailed { reason } => {
+                write!(f, "EFI NVRAM backup failed: {reason}")
+            }
         }
     }
 }

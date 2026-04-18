@@ -23,6 +23,7 @@
 //! | `EspScanFailed`         | `org.bootcontrol.Error.EspScanFailed`               |
 //! | `SecurityPolicyViolation` | `org.bootcontrol.Error.SecurityPolicyViolation`   |
 //! | `ConcurrentModification`| `org.bootcontrol.Error.ConcurrentModification`     |
+//! | `NvramBackupFailed`     | `org.bootcontrol.Error.NvramBackupFailed`          |
 
 use bootcontrol_core::error::BootControlError;
 use zbus::DBusError;
@@ -69,6 +70,9 @@ pub enum DaemonError {
     /// Wymagane narzędzie zewnętrzne nie znaleziono na `$PATH`.
     ToolNotFound(String),
 
+    /// Backup zmiennych EFI NVRAM nie powiódł się.
+    NvramBackupFailed(String),
+
     /// Nieznany błąd — catch-all dla wariantów z `#[non_exhaustive]`.
     Failed(String),
 }
@@ -107,6 +111,7 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
         }
         BootControlError::ConcurrentModification { .. } => DaemonError::ConcurrentModification(msg),
         BootControlError::ToolNotFound { .. } => DaemonError::ToolNotFound(msg),
+        BootControlError::NvramBackupFailed { .. } => DaemonError::NvramBackupFailed(msg),
         // #[non_exhaustive] — przyszłe warianty mapują na Failed
         _ => DaemonError::Failed(msg),
     }
@@ -191,6 +196,17 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn nvram_backup_failed_maps_to_correct_variant() {
+        let e = BootControlError::NvramBackupFailed {
+            reason: "no variables".into(),
+        };
+        assert!(matches!(
+            to_daemon_error(e),
+            DaemonError::NvramBackupFailed(_)
+        ));
+    }
+
     /// Wiadomość w wariancie zawiera oryginalne dane z BootControlError.
     #[test]
     fn daemon_error_message_contains_original_description() {
@@ -255,6 +271,12 @@ mod tests {
             (
                 "ConcurrentModification",
                 to_daemon_error(BootControlError::ConcurrentModification { path: "/p".into() }),
+            ),
+            (
+                "NvramBackupFailed",
+                to_daemon_error(BootControlError::NvramBackupFailed {
+                    reason: "test".into(),
+                }),
             ),
         ];
 

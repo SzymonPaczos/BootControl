@@ -38,6 +38,7 @@ use crate::{
     grub_manager, grub_rebuild,
     polkit::authorize_with_polkit,
     sanitize,
+    secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
 };
 use tracing::{info, warn};
 use zbus::interface;
@@ -448,5 +449,103 @@ impl GrubManager {
 
         // ── Step 2: Run grub-mkconfig ───────────────────────────────────────
         grub_rebuild::run_grub_mkconfig(&self.grub_cfg_path).map_err(to_daemon_error)
+    }
+
+    /// Back up Secure Boot EFI NVRAM variables to a target directory.
+    ///
+    /// Reads all variables matching `db-*`, `KEK-*`, and `PK-*` from the
+    /// Linux sysfs EFI variables interface and writes their raw bytes to the
+    /// target directory. This operation must be performed **before** any key
+    /// enrollment to preserve the original Microsoft certificates locally.
+    ///
+    /// Returns a JSON array of strings listing the absolute paths of all
+    /// backed-up files.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// BackupNvram(s) -> s
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// * `target_dir` — Target directory for backup files. Pass an empty
+    ///   string to use the default (`/var/lib/bootcontrol/certs`).
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied` — the caller is not authorized.
+    /// - `org.bootcontrol.Error.NvramBackupFailed` — the sysfs efivars
+    ///   directory is not mounted, no Secure Boot variables were found, or the
+    ///   target directory could not be written.
+    async fn backup_nvram(
+        &self,
+        target_dir: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<String, DaemonError> {
+        info!(target_dir = %target_dir, "D-Bus: BackupNvram");
+
+        // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!("D-Bus message has no sender field (BackupNvram)");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                warn!(error = %e, "Failed to create DBus proxy (BackupNvram)");
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+            })?;
+
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|e| {
+                    warn!(error = %e, "GetConnectionUnixUser failed (BackupNvram)");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+                })?
+        };
+
+        info!(caller_uid = %caller_uid, "Resolved caller UID for BackupNvram");
+
+        // ── Step 2: Polkit authorization ────────────────────────────────────
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, "Polkit denied for BackupNvram");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 3: Resolve target directory ────────────────────────────────
+        let resolved_target = if target_dir.is_empty() {
+            std::path::PathBuf::from(DEFAULT_BACKUP_DIR)
+        } else {
+            std::path::PathBuf::from(&target_dir)
+        };
+
+        // ── Step 4: Perform the backup ──────────────────────────────────────
+        let backup =
+            backup_efi_variables(std::path::Path::new(DEFAULT_EFIVARS_DIR), &resolved_target)
+                .map_err(|e| {
+                    warn!(error = %e, "NVRAM backup failed");
+                    to_daemon_error(e)
+                })?;
+
+        info!(file_count = backup.files.len(), "NVRAM backup completed");
+
+        // ── Step 5: Serialize file list as a JSON array ─────────────────────
+        let json = format!(
+            "[{}]",
+            backup
+                .files
+                .iter()
+                .map(|p| format!("\"{}\"", p.display()))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
+        Ok(json)
     }
 }
