@@ -1,6 +1,6 @@
 slint::include_modules!();
 
-use bootcontrol_gui::{dbus, view_model::ViewModel};
+use bootcontrol_gui::view_model::ViewModel;
 use tokio::sync::mpsc;
 
 enum UiMessage {
@@ -39,26 +39,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Initialize Backend (D-Bus on Linux, Mock on others or if DEMO=1)
+    let backend: std::sync::Arc<dyn bootcontrol_gui::backend::BootBackend> = {
+        let is_demo = std::env::var("BOOTCONTROL_DEMO").is_ok();
+        let target_os = std::env::consts::OS;
+        
+        if is_demo || target_os != "linux" {
+            println!("Starting in DEMO mode (MockBackend)");
+            std::sync::Arc::new(bootcontrol_gui::backend::MockBackend)
+        } else {
+            match bootcontrol_gui::dbus::connect_bus().await {
+                Ok(conn) => std::sync::Arc::new(bootcontrol_gui::backend::DbusBackend::new(conn)),
+                Err(e) => {
+                    eprintln!("Failed to connect to D-Bus: {}. Falling back to DEMO mode.", e);
+                    std::sync::Arc::new(bootcontrol_gui::backend::MockBackend)
+                }
+            }
+        }
+    };
+
+    let mut view_model = ViewModel::new(backend);
+
+    // Initial fetch
+    let _ = tx_clone.send(UiMessage::FetchEntries).await;
+
     // Spawn async backend task
     let ui_handle_async = ui.as_weak();
     tokio::spawn(async move {
-        let conn = match dbus::connect_bus().await {
-            Ok(c) => c,
-            Err(e) => {
-                show_toast(
-                    &ui_handle_async,
-                    format!("Failed to connect to D-Bus: {}", e),
-                    "error",
-                );
-                return;
-            }
-        };
-
-        let mut view_model = ViewModel::new(conn);
-
-        // Initial fetch
-        let _ = tx_clone.send(UiMessage::FetchEntries).await;
-
         while let Some(msg) = rx.recv().await {
             match msg {
                 UiMessage::FetchEntries => {

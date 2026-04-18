@@ -7,6 +7,41 @@ export struct GrubEntry {
     is_modified: bool,
 }
 
+component SidebarItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> active: false;
+    callback clicked <=> touch.clicked;
+
+    height: 48px;
+    border-radius: 8px;
+    background: root.active ? #313244 : (touch.has-hover ? #1e1e2e : transparent);
+    
+    animate background { duration: 150ms; }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        spacing: 12px;
+        alignment: start;
+        
+        // Icon placeholder
+        Rectangle {
+            width: 4px;
+            height: 20px;
+            background: root.active ? #89b4fa : transparent;
+            border-radius: 2px;
+        }
+
+        Text {
+            text: root.text;
+            color: root.active ? #89b4fa : #a6adc8;
+            font-size: 14px;
+            font-weight: root.active ? 700 : 500;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {}
+}
+
 component GhostButton inherits Rectangle {
     in-out property <string> text;
     callback clicked <=> touch.clicked;
@@ -58,7 +93,7 @@ component StyledInput inherits Rectangle {
     
     height: 36px;
     border-radius: 6px;
-    background: #11111b; // deeper inset
+    background: #11111b;
     border-width: 1px;
     border-color: input.has-focus ? #b4befe : #313244;
     
@@ -80,37 +115,32 @@ component StyledInput inherits Rectangle {
 
 component ToastNotification inherits Rectangle {
     in property <string> message;
-    in property <string> toast_type: "error"; // "error", "success", "info"
+    in property <string> toast_type: "error";
     in property <bool> is_visible: false;
     callback dismiss;
 
-    width: 500px;
-    height: 60px;
-    border-radius: 12px;
-    // error: red-ish, success: green-ish, info: blue-ish
+    width: 400px;
+    height: 50px;
+    border-radius: 10px;
     background: root.toast_type == "error" ? #f38ba8 : (root.toast_type == "success" ? #a6e3a1 : #89b4fa);
-    drop-shadow-color: #00000060;
-    drop-shadow-blur: 16px;
-    drop-shadow-offset-y: 8px;
     opacity: root.is_visible ? 1.0 : 0.0;
     
-    animate opacity { duration: 200ms; easing: ease-out; }
-    animate y { duration: 200ms; easing: ease-out; }
+    animate opacity { duration: 200ms; }
 
     HorizontalLayout {
-        padding: 16px;
+        padding: 12px;
         spacing: 12px;
         Text {
             text: root.message;
             color: #11111b;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
         GhostButton {
             text: "✕";
-            width: 32px;
+            width: 24px;
             clicked => { root.dismiss(); }
         }
     }
@@ -118,9 +148,9 @@ component ToastNotification inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "BootControl";
-    width: 900px;
-    height: 700px;
-    background: #1e1e2e;
+    width: 1000px;
+    height: 750px;
+    background: #181825;
     default-font-family: "Inter, Roboto, sans-serif";
     
     in-out property <[GrubEntry]> entries: [];
@@ -128,119 +158,199 @@ export component AppWindow inherits Window {
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
     in property <string> active_backend: "grub";
+    in-out property <int> active_tab: 0;
     
     callback fetch_entries();
     callback save_entry(string, string);
     callback dismiss_toast();
 
-    // Background decoration (subtle glow top left)
-    Rectangle {
-        width: 400px;
-        height: 400px;
-        x: -100px;
-        y: -100px;
-        background: @radial-gradient(circle, #89b4fa20 0%, transparent 70%);
-    }
-
-    VerticalLayout {
-        padding: 32px;
-        spacing: 24px;
-
-        // Header
-        HorizontalLayout {
-            alignment: space-between;
+    HorizontalLayout {
+        // Sidebar
+        Rectangle {
+            width: 220px;
+            background: #11111b;
+            
             VerticalLayout {
-                spacing: 4px;
+                padding: 24px;
+                spacing: 8px;
+                alignment: start;
+                
                 Text {
                     text: "BootControl";
-                    font-size: 32px;
+                    font-size: 20px;
                     font-weight: 800;
                     color: #cdd6f4;
+                    padding-bottom: 24px;
                 }
+                
+                SidebarItem { 
+                    text: "Boot Settings"; 
+                    active: root.active_tab == 0;
+                    clicked => { root.active_tab = 0; }
+                }
+                SidebarItem { 
+                    text: "Secure Boot"; 
+                    active: root.active_tab == 1;
+                    clicked => { root.active_tab = 1; }
+                }
+                SidebarItem { 
+                    text: "Security Lab"; 
+                    active: root.active_tab == 2;
+                    clicked => { root.active_tab = 2; }
+                }
+                
+                Rectangle { vertical-stretch: 1; } // spacer
+                
                 Text {
-                    text: "Backend: " + root.active_backend + " · Manage boot configurations securely";
-                    font-size: 14px;
-                    color: #a6adc8;
-                }
-            }
-            VerticalLayout {
-                alignment: center;
-                GhostButton {
-                    text: "↻ Refresh";
-                    width: 120px;
-                    clicked => { root.fetch_entries(); }
+                    text: "v1.0.0-alpha";
+                    color: #45475a;
+                    font-size: 11px;
                 }
             }
         }
-
-        // Main List Box
+        
+        // Main Content
         Rectangle {
-            background: #181825; // slightly darker panel
-            border-radius: 16px;
-            border-width: 1px;
-            border-color: #313244;
+            background: #1e1e2e;
             
-            ScrollView {
-                width: 100%;
-                height: 100%;
-                VerticalLayout {
-                    padding: 24px;
-                    spacing: 12px;
-                    
-                    for entry[i] in root.entries : Rectangle {
-                        height: 64px;
-                        background: #1e1e2e;
-                        border-radius: 12px;
-                        border-width: 1px;
-                        border-color: entry.is_modified ? #f9e2af : #313244; // Yellow border when modified
-                        
-                        animate border-color { duration: 200ms; }
+            VerticalLayout {
+                padding: 32px;
+                spacing: 24px;
+                
+                // Content Header
+                HorizontalLayout {
+                    alignment: space-between;
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: root.active_tab == 0 ? "Configuration" : (root.active_tab == 1 ? "Secure Boot" : "Security Lab");
+                            font-size: 28px;
+                            font-weight: 700;
+                            color: #cdd6f4;
+                        }
+                        Text {
+                            text: "Backend: " + root.active_backend;
+                            font-size: 13px;
+                            color: #6c7086;
+                        }
+                    }
+                    if root.active_tab == 0 : GhostButton {
+                        text: "↻ Refresh";
+                        width: 100px;
+                        clicked => { root.fetch_entries(); }
+                    }
+                }
+                
+                // Tab Views
+                if root.active_tab == 0 : Rectangle {
+                    background: #181825;
+                    border-radius: 12px;
+                    ScrollView {
+                        padding: 16px;
+                        VerticalLayout {
+                            spacing: 8px;
+                            for entry[i] in root.entries : Rectangle {
+                                height: 60px;
+                                background: #1e1e2e;
+                                border-radius: 8px;
+                                border-width: 1px;
+                                border-color: entry.is_modified ? #f9e2af : #313244;
+                                
+                                animate border-color { duration: 150ms; }
 
-                        HorizontalLayout {
-                            padding-left: 20px;
-                            padding-right: 20px;
-                            spacing: 16px;
-                            alignment: center;
-                            
-                            VerticalLayout {
-                                width: 220px;
-                                alignment: center;
-                                Text {
-                                    text: entry.key;
-                                    color: #89b4fa;
-                                    font-size: 15px;
-                                    font-weight: 700;
-                                }
-                            }
-                            
-                            StyledInput {
-                                horizontal-stretch: 1;
-                                text: entry.value;
-                                edited(tx) => { 
-                                    root.entries[i].value = tx;
-                                    root.entries[i].is_modified = (tx != root.entries[i].original_value);
-                                }
-                            }
-                            
-                            PrimaryButton {
-                                text: "Save";
-                                width: 90px;
-                                enabled: entry.is_modified;
-                                clicked => {
-                                    root.save_entry(entry.key, entry.value);
+                                HorizontalLayout {
+                                    padding-left: 16px;
+                                    padding-right: 16px;
+                                    spacing: 12px;
+                                    alignment: center;
+                                    
+                                    Text {
+                                        width: 180px;
+                                        text: entry.key;
+                                        color: #89b4fa;
+                                        font-size: 14px;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                    }
+                                    
+                                    StyledInput {
+                                        horizontal-stretch: 1;
+                                        text: entry.value;
+                                        edited(tx) => { 
+                                            root.entries[i].value = tx;
+                                            root.entries[i].is_modified = (tx != root.entries[i].original_value);
+                                        }
+                                    }
+                                    
+                                    PrimaryButton {
+                                        text: "Save";
+                                        width: 80px;
+                                        enabled: entry.is_modified;
+                                        clicked => {
+                                            root.save_entry(entry.key, entry.value);
+                                        }
+                                    }
                                 }
                             }
                         }
+                    }
+                }
+                
+                if root.active_tab == 1 : Rectangle {
+                    background: #181825;
+                    border-radius: 12px;
+                    VerticalLayout {
+                        padding: 40px;
+                        spacing: 20px;
+                        alignment: start;
+                        Text {
+                            text: "Secure Boot Management";
+                            color: #cdd6f4;
+                            font-size: 18px;
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: "Manage MOK certificates and UKI signing settings.";
+                            color: #6c7086;
+                            font-size: 14px;
+                        }
+                        
+                        HorizontalLayout {
+                            spacing: 12px;
+                            PrimaryButton { text: "Backup NVRAM"; width: 150px; }
+                            PrimaryButton { text: "Enroll MOK"; width: 150px; }
+                        }
+                    }
+                }
+
+                if root.active_tab == 2 : Rectangle {
+                    background: #181825;
+                    border-radius: 12px;
+                    VerticalLayout {
+                        padding: 40px;
+                        spacing: 20px;
+                        alignment: start;
+                        Text {
+                            text: "Paranoia Mode (Experimental)";
+                            color: #f38ba8;
+                            font-size: 18px;
+                            font-weight: 600;
+                        }
+                        Text {
+                            text: "Take full ownership of EFI variables. Dangerous operations.";
+                            color: #6c7086;
+                            font-size: 14px;
+                        }
+                        PrimaryButton { text: "Generate Custom PK/KEK"; width: 200px; }
                     }
                 }
             }
         }
     }
 
-    // Modal Toast Anchor
     ToastNotification {
         x: (parent.width - self.width) / 2;
-        y: root.show_toast ? parent.height - self.height - 32px : parent.height + 20px; // animate from bottom
+        y: root.show_toast ? parent.height - self.height - 20px : parent.height + 10px;
         message: root.toast_message;
         toast_type: root.toast_type;
         is_visible: root.show_toast;
