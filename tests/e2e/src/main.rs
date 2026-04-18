@@ -36,4 +36,7 @@
 mod concurrent_write;
 mod etag_mismatch;
 mod grub_roundtrip;
+mod secureboot_mok;
+#[cfg(feature = "experimental_paranoia")]
+mod secureboot_paranoia;
 pub mod helpers;

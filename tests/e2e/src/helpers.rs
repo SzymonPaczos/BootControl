@@ -19,7 +19,7 @@
 //! - Polkit is replaced by the `polkit-mock` Cargo feature at compile time.
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     time::Duration,
 };
@@ -165,6 +165,135 @@ pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
     Ok(())
 }
 
+// ── QEMU & OVMF Helpers ──────────────────────────────────────────────────────
+
+/// Paths to OVMF firmware components.
+pub struct OvmfPaths {
+    /// Read-only executable code (firmware).
+    pub code: PathBuf,
+    /// Mutable non-volatile storage (variables/NVRAM).
+    pub vars: PathBuf,
+}
+
+/// Locate OVMF firmware on the system using environment variables or distro heuristics.
+///
+/// Returns `None` if firmware files are not found on disk.
+pub fn locate_ovmf() -> Option<OvmfPaths> {
+    // 1. Check explicit overrides
+    let code_env = std::env::var_os("BOOTCONTROL_OVMF_CODE").map(PathBuf::from);
+    let vars_env = std::env::var_os("BOOTCONTROL_OVMF_VARS").map(PathBuf::from);
+
+    if let (Some(code), Some(vars)) = (code_env, vars_env) {
+        if code.exists() && vars.exists() {
+            return Some(OvmfPaths { code, vars });
+        }
+    }
+
+    // 2. Try common Linux distribution paths
+    let candidates = [
+        // Ubuntu / Debian
+        ("/usr/share/OVMF/OVMF_CODE.fd", "/usr/share/OVMF/OVMF_VARS.fd"),
+        // Fedora / RHEL
+        ("/usr/share/edk2/ovmf/OVMF_CODE.fd", "/usr/share/edk2/ovmf/OVMF_VARS.fd"),
+        // Arch Linux
+        ("/usr/share/ovmf/x64/OVMF_CODE.fd", "/usr/share/ovmf/x64/OVMF_VARS.fd"),
+    ];
+
+    for (c, v) in candidates {
+        let cp = PathBuf::from(c);
+        let vp = PathBuf::from(v);
+        if cp.exists() && vp.exists() {
+            return Some(OvmfPaths { code: cp, vars: vp });
+        }
+    }
+
+    None
+}
+
+/// Create a minimal FAT32 disk image containing the UEFI binary at `/EFI/BOOT/BOOTX64.EFI`.
+///
+/// Requires `mtools` (`mformat`, `mmd`, `mcopy`) to be installed.
+///
+/// # Errors
+///
+/// Returns an error if any `mtools` command fails or if the image cannot be initialized.
+pub fn create_uefi_disk(image_path: &Path, efi_binary: &Path) -> anyhow::Result<()> {
+    // 1. Create a 64MB empty file to serve as the disk volume.
+    let f = std::fs::File::create(image_path).context("failed to create disk image file")?;
+    f.set_len(64 * 1024 * 1024).context("failed to resize disk image")?;
+    drop(f);
+
+    // 2. Format as FAT32 using mformat.
+    let status = Command::new("mformat")
+        .args(["-i", &image_path.to_string_lossy(), "-F", "::"])
+        .status()
+        .context("failed to invoke mformat")?;
+    if !status.success() {
+        bail!("mformat failed with exit code {status}");
+    }
+
+    // 3. Create the standard UEFI boot directory structure.
+    for dir in ["::/EFI", "::/EFI/BOOT"] {
+        let status = Command::new("mmd")
+            .args(["-i", &image_path.to_string_lossy(), dir])
+            .status()
+            .context("failed to invoke mmd")?;
+        if !status.success() {
+            bail!("mmd {dir} failed");
+        }
+    }
+
+    // 4. Copy the binary to the mandatory boot path.
+    let status = Command::new("mcopy")
+        .args([
+            "-i",
+            &image_path.to_string_lossy(),
+            &efi_binary.to_string_lossy(),
+            "::/EFI/BOOT/BOOTX64.EFI",
+        ])
+        .status()
+        .context("failed to invoke mcopy")?;
+    if !status.success() {
+        bail!("mcopy failed to copy EFI binary");
+    }
+
+    Ok(())
+}
+
+/// Enroll a certificate into the OVMF variables file to enable Secure Boot trust.
+///
+/// Requires `virt-fw-vars` (from `python3-virt-firmware`) to be installed.
+///
+/// # Arguments
+///
+/// * `vars_path` - Path to the local copy of `OVMF_VARS.fd` to modify.
+/// * `cert_path` - Path to the X.509 certificate (`.crt`) to enroll as a MOK.
+///
+/// # Errors
+///
+/// Returns an error if `virt-fw-vars` is missing or fails.
+pub fn enroll_mok_in_vars(vars_path: &Path, cert_path: &Path) -> anyhow::Result<()> {
+    // virt-fw-vars --input {vars} --output {vars} --add-cert {cert} --name "MokList"
+    // Note: This is an approximation for automated E2E tests.
+    let status = Command::new("virt-fw-vars")
+        .args([
+            "--input",
+            &vars_path.to_string_lossy(),
+            "--output",
+            &vars_path.to_string_lossy(),
+            "--enroll-cert", // Simulates manual enrollment by the platform
+            &cert_path.to_string_lossy(),
+        ])
+        .status()
+        .context("failed to invoke virt-fw-vars")?;
+
+    if !status.success() {
+        bail!("virt-fw-vars failed to enroll certificate");
+    }
+
+    Ok(())
+}
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 /// Write `content` to a new [`NamedTempFile`] and flush it.
@@ -193,13 +322,18 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     // workspace root because the [[test]] section is declared there.
     let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
+    let mut features = vec!["bootcontrold/polkit-mock".to_string()];
+    if cfg!(feature = "experimental_paranoia") {
+        features.push("bootcontrold/experimental_paranoia".to_string());
+    }
+
     let status = Command::new(env!("CARGO"))
         .args([
             "build",
             "--bin",
             "bootcontrold",
             "--features",
-            "bootcontrold/polkit-mock",
+            &features.join(","),
         ])
         .current_dir(&workspace_root)
         .status()

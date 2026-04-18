@@ -31,7 +31,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use bootcontrol_core::{boot_manager::BootManager, secureboot::{MokSigner, ParanoiaKeySet}};
+use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
+#[cfg(feature = "experimental_paranoia")]
+use bootcontrol_core::secureboot::ParanoiaKeySet;
 
 use crate::{
     dbus_error::{to_daemon_error, DaemonError},
@@ -40,8 +42,10 @@ use crate::{
     sanitize,
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
-    secureboot::paranoia::{generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR},
 };
+
+#[cfg(feature = "experimental_paranoia")]
+use crate::secureboot::paranoia::{generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR};
 use tracing::{info, warn};
 use zbus::interface;
 
@@ -630,17 +634,17 @@ impl GrubManager {
 
         // ── Step 4b: Sign the UKI ────────────────────────────────────────────
         let uki = std::path::Path::new(&uki_path);
-        let key = std::path::Path::new(crate::secureboot::mok::DEFAULT_MOK_KEY_PATH);
-        let cert = std::path::Path::new(crate::secureboot::mok::DEFAULT_MOK_CERT_PATH);
+        let key = crate::secureboot::mok::get_mok_key_path();
+        let cert = crate::secureboot::mok::get_mok_cert_path();
 
-        signer.sign_uki(uki, key, cert).map_err(|e| {
+        signer.sign_uki(uki, &key, &cert).map_err(|e| {
             warn!(uki_path = %uki_path, "UKI signing failed");
             to_daemon_error(e)
         })?;
 
         // ── Step 4c: Generate enrollment request ────────────────────────────
         signer
-            .generate_enrollment_request(cert, std::path::Path::new(""))
+            .generate_enrollment_request(&cert, std::path::Path::new(""))
             .map_err(|e| {
                 warn!(uki_path = %uki_path, "MOK enrollment request failed");
                 to_daemon_error(e)
@@ -655,6 +659,7 @@ impl GrubManager {
     /// Returns a JSON array of generated file paths.
     /// If `output_dir` is empty, defaults to `/var/lib/bootcontrol/paranoia-keys`.
     /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    #[cfg(feature = "experimental_paranoia")]
     async fn generate_paranoia_keyset(
         &self,
         output_dir: String,
@@ -733,6 +738,7 @@ impl GrubManager {
     ///
     /// Returns path to the merged `.auth` file.
     /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    #[cfg(feature = "experimental_paranoia")]
     async fn merge_paranoia_with_microsoft(
         &self,
         output_dir: String,

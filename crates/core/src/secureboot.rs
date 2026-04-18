@@ -2,7 +2,9 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(feature = "experimental_paranoia")]
+use std::path::PathBuf;
 
 use crate::error::BootControlError;
 
@@ -75,6 +77,7 @@ pub trait MokSigner {
 }
 
 /// Paths to a generated custom Secure Boot key set (PK, KEK, db).
+#[cfg(feature = "experimental_paranoia")]
 #[derive(Debug, Clone)]
 pub struct ParanoiaKeySet {
     /// Path to the generated PK (Platform Key) certificate.

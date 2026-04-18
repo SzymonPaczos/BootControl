@@ -19,6 +19,20 @@ pub const DEFAULT_MOK_KEY_PATH: &str = "/var/lib/bootcontrol/keys/mok.key";
 /// Default path for the MOK certificate.
 pub const DEFAULT_MOK_CERT_PATH: &str = "/var/lib/bootcontrol/keys/mok.crt";
 
+/// Resolve the MOK private key path, checking for env override first.
+pub fn get_mok_key_path() -> PathBuf {
+    std::env::var_os("BOOTCONTROL_MOK_KEY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MOK_KEY_PATH))
+}
+
+/// Resolve the MOK certificate path, checking for env override first.
+pub fn get_mok_cert_path() -> PathBuf {
+    std::env::var_os("BOOTCONTROL_MOK_CERT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_MOK_CERT_PATH))
+}
+
 /// Production MOK signer that delegates to `sbsign` and `mokutil`.
 ///
 /// In production both `sbsign_override` and `mokutil_override` are `None`;
@@ -247,8 +261,8 @@ impl MokSigner for SbsignMokSigner {
 /// // In tests: use SbsignMokSigner with overrides and real temp files.
 /// ```
 pub fn sign_with_default_keys(_signer: &dyn MokSigner) -> Result<(), BootControlError> {
-    let key = Path::new(DEFAULT_MOK_KEY_PATH);
-    let cert = Path::new(DEFAULT_MOK_CERT_PATH);
+    let key = get_mok_key_path();
+    let cert = get_mok_cert_path();
 
     if !key.exists() {
         return Err(BootControlError::MokKeyNotFound {
@@ -261,8 +275,6 @@ pub fn sign_with_default_keys(_signer: &dyn MokSigner) -> Result<(), BootControl
         });
     }
 
-    // sign_with_default_keys only validates key existence; callers supply the UKI.
-    // This function serves as a pre-flight check to surface missing keys early.
     Ok(())
 }
 
