@@ -113,6 +113,17 @@ pub enum BootControlError {
         /// The path of the file that could not be locked.
         path: String,
     },
+
+    /// The required external tool was not found on `$PATH`.
+    ///
+    /// This is a non-fatal configuration issue: the user may simply not have
+    /// the tool installed. Surface this as a clear, actionable error in all UIs.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.ToolNotFound`
+    ToolNotFound {
+        /// Name of the binary that could not be found (e.g. `"mkinitcpio"`).
+        tool: String,
+    },
 }
 
 impl fmt::Display for BootControlError {
@@ -148,6 +159,11 @@ impl fmt::Display for BootControlError {
                 f,
                 "Cannot acquire exclusive lock on '{path}': another process holds the file. \
                  Retry after the package manager or other tool finishes."
+            ),
+            BootControlError::ToolNotFound { tool } => write!(
+                f,
+                "Required tool '{tool}' was not found on $PATH. \
+                 Install the package that provides '{tool}' and retry."
             ),
         }
     }
