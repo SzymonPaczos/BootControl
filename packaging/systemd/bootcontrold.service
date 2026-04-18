@@ -1,19 +1,20 @@
 [Unit]
-Description=BootControl D-Bus Daemon
-Documentation=https://github.com/szymonpaczos/bootcontrol
-Requires=bootcontrold.socket
+Description=BootControl privileged boot configuration daemon
+Documentation=https://github.com/YOUR_USERNAME/bootcontrol
+After=dbus.service
+Requires=dbus.service
 
 [Service]
 Type=notify
 ExecStart=/usr/bin/bootcontrold
 User=root
-Group=root
-IdleTimeoutSec=60
-
-# Security constraints
-ProtectSystem=full
-ProtectHome=yes
-RestrictNamespaces=yes
+Restart=on-failure
+RestartSec=1s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bootcontrold
+BusName=org.bootcontrol.Manager
 
 [Install]
 WantedBy=multi-user.target
+Also=bootcontrold.socket

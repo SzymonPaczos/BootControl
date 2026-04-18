@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.bootcontrol.Manager
+Exec=/usr/bin/bootcontrold
+User=root
+SystemdService=bootcontrold.service
