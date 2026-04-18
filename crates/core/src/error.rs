@@ -152,6 +152,22 @@ pub enum BootControlError {
         /// Human-readable description of the failure.
         reason: String,
     },
+
+    /// Key generation operation failed (e.g. openssl exited non-zero).
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.KeyGenerationFailed`
+    KeyGenerationFailed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
+
+    /// Writing an EFI NVRAM variable failed.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.NvramWriteFailed`
+    NvramWriteFailed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
 }
 
 impl fmt::Display for BootControlError {
@@ -203,6 +219,12 @@ impl fmt::Display for BootControlError {
             ),
             BootControlError::SigningFailed { reason } => {
                 write!(f, "Signing or enrollment operation failed: {reason}")
+            }
+            BootControlError::KeyGenerationFailed { reason } => {
+                write!(f, "Key generation failed: {reason}")
+            }
+            BootControlError::NvramWriteFailed { reason } => {
+                write!(f, "EFI NVRAM write failed: {reason}")
             }
         }
     }

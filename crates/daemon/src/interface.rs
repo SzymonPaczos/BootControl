@@ -31,7 +31,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
+use bootcontrol_core::{boot_manager::BootManager, secureboot::{MokSigner, ParanoiaKeySet}};
 
 use crate::{
     dbus_error::{to_daemon_error, DaemonError},
@@ -40,6 +40,7 @@ use crate::{
     sanitize,
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
+    secureboot::paranoia::{generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR},
 };
 use tracing::{info, warn};
 use zbus::interface;
@@ -647,5 +648,155 @@ impl GrubManager {
 
         info!(uki_path = %uki_path, "SignAndEnrollUki completed successfully");
         Ok(())
+    }
+
+    /// Generate a custom Secure Boot key set (PK, KEK, db) using openssl.
+    ///
+    /// Returns a JSON array of generated file paths.
+    /// If `output_dir` is empty, defaults to `/var/lib/bootcontrol/paranoia-keys`.
+    /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    async fn generate_paranoia_keyset(
+        &self,
+        output_dir: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<String, DaemonError> {
+        info!(output_dir = %output_dir, "D-Bus: GenerateParanoiaKeyset");
+
+        // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!("D-Bus message has no sender field (GenerateParanoiaKeyset)");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                warn!(error = %e, "Failed to create DBus proxy (GenerateParanoiaKeyset)");
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+            })?;
+
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|e| {
+                    warn!(error = %e, "GetConnectionUnixUser failed (GenerateParanoiaKeyset)");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+                })?
+        };
+
+        // ── Step 2: Polkit authorization ────────────────────────────────────
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, "Polkit denied for GenerateParanoiaKeyset");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 3: Resolve target directory ────────────────────────────────
+        let target = if output_dir.is_empty() {
+            std::path::PathBuf::from(DEFAULT_KEYSET_DIR)
+        } else {
+            std::path::PathBuf::from(&output_dir)
+        };
+
+        // ── Step 4: Generate keys ───────────────────────────────────────────
+        let keyset = generate_custom_keyset(&target, None).map_err(|e| {
+            warn!(error = %e, "Key generation failed");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 5: Serialize paths as JSON array ───────────────────────────
+        let paths = vec![
+            keyset.pk_cert,
+            keyset.pk_key,
+            keyset.kek_cert,
+            keyset.kek_key,
+            keyset.db_cert,
+            keyset.db_key,
+        ];
+
+        let json = format!(
+            "[{}]",
+            paths
+                .iter()
+                .map(|p| format!("\"{}\"", p.display()))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+
+        info!(target = %target.display(), "Paranoia keyset generated successfully");
+        Ok(json)
+    }
+
+    /// Merge custom db cert with Microsoft UEFI CA signatures.
+    ///
+    /// Returns path to the merged `.auth` file.
+    /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    async fn merge_paranoia_with_microsoft(
+        &self,
+        output_dir: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<String, DaemonError> {
+        info!(output_dir = %output_dir, "D-Bus: MergeParanoiaWithMicrosoft");
+
+        // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!("D-Bus message has no sender field (MergeParanoiaWithMicrosoft)");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                warn!(error = %e, "Failed to create DBus proxy (MergeParanoiaWithMicrosoft)");
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+            })?;
+
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|e| {
+                    warn!(error = %e, "GetConnectionUnixUser failed (MergeParanoiaWithMicrosoft)");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+                })?
+        };
+
+        // ── Step 2: Polkit authorization ────────────────────────────────────
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, "Polkit denied for MergeParanoiaWithMicrosoft");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 3: Resolve target directory ────────────────────────────────
+        let target = if output_dir.is_empty() {
+            std::path::PathBuf::from(DEFAULT_KEYSET_DIR)
+        } else {
+            std::path::PathBuf::from(&output_dir)
+        };
+
+        // ── Step 4: Construct ParanoiaKeySet from default locations ─────────
+        // We expect the keys to follow the naming convention in DEFAULT_KEYSET_DIR
+        let keys_base = std::path::PathBuf::from(DEFAULT_KEYSET_DIR);
+        let keyset = ParanoiaKeySet {
+            pk_cert: keys_base.join("PK.crt"),
+            pk_key: keys_base.join("PK.key"),
+            kek_cert: keys_base.join("KEK.crt"),
+            kek_key: keys_base.join("KEK.key"),
+            db_cert: keys_base.join("db.crt"),
+            db_key: keys_base.join("db.key"),
+        };
+
+        // ── Step 5: Merge signatures ────────────────────────────────────────
+        let auth_path = merge_with_microsoft_signatures(&keyset, &target, None).map_err(|e| {
+            warn!(error = %e, "Merging signatures failed");
+            to_daemon_error(e)
+        })?;
+
+        info!(auth_path = %auth_path.display(), "Signatures merged successfully");
+        Ok(auth_path.display().to_string())
     }
 }

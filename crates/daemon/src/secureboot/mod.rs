@@ -4,3 +4,4 @@
 
 pub mod mok;
 pub mod nvram;
+pub mod paranoia;
