@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use zbus::proxy;
 
-use crate::helpers::{shutdown_daemon, spawn_daemon, MINIMAL_GRUB, OBJECT_PATH};
+use crate::helpers::{shutdown_daemon, spawn_daemon, MINIMAL_GRUB};
 
 // ── D-Bus proxy ───────────────────────────────────────────────────────────────
 

@@ -145,7 +145,7 @@ pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
 
-    let pid = handle.process.id().context("daemon process has no PID")?;
+    let pid = handle.process.id();
 
     kill(Pid::from_raw(pid as i32), Signal::SIGTERM).context("failed to SIGTERM bootcontrold")?;
 
