@@ -2,4 +2,5 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
+pub mod mok;
 pub mod nvram;

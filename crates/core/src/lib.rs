@@ -32,3 +32,4 @@ pub mod grub;
 pub mod hash;
 pub mod initramfs;
 pub mod prober;
+pub mod secureboot;

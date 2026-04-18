@@ -23,7 +23,10 @@
 //! | `EspScanFailed`         | `org.bootcontrol.Error.EspScanFailed`               |
 //! | `SecurityPolicyViolation` | `org.bootcontrol.Error.SecurityPolicyViolation`   |
 //! | `ConcurrentModification`| `org.bootcontrol.Error.ConcurrentModification`     |
+//! | `ToolNotFound`          | `org.bootcontrol.Error.ToolNotFound`               |
 //! | `NvramBackupFailed`     | `org.bootcontrol.Error.NvramBackupFailed`          |
+//! | `MokKeyNotFound`        | `org.bootcontrol.Error.MokKeyNotFound`             |
+//! | `SigningFailed`         | `org.bootcontrol.Error.SigningFailed`              |
 
 use bootcontrol_core::error::BootControlError;
 use zbus::DBusError;
@@ -73,6 +76,12 @@ pub enum DaemonError {
     /// Backup zmiennych EFI NVRAM nie powiódł się.
     NvramBackupFailed(String),
 
+    /// Klucz MOK lub certyfikat nie znaleziono pod oczekiwaną ścieżką.
+    MokKeyNotFound(String),
+
+    /// Operacja podpisywania lub rejestracji certyfikatu zakończyła się błędem.
+    SigningFailed(String),
+
     /// Nieznany błąd — catch-all dla wariantów z `#[non_exhaustive]`.
     Failed(String),
 }
@@ -112,6 +121,8 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
         BootControlError::ConcurrentModification { .. } => DaemonError::ConcurrentModification(msg),
         BootControlError::ToolNotFound { .. } => DaemonError::ToolNotFound(msg),
         BootControlError::NvramBackupFailed { .. } => DaemonError::NvramBackupFailed(msg),
+        BootControlError::MokKeyNotFound { .. } => DaemonError::MokKeyNotFound(msg),
+        BootControlError::SigningFailed { .. } => DaemonError::SigningFailed(msg),
         // #[non_exhaustive] — przyszłe warianty mapują na Failed
         _ => DaemonError::Failed(msg),
     }
@@ -120,8 +131,6 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── to_daemon_error — jeden test na wariant ─────────────────────────────
 
     #[test]
     fn state_mismatch_maps_to_correct_variant() {
@@ -197,6 +206,14 @@ mod tests {
     }
 
     #[test]
+    fn tool_not_found_maps_to_correct_variant() {
+        let e = BootControlError::ToolNotFound {
+            tool: "sbsign".into(),
+        };
+        assert!(matches!(to_daemon_error(e), DaemonError::ToolNotFound(_)));
+    }
+
+    #[test]
     fn nvram_backup_failed_maps_to_correct_variant() {
         let e = BootControlError::NvramBackupFailed {
             reason: "no variables".into(),
@@ -207,7 +224,22 @@ mod tests {
         ));
     }
 
-    /// Wiadomość w wariancie zawiera oryginalne dane z BootControlError.
+    #[test]
+    fn mok_key_not_found_maps_to_correct_variant() {
+        let e = BootControlError::MokKeyNotFound {
+            path: "/var/lib/bootcontrol/keys/mok.key".into(),
+        };
+        assert!(matches!(to_daemon_error(e), DaemonError::MokKeyNotFound(_)));
+    }
+
+    #[test]
+    fn signing_failed_maps_to_correct_variant() {
+        let e = BootControlError::SigningFailed {
+            reason: "sbsign exited 1".into(),
+        };
+        assert!(matches!(to_daemon_error(e), DaemonError::SigningFailed(_)));
+    }
+
     #[test]
     fn daemon_error_message_contains_original_description() {
         let e = BootControlError::StateMismatch {
@@ -225,8 +257,6 @@ mod tests {
         assert_eq!(msg, original_msg);
     }
 
-    /// Kompletny test dla wszystkich wariantów — regresja jeśli nowy wariant
-    /// zostanie dodany do BootControlError bez aktualizacji mapowania.
     #[test]
     fn all_known_variants_produce_non_failed_daemon_error() {
         let cases: Vec<(&str, DaemonError)> = vec![
@@ -273,9 +303,25 @@ mod tests {
                 to_daemon_error(BootControlError::ConcurrentModification { path: "/p".into() }),
             ),
             (
+                "ToolNotFound",
+                to_daemon_error(BootControlError::ToolNotFound { tool: "sbsign".into() }),
+            ),
+            (
                 "NvramBackupFailed",
                 to_daemon_error(BootControlError::NvramBackupFailed {
                     reason: "test".into(),
+                }),
+            ),
+            (
+                "MokKeyNotFound",
+                to_daemon_error(BootControlError::MokKeyNotFound {
+                    path: "/var/lib/bootcontrol/keys/mok.key".into(),
+                }),
+            ),
+            (
+                "SigningFailed",
+                to_daemon_error(BootControlError::SigningFailed {
+                    reason: "sbsign exited 1".into(),
                 }),
             ),
         ];

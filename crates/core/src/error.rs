@@ -136,6 +136,22 @@ pub enum BootControlError {
         /// Human-readable description of the failure.
         reason: String,
     },
+
+    /// MOK key or certificate file not found at the expected path.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.MokKeyNotFound`
+    MokKeyNotFound {
+        /// Path that was expected to contain the key/cert.
+        path: String,
+    },
+
+    /// A binary signing or enrollment operation failed.
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.SigningFailed`
+    SigningFailed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
 }
 
 impl fmt::Display for BootControlError {
@@ -179,6 +195,14 @@ impl fmt::Display for BootControlError {
             ),
             BootControlError::NvramBackupFailed { reason } => {
                 write!(f, "EFI NVRAM backup failed: {reason}")
+            }
+            BootControlError::MokKeyNotFound { path } => write!(
+                f,
+                "MOK key or certificate not found at '{path}'. \
+                 Ensure the MOK key and certificate are present before signing."
+            ),
+            BootControlError::SigningFailed { reason } => {
+                write!(f, "Signing or enrollment operation failed: {reason}")
             }
         }
     }

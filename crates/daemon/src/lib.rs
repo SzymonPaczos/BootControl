@@ -16,7 +16,7 @@
 //! | [`polkit`] | Polkit authorization (mock or real, feature-gated). |
 //! | [`sanitize`] | Payload blacklist enforcement. |
 //! | [`dbus_error`] | `BootControlError` → `zbus::fdo::Error` mapping. |
-//! | [`secureboot`] | Secure Boot utilities (NVRAM backup, MOK signing). |
+//! | [`secureboot`] | Secure Boot utilities: NVRAM backup, MOK signing and enrollment. |
 
 #![deny(warnings)]
 #![deny(missing_docs)]
