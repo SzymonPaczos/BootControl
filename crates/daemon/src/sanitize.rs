@@ -67,16 +67,12 @@ pub fn check_payload(key: &str, value: &str) -> Result<(), BootControlError> {
     for &pattern in BLACKLISTED_PATTERNS {
         if key.contains(pattern) {
             return Err(BootControlError::SecurityPolicyViolation {
-                reason: format!(
-                    "key '{key}' contains blacklisted pattern '{pattern}'"
-                ),
+                reason: format!("key '{key}' contains blacklisted pattern '{pattern}'"),
             });
         }
         if value.contains(pattern) {
             return Err(BootControlError::SecurityPolicyViolation {
-                reason: format!(
-                    "value for key '{key}' contains blacklisted pattern '{pattern}'"
-                ),
+                reason: format!("value for key '{key}' contains blacklisted pattern '{pattern}'"),
             });
         }
     }
@@ -115,43 +111,64 @@ mod tests {
     #[test]
     fn blocks_init_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "quiet init=/bin/sh splash");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
     fn blocks_selinux_zero_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "selinux=0 quiet");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
     fn blocks_apparmor_zero_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "apparmor=0");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
     fn blocks_systemd_unit_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "systemd.unit=rescue.target");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
     fn blocks_rd_break_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "rd.break quiet");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
     fn blocks_single_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "single");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
     fn blocks_emergency_in_value() {
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "emergency");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     // ── Blocked by key ────────────────────────────────────────────────────────
@@ -159,7 +176,10 @@ mod tests {
     #[test]
     fn blocks_selinux_zero_in_key() {
         let result = check_payload("selinux=0_key", "somevalue");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     // ── Edge cases ────────────────────────────────────────────────────────────
@@ -167,8 +187,14 @@ mod tests {
     #[test]
     fn blocks_init_embedded_in_longer_string() {
         // The pattern "init=" must be rejected even when embedded in a longer string.
-        let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "quiet noinit=something init=/usr/lib/systemd/systemd");
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        let result = check_payload(
+            "GRUB_CMDLINE_LINUX_DEFAULT",
+            "quiet noinit=something init=/usr/lib/systemd/systemd",
+        );
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]
@@ -178,7 +204,10 @@ mod tests {
         // This test documents the intended behavior.
         let result = check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "nosingle");
         // "nosingle" DOES contain the substring "single", so it IS blocked.
-        assert!(matches!(result, Err(BootControlError::SecurityPolicyViolation { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]

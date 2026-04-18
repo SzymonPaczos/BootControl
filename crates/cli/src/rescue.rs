@@ -94,8 +94,8 @@ impl std::error::Error for RescueError {
 /// run_rescue().unwrap();
 /// ```
 pub fn run_rescue() -> Result<(), RescueError> {
-    let proc_content =
-        std::fs::read_to_string("/proc/partitions").map_err(RescueError::ProcPartitionsUnreadable)?;
+    let proc_content = std::fs::read_to_string("/proc/partitions")
+        .map_err(RescueError::ProcPartitionsUnreadable)?;
 
     info!("scanning /proc/partitions for root filesystems");
 
@@ -209,10 +209,7 @@ pub(crate) fn check_for_root(dev_path: &Path, tmp_mount: &Path) -> Option<PathBu
     // We use the `mount` command rather than the `mount(2)` syscall so that
     // the CLI remains a safe, unprivileged binary — the OS will reject the
     // mount if insufficient privileges, which we handle below.
-    let status = Command::new("mount")
-        .arg(dev_path)
-        .arg(tmp_mount)
-        .status();
+    let status = Command::new("mount").arg(dev_path).arg(tmp_mount).status();
 
     match status {
         Err(e) => {

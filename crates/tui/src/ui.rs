@@ -38,15 +38,15 @@ use crate::popup;
 // Colour palette
 // ──────────────────────────────────────────────────────────────────────────────
 
-const ACCENT:       Color = Color::Cyan;
-const HEADER_FG:    Color = Color::White;
-const HEADER_BG:    Color = Color::Rgb(20, 20, 40);
+const ACCENT: Color = Color::Cyan;
+const HEADER_FG: Color = Color::White;
+const HEADER_BG: Color = Color::Rgb(20, 20, 40);
 const ROW_SELECTED: Color = Color::Rgb(0, 80, 120);
-const ROW_ALT:      Color = Color::Rgb(18, 18, 30);
-const ROW_NORMAL:   Color = Color::Rgb(12, 12, 22);
-const FOOTER_FG:    Color = Color::DarkGray;
-const KEY_FG:       Color = Color::Rgb(140, 210, 255);
-const VALUE_FG:     Color = Color::Rgb(200, 255, 200);
+const ROW_ALT: Color = Color::Rgb(18, 18, 30);
+const ROW_NORMAL: Color = Color::Rgb(12, 12, 22);
+const FOOTER_FG: Color = Color::DarkGray;
+const KEY_FG: Color = Color::Rgb(140, 210, 255);
+const VALUE_FG: Color = Color::Rgb(200, 255, 200);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public entry point
@@ -82,10 +82,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     // ── Floating overlays (rendered last so they appear on top) ───────────────
     match &app.mode {
         Mode::Editing => {
-            let key = app
-                .current_entry()
-                .map(|e| e.key.as_str())
-                .unwrap_or("?");
+            let key = app.current_entry().map(|e| e.key.as_str()).unwrap_or("?");
             popup::edit_popup(frame, area, key, &app.edit_buf);
         }
         Mode::ErrorPopup => {
@@ -110,14 +107,9 @@ fn render_header(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let title_line = Line::from(vec![
         Span::styled(
             "  BootControl TUI",
-            Style::default()
-                .fg(ACCENT)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            "  •  /etc/default/grub",
-            Style::default().fg(HEADER_FG),
-        ),
+        Span::styled("  •  /etc/default/grub", Style::default().fg(HEADER_FG)),
         Span::styled(
             format!("  [etag: {etag_short}…]"),
             Style::default().fg(Color::DarkGray),
@@ -135,8 +127,7 @@ fn render_header(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .border_type(BorderType::Plain)
         .style(Style::default().bg(HEADER_BG));
 
-    let header_widget = Paragraph::new(vec![title_line, status_line])
-        .block(header_block);
+    let header_widget = Paragraph::new(vec![title_line, status_line]).block(header_block);
 
     frame.render_widget(header_widget, area);
 }
@@ -167,12 +158,8 @@ fn render_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .map(|(i, entry)| {
             let bg = if i % 2 == 0 { ROW_NORMAL } else { ROW_ALT };
             Row::new([
-                Cell::from(format!("  {}", entry.key)).style(
-                    Style::default().fg(KEY_FG).bg(bg),
-                ),
-                Cell::from(entry.value.clone()).style(
-                    Style::default().fg(VALUE_FG).bg(bg),
-                ),
+                Cell::from(format!("  {}", entry.key)).style(Style::default().fg(KEY_FG).bg(bg)),
+                Cell::from(entry.value.clone()).style(Style::default().fg(VALUE_FG).bg(bg)),
             ])
             .height(1)
         })
@@ -204,9 +191,7 @@ fn render_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
 fn render_footer(frame: &mut Frame, _app: &App, area: ratatui::layout::Rect) {
     let help = match _app.mode {
-        Mode::Browse => {
-            " [↑↓] Navigate  [Enter] Edit  [r] Reload  [q] Quit "
-        }
+        Mode::Browse => " [↑↓] Navigate  [Enter] Edit  [r] Reload  [q] Quit ",
         Mode::Editing => " [Enter] Save  [Esc] Cancel  [Backspace] Delete char ",
         Mode::ErrorPopup => " [Esc] Dismiss error ",
     };
@@ -246,7 +231,9 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("terminal must init");
         let app = make_app(&[]);
-        terminal.draw(|f| render(f, &app)).expect("draw must succeed");
+        terminal
+            .draw(|f| render(f, &app))
+            .expect("draw must succeed");
     }
 
     #[test]
@@ -259,7 +246,9 @@ mod tests {
             ("GRUB_CMDLINE_LINUX", "quiet splash"),
             ("GRUB_GFXMODE", "auto"),
         ]);
-        terminal.draw(|f| render(f, &app)).expect("draw must succeed");
+        terminal
+            .draw(|f| render(f, &app))
+            .expect("draw must succeed");
     }
 
     #[test]
@@ -268,7 +257,9 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("terminal must init");
         let mut app = make_app(&[("GRUB_TIMEOUT", "5")]);
         app.open_edit_popup();
-        terminal.draw(|f| render(f, &app)).expect("draw must succeed");
+        terminal
+            .draw(|f| render(f, &app))
+            .expect("draw must succeed");
     }
 
     #[test]
@@ -277,7 +268,9 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("terminal must init");
         let mut app = make_app(&[("GRUB_TIMEOUT", "5")]);
         app.show_error("org.bootcontrol.Error.PolkitDenied: not authorised".into());
-        terminal.draw(|f| render(f, &app)).expect("draw must succeed");
+        terminal
+            .draw(|f| render(f, &app))
+            .expect("draw must succeed");
     }
 
     #[test]
@@ -285,7 +278,9 @@ mod tests {
         let backend = TestBackend::new(20, 5);
         let mut terminal = Terminal::new(backend).expect("terminal must init");
         let app = make_app(&[("GRUB_TIMEOUT", "5")]);
-        terminal.draw(|f| render(f, &app)).expect("draw on narrow terminal must not panic");
+        terminal
+            .draw(|f| render(f, &app))
+            .expect("draw on narrow terminal must not panic");
     }
 
     #[test]
@@ -293,6 +288,8 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("terminal must init");
         let app = make_app(&[("GRUB_CMDLINE_LINUX", "résumé 日本語 αβγ")]);
-        terminal.draw(|f| render(f, &app)).expect("unicode values must not panic");
+        terminal
+            .draw(|f| render(f, &app))
+            .expect("unicode values must not panic");
     }
 }

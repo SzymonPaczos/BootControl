@@ -2,7 +2,8 @@
 //!
 //! This module exposes the `org.bootcontrol.Manager` interface at the D-Bus
 //! object path `/org/bootcontrol/Manager`. All methods are async and delegate
-//! to the pure logic in [`crate::grub_manager`] and [`crate::sanitize`].
+//! to the pure logic in [`crate::grub_manager`], [`crate::grub_rebuild`],
+//! and [`crate::sanitize`].
 //!
 //! # Security layers per method
 //!
@@ -21,15 +22,20 @@
 //! 2. Payload blacklist ([`crate::sanitize::check_payload`])
 //! 3. ETag + flock + atomic write ([`crate::grub_manager::set_grub_value`])
 //!    — weryfikacja ETag odbywa się **pod lockiem** (TOCTOU-safe)
+//! 4. `grub-mkconfig` regeneration ([`crate::grub_rebuild::run_grub_mkconfig`])
+//!
+//! ## `RebuildGrubConfig`
+//! 1. Polkit check ([`crate::polkit::authorize_with_polkit`])
+//! 2. `grub-mkconfig` regeneration ([`crate::grub_rebuild::run_grub_mkconfig`])
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use bootcontrol_core::boot_manager::BootManager;
 
 use crate::{
     dbus_error::{to_daemon_error, DaemonError},
-    grub_manager,
+    grub_manager, grub_rebuild,
     polkit::authorize_with_polkit,
     sanitize,
 };
@@ -45,6 +51,10 @@ use zbus::interface;
 /// `failsafe_cfg_path` is the path to the golden-parachute GRUB snippet
 /// written after every successful `SetGrubValue`. It is injectable for tests
 /// via [`GrubManager::with_failsafe_path`].
+///
+/// `grub_cfg_path` is the destination for `grub-mkconfig -o <path>`. In
+/// production this is `/boot/grub/grub.cfg`. Injectable for tests to avoid
+/// writing to the live boot partition.
 ///
 /// `backend` is the active [`BootManager`] backend. It is selected at startup
 /// by the prober and injected here. This enables `GetActiveBackend()` and
@@ -62,6 +72,10 @@ pub struct GrubManager {
     ///
     /// Private — set during construction; not exposed directly.
     failsafe_cfg_path: PathBuf,
+    /// Destination path for the regenerated `grub.cfg`.
+    ///
+    /// Private — production default is `/boot/grub/grub.cfg`.
+    grub_cfg_path: PathBuf,
     /// Active bootloader backend, selected by the prober at startup.
     backend: Box<dyn BootManager>,
 }
@@ -69,8 +83,9 @@ pub struct GrubManager {
 impl GrubManager {
     /// Create a new [`GrubManager`] pointing at the given `grub_path`.
     ///
-    /// The failsafe snippet path defaults to `/etc/bootcontrol/failsafe.cfg`.
-    /// Use [`GrubManager::with_failsafe_path`] to override it for tests.
+    /// The failsafe snippet path defaults to `/etc/bootcontrol/failsafe.cfg`
+    /// and the grub.cfg output path defaults to `/boot/grub/grub.cfg`.
+    /// Use [`GrubManager::with_failsafe_path`] to override both for tests.
     ///
     /// # Arguments
     ///
@@ -92,14 +107,15 @@ impl GrubManager {
         Self {
             grub_path,
             failsafe_cfg_path: PathBuf::from("/etc/bootcontrol/failsafe.cfg"),
+            grub_cfg_path: PathBuf::from("/boot/grub/grub.cfg"),
             backend,
         }
     }
 
-    /// Create a [`GrubManager`] with a custom failsafe snippet path.
+    /// Create a [`GrubManager`] with custom failsafe and grub.cfg output paths.
     ///
     /// Intended for integration tests that need to avoid writing to system
-    /// paths (`/etc/bootcontrol`) during test runs.
+    /// paths (`/etc/bootcontrol`, `/boot/grub`) during test runs.
     ///
     /// # Arguments
     ///
@@ -129,6 +145,48 @@ impl GrubManager {
         Self {
             grub_path,
             failsafe_cfg_path,
+            grub_cfg_path: PathBuf::from("/boot/grub/grub.cfg"),
+            backend,
+        }
+    }
+
+    /// Create a [`GrubManager`] with fully injectable paths for testing.
+    ///
+    /// Overrides all filesystem paths so that tests never touch system
+    /// directories (`/etc/bootcontrol`, `/boot/grub`).
+    ///
+    /// # Arguments
+    ///
+    /// * `grub_path`         — Path to the GRUB configuration file.
+    /// * `failsafe_cfg_path` — Path where the failsafe GRUB snippet is written.
+    /// * `grub_cfg_path`     — Destination for the regenerated `grub.cfg`.
+    /// * `backend`           — The active [`BootManager`] backend.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::PathBuf;
+    /// use bootcontrold::interface::GrubManager;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
+    ///
+    /// let m = GrubManager::with_all_paths(
+    ///     PathBuf::from("/tmp/grub"),
+    ///     PathBuf::from("/tmp/failsafe.cfg"),
+    ///     PathBuf::from("/tmp/grub.cfg"),
+    ///     Box::new(GrubBackend),
+    /// );
+    /// assert_eq!(m.grub_path(), std::path::Path::new("/tmp/grub"));
+    /// ```
+    pub fn with_all_paths(
+        grub_path: PathBuf,
+        failsafe_cfg_path: PathBuf,
+        grub_cfg_path: PathBuf,
+        backend: Box<dyn BootManager>,
+    ) -> Self {
+        Self {
+            grub_path,
+            failsafe_cfg_path,
+            grub_cfg_path,
             backend,
         }
     }
@@ -197,15 +255,18 @@ impl GrubManager {
     ///
     /// ## Arguments
     ///
-    /// - `key`   — GRUB variable name (e.g. `"GRUB_TIMEOUT"`).
-    /// - `value` — New value (e.g. `"10"`). Do **not** include surrounding
-    ///             quotes; the daemon adds them when necessary.
-    /// - `etag`  — The ETag returned by the most recent `ReadGrubConfig` or
-    ///             `GetEtag` call.
+    /// - `key`        — GRUB variable name (e.g. `"GRUB_TIMEOUT"`).
+    /// - `value`      — New value (e.g. `"10"`). Do **not** include surrounding
+    ///                  quotes; the daemon adds them when necessary.
+    /// - `etag`       — The ETag returned by the most recent `ReadGrubConfig`
+    ///                  or `GetEtag` call.
+    /// - `connection` — Injected by zbus; used to resolve the caller's Unix UID
+    ///                  via `org.freedesktop.DBus.GetConnectionUnixUser`.
     ///
     /// ## Errors
     ///
-    /// - `org.bootcontrol.Error.PolkitDenied` — the caller is not authorized.
+    /// - `org.bootcontrol.Error.PolkitDenied` — the caller UID could not be
+    ///   resolved, or Polkit denies the action.
     /// - `org.bootcontrol.Error.SecurityPolicyViolation` — key or value
     ///   contains a blacklisted pattern.
     /// - `org.bootcontrol.Error.ConcurrentModification` — another process
@@ -221,32 +282,63 @@ impl GrubManager {
         value: String,
         etag: String,
         #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
-        let caller_serial = header.primary().serial_num();
-        info!(
-            caller_serial = %caller_serial,
-            key = %key,
-            "D-Bus: SetGrubValue"
-        );
+        info!(key = %key, "D-Bus: SetGrubValue");
 
-        // ── Step 1: Polkit authorization ────────────────────────────────────
-        // TODO Phase 2: wyciągnij prawdziwy UID z D-Bus peer credentials.
-        // Na razie mock zakończy się sukcesem dla wszystkich UID.
-        let caller_uid: u32 = caller_serial.into();
-        authorize_with_polkit(caller_uid).map_err(|e| {
-            warn!(key = %key, "Polkit denied");
+        // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
+        // The D-Bus daemon tracks each connection's OS-level UID. We ask it
+        // for the caller's unique bus name, then call
+        // GetConnectionUnixUser(name) to retrieve the verified UID.
+        // This is TOCTOU-safe: the D-Bus daemon maintains an immutable mapping
+        // per connection that the caller cannot spoof.
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!(key = %key, "D-Bus message has no sender field");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                warn!(key = %key, error = %e, "Failed to create DBus proxy");
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+            })?;
+
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|e| {
+                    warn!(key = %key, error = %e, "GetConnectionUnixUser failed");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+                })?
+        };
+
+        info!(caller_uid = %caller_uid, key = %key, "Resolved caller UID for Polkit");
+
+        // ── Step 2: Polkit authorization ────────────────────────────────────
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, key = %key, "Polkit denied");
             to_daemon_error(e)
         })?;
 
-        // ── Step 2: Payload sanitization ────────────────────────────────────
+        // ── Step 3: Payload sanitization ────────────────────────────────────
         sanitize::check_payload(&key, &value).map_err(|e| {
             warn!(key = %key, value = %value, "Security policy violation");
             to_daemon_error(e)
         })?;
 
-        // ── Steps 3–7: flock → ETag verify → atomic write → failsafe refresh ──
-        grub_manager::set_grub_value(&self.grub_path, &key, &value, &etag, &self.failsafe_cfg_path)
-            .map_err(to_daemon_error)
+        // ── Steps 3–9: flock → ETag verify → atomic write → failsafe refresh → grub-mkconfig ──
+        grub_manager::set_grub_value(
+            &self.grub_path,
+            &key,
+            &value,
+            &etag,
+            &self.failsafe_cfg_path,
+            &self.grub_cfg_path,
+        )
+        .map_err(to_daemon_error)
     }
 
     /// Return the SHA-256 ETag of the current on-disk GRUB configuration.
@@ -290,5 +382,71 @@ impl GrubManager {
     async fn get_active_backend(&self) -> String {
         info!("D-Bus: GetActiveBackend");
         self.backend.name().to_string()
+    }
+
+    /// Regenerate `/boot/grub/grub.cfg` by invoking `grub-mkconfig`.
+    ///
+    /// Use this method to apply pending changes to the GRUB configuration
+    /// without writing any new key-value pair. `SetGrubValue` already calls
+    /// this automatically; `RebuildGrubConfig` is provided as a standalone
+    /// escape hatch for cases where an external tool modified
+    /// `/etc/default/grub` directly and the caller wants to regenerate the
+    /// boot config without going through the full ETag write pipeline.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// RebuildGrubConfig() -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// None.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied` — the caller is not authorized.
+    /// - `org.bootcontrol.Error.EspScanFailed` — `grub-mkconfig` (or
+    ///   `grub2-mkconfig`) is not installed, or the command exited with a
+    ///   non-zero status. The reason string includes the exit code and stderr.
+    async fn rebuild_grub_config(
+        &self,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!("D-Bus: RebuildGrubConfig");
+
+        // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!("D-Bus message has no sender field (RebuildGrubConfig)");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                warn!(error = %e, "Failed to create DBus proxy (RebuildGrubConfig)");
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+            })?;
+
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|e| {
+                    warn!(error = %e, "GetConnectionUnixUser failed (RebuildGrubConfig)");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+                })?
+        };
+
+        // ── Step 2: Polkit authorization ────────────────────────────────────
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, "Polkit denied for RebuildGrubConfig");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 2: Run grub-mkconfig ───────────────────────────────────────
+        grub_rebuild::run_grub_mkconfig(&self.grub_cfg_path).map_err(to_daemon_error)
     }
 }

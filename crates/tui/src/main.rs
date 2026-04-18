@@ -144,9 +144,9 @@ async fn run_event_loop(
 /// Dispatch a keyboard event to the correct handler based on `app.mode`.
 async fn handle_key_event(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'_>) {
     match app.mode {
-        Mode::Browse       => handle_browse_key(key, app, proxy).await,
-        Mode::Editing      => handle_editing_key(key, app, proxy).await,
-        Mode::ErrorPopup   => handle_error_key(key, app),
+        Mode::Browse => handle_browse_key(key, app, proxy).await,
+        Mode::Editing => handle_editing_key(key, app, proxy).await,
+        Mode::ErrorPopup => handle_error_key(key, app),
     }
 }
 
@@ -183,8 +183,7 @@ async fn handle_editing_key(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'
 
         // Cancel edit
         KeyEvent {
-            code: KeyCode::Esc,
-            ..
+            code: KeyCode::Esc, ..
         } => {
             app.cancel_edit();
             app.status_msg = "Edit cancelled.".into();

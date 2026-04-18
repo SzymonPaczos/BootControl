@@ -83,7 +83,10 @@ pub fn refresh_failsafe_entry(cfg_path: &Path) -> Result<(), BootControlError> {
 
     write_failsafe_content(cfg_path, &snippet)?;
 
-    info!(?cfg_path, "failsafe entry refreshed — run update-grub to activate");
+    info!(
+        ?cfg_path,
+        "failsafe entry refreshed — run update-grub to activate"
+    );
     Ok(())
 }
 
@@ -315,7 +318,10 @@ fn build_failsafe_snippet(
 /// # Errors
 ///
 /// Returns [`BootControlError::EspScanFailed`] on any I/O error.
-pub(crate) fn write_failsafe_content(cfg_path: &Path, content: &str) -> Result<(), BootControlError> {
+pub(crate) fn write_failsafe_content(
+    cfg_path: &Path,
+    content: &str,
+) -> Result<(), BootControlError> {
     // ── 1. Ensure parent directory exists ────────────────────────────────────
     // We create the directory with mode 0o755 — readable by all, writable only
     // by root — matching the security requirement that the file is not writable
@@ -344,16 +350,16 @@ pub(crate) fn write_failsafe_content(cfg_path: &Path, content: &str) -> Result<(
             }
         })?;
 
-    tmp.write_all(content.as_bytes()).map_err(|e| {
-        BootControlError::EspScanFailed {
+    tmp.write_all(content.as_bytes())
+        .map_err(|e| BootControlError::EspScanFailed {
             reason: format!("write to tmp file failed: {e}"),
-        }
-    })?;
+        })?;
 
     // ── 3. fsync — ensure data reaches storage before rename ─────────────────
-    tmp.sync_all().map_err(|e| BootControlError::EspScanFailed {
-        reason: format!("fsync failed on failsafe tmp: {e}"),
-    })?;
+    tmp.sync_all()
+        .map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("fsync failed on failsafe tmp: {e}"),
+        })?;
 
     drop(tmp); // flush OS buffers before rename
 
@@ -516,8 +522,7 @@ mod tests {
 
         // Build snippet as the production path does — root comes from detect_root_uuid(),
         // which we stub inline here.
-        let snippet =
-            build_failsafe_snippet(&kernel, None, "UUID=test-uuid", &fixed_ts());
+        let snippet = build_failsafe_snippet(&kernel, None, "UUID=test-uuid", &fixed_ts());
         write_failsafe_content(&cfg_path, &snippet).expect("write");
 
         let content = fs::read_to_string(&cfg_path).expect("read back");
@@ -547,11 +552,9 @@ mod tests {
 
     #[test]
     fn parse_root_device_finds_root() {
-        let mounts = "sysfs /sys sysfs rw 0 0\n/dev/sda2 / ext4 rw,relatime 0 0\ntmpfs /tmp tmpfs rw 0 0\n";
-        assert_eq!(
-            parse_root_device(mounts),
-            Some("/dev/sda2".to_owned())
-        );
+        let mounts =
+            "sysfs /sys sysfs rw 0 0\n/dev/sda2 / ext4 rw,relatime 0 0\ntmpfs /tmp tmpfs rw 0 0\n";
+        assert_eq!(parse_root_device(mounts), Some("/dev/sda2".to_owned()));
     }
 
     #[test]

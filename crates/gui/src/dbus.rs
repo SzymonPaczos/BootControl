@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use zbus::{proxy, Connection};
+use zbus::{Connection, proxy};
 
 /// D-Bus proxy for the `org.bootcontrol.Manager` interface exposed by `bootcontrold`.
 #[proxy(

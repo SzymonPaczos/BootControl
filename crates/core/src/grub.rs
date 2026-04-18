@@ -453,9 +453,8 @@ mod tests {
     }
 
     fn assert_parses_ok(input: &str) -> GrubConfig {
-        parse_grub_config(input).unwrap_or_else(|e| {
-            panic!("Expected Ok for input:\n{input}\n\nGot error: {e}")
-        })
+        parse_grub_config(input)
+            .unwrap_or_else(|e| panic!("Expected Ok for input:\n{input}\n\nGot error: {e}"))
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -478,7 +477,10 @@ mod tests {
     fn parses_double_quoted_string() {
         let cfg = assert_parses_ok("GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash\"\n");
         // Outer quotes are stripped; inner content is preserved.
-        assert_eq!(cfg.get("GRUB_CMDLINE_LINUX_DEFAULT").unwrap(), "quiet splash");
+        assert_eq!(
+            cfg.get("GRUB_CMDLINE_LINUX_DEFAULT").unwrap(),
+            "quiet splash"
+        );
     }
 
     #[test]
@@ -625,8 +627,7 @@ GRUB_GFXPAYLOAD_LINUX=keep
     /// The famous Ubuntu default GRUB_DISTRIBUTOR uses a backtick subshell.
     #[test]
     fn rejects_ubuntu_distributor_backtick() {
-        let input =
-            "GRUB_DISTRIBUTOR=`lsb_release -i -s 2> /dev/null || echo Debian`\n";
+        let input = "GRUB_DISTRIBUTOR=`lsb_release -i -s 2> /dev/null || echo Debian`\n";
         assert_complex_bash(input);
     }
 
@@ -806,9 +807,7 @@ GRUB_DEFAULT=0
     fn get_missing_key_returns_key_not_found() {
         let cfg = assert_parses_ok("GRUB_TIMEOUT=5\n");
         let err = cfg.get("NONEXISTENT").unwrap_err();
-        assert!(
-            matches!(err, BootControlError::KeyNotFound { ref key } if key == "NONEXISTENT")
-        );
+        assert!(matches!(err, BootControlError::KeyNotFound { ref key } if key == "NONEXISTENT"));
     }
 
     #[test]
@@ -841,7 +840,10 @@ GRUB_DEFAULT=0
         // perspective; we do not enforce shell syntax beyond our strict subset.
         let input = "GRUB_CMDLINE_LINUX_DEFAULT=quiet splash\n";
         let cfg = assert_parses_ok(input);
-        assert_eq!(cfg.get("GRUB_CMDLINE_LINUX_DEFAULT").unwrap(), "quiet splash");
+        assert_eq!(
+            cfg.get("GRUB_CMDLINE_LINUX_DEFAULT").unwrap(),
+            "quiet splash"
+        );
     }
 
     #[test]

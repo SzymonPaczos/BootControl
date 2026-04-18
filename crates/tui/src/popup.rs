@@ -102,7 +102,9 @@ pub fn edit_popup(frame: &mut Frame, area: Rect, key: &str, edit_buf: &str) {
         Line::from(""),
         Line::from(Span::styled(
             cursor_line,
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(Span::styled(
@@ -148,10 +150,7 @@ pub fn error_popup(frame: &mut Frame, area: Rect, message: &str) {
 
     let inner_text = Text::from(vec![
         Line::from(""),
-        Line::from(Span::styled(
-            message,
-            Style::default().fg(Color::LightRed),
-        )),
+        Line::from(Span::styled(message, Style::default().fg(Color::LightRed))),
         Line::from(""),
         Line::from(Span::styled(
             " [Esc] Dismiss ",

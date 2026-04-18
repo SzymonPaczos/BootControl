@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::time::{sleep, timeout};
 use zbus::Connection;
@@ -139,13 +139,12 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
 /// Returns an error if the kill signal cannot be sent or the process does not
 /// exit within a reasonable time after SIGTERM.
 pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
-    use nix::sys::signal::{kill, Signal};
+    use nix::sys::signal::{Signal, kill};
     use nix::unistd::Pid;
 
     let pid = handle.process.id();
 
-    kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
-        .context("failed to SIGTERM bootcontrold")?;
+    kill(Pid::from_raw(pid as i32), Signal::SIGTERM).context("failed to SIGTERM bootcontrold")?;
 
     // Give the daemon a moment to exit gracefully, then force-kill if needed.
     let waited = tokio::task::spawn_blocking(move || handle.process.wait()).await??;
@@ -218,10 +217,16 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     }
 
     // The binary lands in target/debug/ relative to the workspace root.
-    let binary = workspace_root.join("target").join("debug").join("bootcontrold");
+    let binary = workspace_root
+        .join("target")
+        .join("debug")
+        .join("bootcontrold");
 
     if !binary.exists() {
-        bail!("expected binary not found after build: {}", binary.display());
+        bail!(
+            "expected binary not found after build: {}",
+            binary.display()
+        );
     }
 
     Ok(binary)

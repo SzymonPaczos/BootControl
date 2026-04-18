@@ -75,8 +75,8 @@ async fn concurrent_write_returns_concurrent_modification_error() -> anyhow::Res
 
     // `Flock::lock` will succeed here because no other process holds it yet
     // (the daemon only locks during the write, not during `ReadGrubConfig`).
-    let _flock = Flock::lock(grub_fd, FlockArg::LockExclusiveNonblock)
-        .map_err(|(_fd, errno)| {
+    let _flock =
+        Flock::lock(grub_fd, FlockArg::LockExclusiveNonblock).map_err(|(_fd, errno)| {
             anyhow::anyhow!("could not acquire flock from test process: {errno}")
         })?;
 
@@ -87,8 +87,7 @@ async fn concurrent_write_returns_concurrent_modification_error() -> anyhow::Res
     let err = result.expect_err("SetGrubValue must fail when flock is held externally");
     let error_name = dbus_error_name(&err).unwrap_or("<not a method error>");
     assert_eq!(
-        error_name,
-        "org.bootcontrol.Error.ConcurrentModification",
+        error_name, "org.bootcontrol.Error.ConcurrentModification",
         "expected ConcurrentModification D-Bus error, got: {err}"
     );
 

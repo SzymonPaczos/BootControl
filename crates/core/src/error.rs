@@ -248,10 +248,15 @@ mod tests {
     /// Two equal variants must compare as equal.
     #[test]
     fn implements_partialeq() {
-        assert_eq!(BootControlError::PolkitDenied, BootControlError::PolkitDenied);
+        assert_eq!(
+            BootControlError::PolkitDenied,
+            BootControlError::PolkitDenied
+        );
         assert_ne!(
             BootControlError::PolkitDenied,
-            BootControlError::KeyNotFound { key: "X".to_string() }
+            BootControlError::KeyNotFound {
+                key: "X".to_string()
+            }
         );
     }
 }

@@ -68,14 +68,15 @@ async fn etag_mismatch_returns_state_mismatch_error() -> anyhow::Result<()> {
     // 64 zero-chars is a valid SHA-256 hex string that will never match any
     // real file's hash.
     let stale_etag = "0".repeat(64);
-    let result = proxy.set_grub_value("GRUB_TIMEOUT", "99", &stale_etag).await;
+    let result = proxy
+        .set_grub_value("GRUB_TIMEOUT", "99", &stale_etag)
+        .await;
 
     // ── Step 4: Assert the error name ────────────────────────────────────────
     let err = result.expect_err("SetGrubValue with stale ETag must fail");
     let error_name = dbus_error_name(&err).unwrap_or("<not a method error>");
     assert_eq!(
-        error_name,
-        "org.bootcontrol.Error.StateMismatch",
+        error_name, "org.bootcontrol.Error.StateMismatch",
         "expected StateMismatch D-Bus error, got: {err}"
     );
 
