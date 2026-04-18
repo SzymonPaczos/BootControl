@@ -1,6 +1,6 @@
 [Unit]
 Description=BootControl privileged boot configuration daemon
-Documentation=https://github.com/YOUR_USERNAME/bootcontrol
+Documentation=https://github.com/szymonpaczos/bootcontrol
 After=dbus.service
 Requires=dbus.service
 
@@ -8,12 +8,18 @@ Requires=dbus.service
 Type=notify
 ExecStart=/usr/bin/bootcontrold
 User=root
+Group=root
 Restart=on-failure
 RestartSec=1s
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=bootcontrold
 BusName=org.bootcontrol.Manager
+
+# Security constraints
+ProtectSystem=full
+ProtectHome=yes
+RestrictNamespaces=yes
 
 [Install]
 WantedBy=multi-user.target
