@@ -77,9 +77,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .collect();
                             entries.sort_by(|a, b| a.key.cmp(&b.key));
 
+                            let backend_name = view_model.active_backend.clone();
                             let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
                                 let model = std::rc::Rc::new(slint::VecModel::from(entries));
                                 ui.set_entries(model.into());
+                                ui.set_active_backend(backend_name.into());
                             });
                         }
                         Err(e) => {

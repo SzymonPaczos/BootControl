@@ -127,6 +127,7 @@ export component AppWindow inherits Window {
     in property <string> toast_message: "";
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
+    in property <string> active_backend: "grub";
     
     callback fetch_entries();
     callback save_entry(string, string);
@@ -157,7 +158,7 @@ export component AppWindow inherits Window {
                     color: #cdd6f4;
                 }
                 Text {
-                    text: "Manage GRUB configurations securely";
+                    text: "Backend: " + root.active_backend + " · Manage boot configurations securely";
                     font-size: 14px;
                     color: #a6adc8;
                 }
