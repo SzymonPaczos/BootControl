@@ -16,9 +16,9 @@
 #![deny(warnings)]
 
 use clap::{Parser, Subcommand};
+use bootcontrol_client::resolve_backend;
 use tracing::error;
 
-pub mod dbus;
 pub mod rescue;
 
 /// BootControl — safe GRUB/bootloader management.
@@ -38,10 +38,6 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Scan for an installed root filesystem and print chroot rescue instructions.
-    ///
-    /// Reads `/proc/partitions`, attempts to mount each partition, and checks
-    /// for `/etc/fstab`. Prints the chroot commands to stdout. Does NOT
-    /// perform the mounts or chroot itself — that is the user's responsibility.
     Rescue,
     /// Read the current GRUB configure and ETag from the daemon.
     GetConfig,
@@ -76,10 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::GetConfig => {
-            let connection = zbus::Connection::system().await?;
-            let proxy = dbus::ManagerProxy::new(&connection).await?;
-            let (config, etag) = proxy.read_grub_config().await?;
-            let active_backend = proxy
+            let backend = resolve_backend().await;
+            let (config, etag) = backend.read_config().await?;
+            let active_backend = backend
                 .get_active_backend()
                 .await
                 .unwrap_or_else(|_| "unknown".to_string());
@@ -87,21 +82,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Active Backend: {}", active_backend);
             println!("ETag: {}", etag);
             println!("\nConfiguration:");
-            for (key, value) in config {
-                println!("{}={}", key, value);
+            let mut keys: Vec<_> = config.keys().collect();
+            keys.sort();
+            for key in keys {
+                println!("{}={}", key, config[key]);
             }
         }
         Commands::GetEtag => {
-            let connection = zbus::Connection::system().await?;
-            let proxy = dbus::ManagerProxy::new(&connection).await?;
-            let etag = proxy.get_etag().await?;
-
+            let backend = resolve_backend().await;
+            let (_config, etag) = backend.read_config().await?;
             println!("{}", etag);
         }
         Commands::Set { key, value, etag } => {
-            let connection = zbus::Connection::system().await?;
-            let proxy = dbus::ManagerProxy::new(&connection).await?;
-            proxy.set_grub_value(&key, &value, &etag).await?;
+            let backend = resolve_backend().await;
+            backend.set_value(&key, &value, &etag).await?;
 
             println!("Successfully set {}={}", key, value);
         }

@@ -11,12 +11,14 @@ name = "bootcontrol-tui"
 path = "src/main.rs"
 
 [dependencies]
+# ── BootControl Client ────────────────────────────────────────────────────────
+bootcontrol-client = { workspace = true }
+async-trait        = "0.1"
+zbus               = { workspace = true }
+
 # ── TUI rendering ────────────────────────────────────────────────────────────
 ratatui   = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
-
-# ── D-Bus client ─────────────────────────────────────────────────────────────
-zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 # ── Async runtime ─────────────────────────────────────────────────────────────
 tokio        = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }

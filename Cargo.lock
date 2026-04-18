@@ -652,11 +652,23 @@ dependencies = [
 name = "bootcontrol-cli"
 version = "0.1.0"
 dependencies = [
+ "bootcontrol-client",
  "bootcontrol-core",
  "clap",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
+name = "bootcontrol-client"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bootcontrol-core",
+ "tokio",
+ "tracing",
  "zbus",
 ]
 
@@ -684,7 +696,7 @@ name = "bootcontrol-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
+ "bootcontrol-client",
  "bootcontrol-core",
  "nix 0.29.0",
  "slint",
@@ -698,6 +710,8 @@ dependencies = [
 name = "bootcontrol-tui"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "bootcontrol-client",
  "crossterm",
  "ratatui",
  "tokio",
