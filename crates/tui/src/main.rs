@@ -24,20 +24,20 @@
 #![deny(warnings)]
 
 pub mod app;
-pub mod dbus;
 pub mod events;
 pub mod popup;
 pub mod ui;
 
 use std::io;
+use std::sync::Arc;
 
 use app::{App, GrubEntry, Mode};
+use bootcontrol_client::{BootBackend, resolve_backend, dbus_error_message};
 use crossterm::{
     event::{EventStream, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use dbus::ManagerProxy;
 use events::{AppEvent, is_quit_key, next_event};
 use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::time::{Duration, Instant};
@@ -54,24 +54,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    // ── Connect to D-Bus ─────────────────────────────────────────────────────
-    info!("connecting to D-Bus system bus");
-    let connection = zbus::Connection::system().await.map_err(|e| {
-        eprintln!("error: cannot connect to D-Bus: {e}");
-        e
-    })?;
-
-    let proxy = ManagerProxy::new(&connection).await.map_err(|e| {
-        eprintln!("error: cannot reach bootcontrold: {e}");
-        e
-    })?;
+    // ── Resolve Backend (D-Bus or Mock) ───────────────────────────────────────
+    let backend = resolve_backend().await;
 
     // ── Initial config load ───────────────────────────────────────────────────
-    info!("loading initial GRUB configuration");
-    let app = match load_app(&proxy).await {
+    info!("loading initial boot configuration");
+    let app = match load_app(backend.as_ref()).await {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("error: failed to read GRUB config from daemon: {e}");
+            eprintln!("error: failed to read config from backend: {e}");
             return Err(e.into());
         }
     };
@@ -80,12 +71,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let backend_tui = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend_tui)?;
     terminal.clear()?;
 
     // ── Run the event loop ────────────────────────────────────────────────────
-    let result = run_event_loop(&mut terminal, app, &proxy).await;
+    let result = run_event_loop(&mut terminal, app, backend.clone()).await;
 
     // ── Terminal teardown (always runs) ───────────────────────────────────────
     disable_raw_mode()?;
@@ -101,14 +92,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// Run the main TUI event loop until the user requests a quit.
-///
-/// # Errors
-///
-/// Returns any terminal I/O error from `terminal.draw`.
 async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
-    proxy: &ManagerProxy<'_>,
+    backend: Arc<dyn BootBackend>,
 ) -> io::Result<()> {
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
@@ -124,13 +111,12 @@ async fn run_event_loop(
 
         // ── Poll for the next event ───────────────────────────────────────────
         let Some(event) = next_event(&mut stream, tick_rate, &mut last_tick).await else {
-            // Stream closed — terminal gone, exit cleanly.
             break;
         };
 
         match event {
-            AppEvent::Key(key) => handle_key_event(key, &mut app, proxy).await,
-            AppEvent::Resize | AppEvent::Tick => {} // just redraw on next iteration
+            AppEvent::Key(key) => handle_key_event(key, &mut app, backend.as_ref()).await,
+            AppEvent::Resize | AppEvent::Tick => {}
         }
     }
 
@@ -142,17 +128,17 @@ async fn run_event_loop(
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// Dispatch a keyboard event to the correct handler based on `app.mode`.
-async fn handle_key_event(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'_>) {
+async fn handle_key_event(key: KeyEvent, app: &mut App, backend: &dyn BootBackend) {
     match app.mode {
-        Mode::Browse => handle_browse_key(key, app, proxy).await,
-        Mode::Editing => handle_editing_key(key, app, proxy).await,
+        Mode::Browse => handle_browse_key(key, app, backend).await,
+        Mode::Editing => handle_editing_key(key, app, backend).await,
         Mode::ErrorPopup => handle_error_key(key, app),
     }
 }
 
 // ── Browse mode ───────────────────────────────────────────────────────────────
 
-async fn handle_browse_key(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'_>) {
+async fn handle_browse_key(key: KeyEvent, app: &mut App, backend: &dyn BootBackend) {
     if is_quit_key(&key) || matches!(key.code, KeyCode::Esc) {
         app.should_quit = true;
         return;
@@ -163,7 +149,7 @@ async fn handle_browse_key(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'_
         KeyCode::Down | KeyCode::Char('j') => app.move_selection_down(),
         KeyCode::Enter => app.open_edit_popup(),
         KeyCode::Char('r') | KeyCode::Char('R') => {
-            reload_config(app, proxy).await;
+            reload_config(app, backend).await;
         }
         _ => {}
     }
@@ -171,14 +157,14 @@ async fn handle_browse_key(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'_
 
 // ── Editing mode ──────────────────────────────────────────────────────────────
 
-async fn handle_editing_key(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'_>) {
+async fn handle_editing_key(key: KeyEvent, app: &mut App, backend: &dyn BootBackend) {
     match key {
-        // Confirm edit → call daemon
+        // Confirm edit → call backend
         KeyEvent {
             code: KeyCode::Enter,
             ..
         } => {
-            commit_edit(app, proxy).await;
+            commit_edit(app, backend).await;
         }
 
         // Cancel edit
@@ -197,7 +183,7 @@ async fn handle_editing_key(key: KeyEvent, app: &mut App, proxy: &ManagerProxy<'
             app.pop_char();
         }
 
-        // Printable characters (no modifiers or SHIFT only)
+        // Printable characters
         KeyEvent {
             code: KeyCode::Char(c),
             modifiers,
@@ -220,28 +206,29 @@ fn handle_error_key(key: KeyEvent, app: &mut App) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// D-Bus helpers
+// Backend helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Call `ReadGrubConfig` and build a fresh [`App`].
-async fn load_app(proxy: &ManagerProxy<'_>) -> Result<App, zbus::Error> {
-    let (config, etag) = proxy.read_grub_config().await?;
-    let entries: Vec<GrubEntry> = config
+/// Call `read_config` and build a fresh [`App`].
+async fn load_app(backend: &dyn BootBackend) -> Result<App, zbus::Error> {
+    let (config, etag) = backend.read_config().await?;
+    let mut entries: Vec<GrubEntry> = config
         .into_iter()
         .map(|(key, value)| GrubEntry { key, value })
         .collect();
+    entries.sort_by(|a, b| a.key.cmp(&b.key));
     Ok(App::new(entries, etag))
 }
 
-/// Reload the GRUB config and update `app` in place.
-async fn reload_config(app: &mut App, proxy: &ManagerProxy<'_>) {
-    info!("reloading GRUB configuration from daemon");
-    match proxy.read_grub_config().await {
+/// Reload the config and update `app` in place.
+async fn reload_config(app: &mut App, backend: &dyn BootBackend) {
+    match backend.read_config().await {
         Ok((config, etag)) => {
-            let entries: Vec<GrubEntry> = config
+            let mut entries: Vec<GrubEntry> = config
                 .into_iter()
                 .map(|(key, value)| GrubEntry { key, value })
                 .collect();
+            entries.sort_by(|a, b| a.key.cmp(&b.key));
             app.apply_grub_entries(entries, etag);
             app.status_msg = "Configuration reloaded.".into();
         }
@@ -252,11 +239,8 @@ async fn reload_config(app: &mut App, proxy: &ManagerProxy<'_>) {
     }
 }
 
-/// Call `SetGrubValue` with the current edit buffer contents.
-///
-/// On success, reloads the config (to refresh the ETag) and returns to Browse.
-/// On failure, shows the error popup.
-async fn commit_edit(app: &mut App, proxy: &ManagerProxy<'_>) {
+/// Call `set_value` with the current edit buffer contents.
+async fn commit_edit(app: &mut App, backend: &dyn BootBackend) {
     let (key, value, etag) = match app.current_entry() {
         Some(entry) => (entry.key.clone(), app.edit_buf.clone(), app.etag.clone()),
         None => {
@@ -265,12 +249,11 @@ async fn commit_edit(app: &mut App, proxy: &ManagerProxy<'_>) {
         }
     };
 
-    info!(key = %key, "committing edit via D-Bus");
-    match proxy.set_grub_value(&key, &value, &etag).await {
+    match backend.set_value(&key, &value, &etag).await {
         Ok(()) => {
             app.cancel_edit();
             app.status_msg = format!("✓  {key} updated successfully.");
-            reload_config(app, proxy).await;
+            reload_config(app, backend).await;
         }
         Err(e) => {
             warn!(key = %key, error = %e, "SetGrubValue failed");
@@ -280,20 +263,3 @@ async fn commit_edit(app: &mut App, proxy: &ManagerProxy<'_>) {
     }
 }
 
-/// Extract a human-readable string from a [`zbus::Error`].
-///
-/// Prefers the D-Bus `org.bootcontrol.Error.*` error name when it is
-/// available; falls back to the full `Display` representation.
-fn dbus_error_message(e: &zbus::Error) -> String {
-    // zbus::Error::MethodError carries (error_name, detail, message)
-    if let zbus::Error::MethodError(name, detail, _) = e {
-        let short_name = name
-            .strip_prefix("org.bootcontrol.Error.")
-            .unwrap_or(name.as_str());
-        return match detail {
-            Some(d) if !d.is_empty() => format!("{short_name}: {d}"),
-            _ => short_name.to_string(),
-        };
-    }
-    e.to_string()
-}

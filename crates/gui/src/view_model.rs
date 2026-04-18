@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::backend::BootBackend;
+use bootcontrol_client::BootBackend;
 
 /// View model bridging the boot backend and the Slint UI layer.
 pub struct ViewModel {

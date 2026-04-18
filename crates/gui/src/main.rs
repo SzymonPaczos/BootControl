@@ -40,24 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Initialize Backend (D-Bus on Linux, Mock on others or if DEMO=1)
-    let backend: std::sync::Arc<dyn bootcontrol_gui::backend::BootBackend> = {
-        let is_demo = std::env::var("BOOTCONTROL_DEMO").is_ok();
-        let target_os = std::env::consts::OS;
-        
-        if is_demo || target_os != "linux" {
-            println!("Starting in DEMO mode (MockBackend)");
-            std::sync::Arc::new(bootcontrol_gui::backend::MockBackend)
-        } else {
-            match bootcontrol_gui::dbus::connect_bus().await {
-                Ok(conn) => std::sync::Arc::new(bootcontrol_gui::backend::DbusBackend::new(conn)),
-                Err(e) => {
-                    eprintln!("Failed to connect to D-Bus: {}. Falling back to DEMO mode.", e);
-                    std::sync::Arc::new(bootcontrol_gui::backend::MockBackend)
-                }
-            }
-        }
-    };
-
+    let backend = bootcontrol_client::resolve_backend().await;
     let mut view_model = ViewModel::new(backend);
 
     // Initial fetch

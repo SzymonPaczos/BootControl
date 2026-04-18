@@ -10,8 +10,8 @@ path = "src/lib.rs"
 [dependencies]
 slint = "1.8"
 bootcontrol-core = { workspace = true }
+bootcontrol-client = { workspace = true }
 zbus = { workspace = true }
-async-trait = "0.1"
 tokio = { workspace = true }
 
 [build-dependencies]
