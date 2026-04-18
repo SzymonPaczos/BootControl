@@ -16,6 +16,7 @@
 //! | [`polkit`] | Polkit authorization (mock or real, feature-gated). |
 //! | [`sanitize`] | Payload blacklist enforcement. |
 //! | [`dbus_error`] | `BootControlError` → `zbus::fdo::Error` mapping. |
+//! | [`secureboot`] | MOK-based UKI signing and enrollment via `sbsign` and `mokutil`. |
 
 #![deny(warnings)]
 #![deny(missing_docs)]
@@ -29,3 +30,4 @@ pub mod interface;
 pub mod polkit;
 pub mod prober;
 pub mod sanitize;
+pub mod secureboot;

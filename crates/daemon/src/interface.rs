@@ -31,13 +31,14 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use bootcontrol_core::boot_manager::BootManager;
+use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
 
 use crate::{
     dbus_error::{to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
     polkit::authorize_with_polkit,
     sanitize,
+    secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
 };
 use tracing::{info, warn};
 use zbus::interface;
@@ -448,5 +449,104 @@ impl GrubManager {
 
         // ── Step 2: Run grub-mkconfig ───────────────────────────────────────
         grub_rebuild::run_grub_mkconfig(&self.grub_cfg_path).map_err(to_daemon_error)
+    }
+
+    /// Sign a UKI image and enroll the MOK certificate.
+    ///
+    /// Signs the UKI at `uki_path` using the MOK key and certificate stored
+    /// at the default paths (`/var/lib/bootcontrol/keys/mok.key` and
+    /// `/var/lib/bootcontrol/keys/mok.crt`), then generates a MokManager
+    /// enrollment request so the key is trusted on the next reboot.
+    ///
+    /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// SignAndEnrollUki(s) -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// * `uki_path` — Absolute path to the UKI `.efi` image to sign.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied` — the caller is not authorized.
+    /// - `org.bootcontrol.Error.MokKeyNotFound` — the MOK key or certificate is absent.
+    /// - `org.bootcontrol.Error.ToolNotFound` — `sbsign` or `mokutil` is not installed.
+    /// - `org.bootcontrol.Error.SigningFailed` — signing or enrollment exited non-zero.
+    async fn sign_and_enroll_uki(
+        &self,
+        uki_path: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(uki_path = %uki_path, "D-Bus: SignAndEnrollUki");
+
+        // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!(uki_path = %uki_path, "D-Bus message has no sender field");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                warn!(uki_path = %uki_path, error = %e, "Failed to create DBus proxy");
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+            })?;
+
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|e| {
+                    warn!(uki_path = %uki_path, error = %e, "GetConnectionUnixUser failed");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+                })?
+        };
+
+        info!(caller_uid = %caller_uid, uki_path = %uki_path, "Resolved caller UID for Polkit");
+
+        // ── Step 2: Polkit authorization ────────────────────────────────────
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, uki_path = %uki_path, "Polkit denied");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 3: Instantiate the signer ──────────────────────────────────
+        let signer = SbsignMokSigner {
+            sbsign_override: None,
+            mokutil_override: None,
+        };
+
+        // ── Step 4a: Pre-flight check — default keys exist ──────────────────
+        sign_with_default_keys(&signer).map_err(|e| {
+            warn!(uki_path = %uki_path, "MOK key pre-flight failed");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 4b: Sign the UKI ────────────────────────────────────────────
+        let uki = std::path::Path::new(&uki_path);
+        let key = std::path::Path::new(crate::secureboot::mok::DEFAULT_MOK_KEY_PATH);
+        let cert = std::path::Path::new(crate::secureboot::mok::DEFAULT_MOK_CERT_PATH);
+
+        signer.sign_uki(uki, key, cert).map_err(|e| {
+            warn!(uki_path = %uki_path, "UKI signing failed");
+            to_daemon_error(e)
+        })?;
+
+        // ── Step 4c: Generate enrollment request ────────────────────────────
+        signer
+            .generate_enrollment_request(cert, std::path::Path::new(""))
+            .map_err(|e| {
+                warn!(uki_path = %uki_path, "MOK enrollment request failed");
+                to_daemon_error(e)
+            })?;
+
+        info!(uki_path = %uki_path, "SignAndEnrollUki completed successfully");
+        Ok(())
     }
 }
