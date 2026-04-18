@@ -23,6 +23,7 @@
 use std::path::PathBuf;
 
 use bootcontrold::interface::GrubManager;
+use bootcontrold::prober::{build_backend, probe_system};
 use tracing::info;
 use zbus::connection;
 
@@ -90,8 +91,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "bootcontrold starting"
     );
 
-    // ── 2. Build D-Bus connection ────────────────────────────────────────────
-    let manager = GrubManager::with_failsafe_path(grub_path, failsafe_path);
+    // ── 2. Detect bootloader and build backend ───────────────────────────────
+    let detected = probe_system();
+    info!(backend = %detected, "bootloader detected");
+    let backend = build_backend(detected);
+
+    // ── 3. Build D-Bus connection ────────────────────────────────────────────
+    let manager = GrubManager::with_failsafe_path(grub_path, failsafe_path, backend);
 
     let _conn = dbus_connection_builder()
         // ── 3. Register the interface object ────────────────────────────────

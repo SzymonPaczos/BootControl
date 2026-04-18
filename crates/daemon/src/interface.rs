@@ -12,6 +12,9 @@
 //! ## `GetEtag`
 //! Read-only — no authorization required.
 //!
+//! ## `GetActiveBackend`
+//! Read-only — no authorization required.
+//!
 //! ## `SetGrubValue`
 //! Wielowarstwowa autoryzacja zapisu:
 //! 1. Polkit check ([`crate::polkit::authorize_with_polkit`])
@@ -22,7 +25,14 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
-use crate::{dbus_error::{to_daemon_error, DaemonError}, grub_manager, polkit::authorize_with_polkit, sanitize};
+use bootcontrol_core::boot_manager::BootManager;
+
+use crate::{
+    dbus_error::{to_daemon_error, DaemonError},
+    grub_manager,
+    polkit::authorize_with_polkit,
+    sanitize,
+};
 use tracing::{info, warn};
 use zbus::interface;
 
@@ -36,7 +46,11 @@ use zbus::interface;
 /// written after every successful `SetGrubValue`. It is injectable for tests
 /// via [`GrubManager::with_failsafe_path`].
 ///
-/// Both fields are **private** — external code accesses them only through the
+/// `backend` is the active [`BootManager`] backend. It is selected at startup
+/// by the prober and injected here. This enables `GetActiveBackend()` and
+/// future generic boot operations.
+///
+/// All fields are **private** — external code accesses them only through the
 /// corresponding accessor methods to prevent accidental mutation after
 /// construction.
 pub struct GrubManager {
@@ -48,6 +62,8 @@ pub struct GrubManager {
     ///
     /// Private — set during construction; not exposed directly.
     failsafe_cfg_path: PathBuf,
+    /// Active bootloader backend, selected by the prober at startup.
+    backend: Box<dyn BootManager>,
 }
 
 impl GrubManager {
@@ -60,20 +76,23 @@ impl GrubManager {
     ///
     /// * `grub_path` — Path to the GRUB configuration file. Production code
     ///   passes `/etc/default/grub`; tests pass a `NamedTempFile` path.
+    /// * `backend`   — The active [`BootManager`] backend, selected by the prober.
     ///
     /// # Examples
     ///
     /// ```
     /// use std::path::PathBuf;
     /// use bootcontrold::interface::GrubManager;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
     ///
-    /// let manager = GrubManager::new(PathBuf::from("/etc/default/grub"));
+    /// let manager = GrubManager::new(PathBuf::from("/etc/default/grub"), Box::new(GrubBackend));
     /// assert_eq!(manager.grub_path(), std::path::Path::new("/etc/default/grub"));
     /// ```
-    pub fn new(grub_path: PathBuf) -> Self {
+    pub fn new(grub_path: PathBuf, backend: Box<dyn BootManager>) -> Self {
         Self {
             grub_path,
             failsafe_cfg_path: PathBuf::from("/etc/bootcontrol/failsafe.cfg"),
+            backend,
         }
     }
 
@@ -86,23 +105,31 @@ impl GrubManager {
     ///
     /// * `grub_path`         — Path to the GRUB configuration file.
     /// * `failsafe_cfg_path` — Path where the failsafe GRUB snippet is written.
+    /// * `backend`           — The active [`BootManager`] backend.
     ///
     /// # Examples
     ///
     /// ```
     /// use std::path::PathBuf;
     /// use bootcontrold::interface::GrubManager;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
     ///
     /// let m = GrubManager::with_failsafe_path(
     ///     PathBuf::from("/etc/default/grub"),
     ///     PathBuf::from("/tmp/test-failsafe.cfg"),
+    ///     Box::new(GrubBackend),
     /// );
     /// assert_eq!(m.grub_path(), std::path::Path::new("/etc/default/grub"));
     /// ```
-    pub fn with_failsafe_path(grub_path: PathBuf, failsafe_cfg_path: PathBuf) -> Self {
+    pub fn with_failsafe_path(
+        grub_path: PathBuf,
+        failsafe_cfg_path: PathBuf,
+        backend: Box<dyn BootManager>,
+    ) -> Self {
         Self {
             grub_path,
             failsafe_cfg_path,
+            backend,
         }
     }
 
@@ -113,8 +140,9 @@ impl GrubManager {
     /// ```
     /// use std::path::{Path, PathBuf};
     /// use bootcontrold::interface::GrubManager;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
     ///
-    /// let m = GrubManager::new(PathBuf::from("/etc/default/grub"));
+    /// let m = GrubManager::new(PathBuf::from("/etc/default/grub"), Box::new(GrubBackend));
     /// assert_eq!(m.grub_path(), Path::new("/etc/default/grub"));
     /// ```
     pub fn grub_path(&self) -> &Path {
@@ -242,5 +270,25 @@ impl GrubManager {
     async fn get_etag(&self) -> Result<String, DaemonError> {
         info!(path = ?self.grub_path, "D-Bus: GetEtag");
         grub_manager::fetch_etag(&self.grub_path).map_err(to_daemon_error)
+    }
+
+    /// Return the name of the active bootloader backend.
+    ///
+    /// **Read-only — no Polkit authorization required.** This method only
+    /// reports which backend was detected at daemon startup; it performs no
+    /// writes and accesses no sensitive state.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// GetActiveBackend() -> s
+    /// ```
+    ///
+    /// ## Return value
+    ///
+    /// A short ASCII string: `"grub"`, `"systemd-boot"`, or `"unknown"`.
+    async fn get_active_backend(&self) -> String {
+        info!("D-Bus: GetActiveBackend");
+        self.backend.name().to_string()
     }
 }

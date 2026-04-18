@@ -22,7 +22,9 @@
 pub mod dbus_error;
 pub mod failsafe;
 pub mod grub_manager;
+pub mod initramfs;
 pub mod interface;
 pub mod polkit;
+pub mod prober;
 pub mod sanitize;
 
