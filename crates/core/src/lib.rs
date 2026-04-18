@@ -25,6 +25,10 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
+pub mod backends;
+pub mod boot_manager;
 pub mod error;
 pub mod grub;
 pub mod hash;
+pub mod initramfs;
+pub mod prober;
