@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use zbus::Connection;
+use std::sync::Arc;
+use crate::backend::BootBackend;
 
-use crate::dbus::ManagerProxy;
-
-/// View model bridging the D-Bus daemon and the Slint UI layer.
+/// View model bridging the boot backend and the Slint UI layer.
 pub struct ViewModel {
-    /// Active D-Bus connection.
-    pub conn: Connection,
+    /// Active boot backend (D-Bus or Mock).
+    pub backend: Arc<dyn BootBackend>,
     /// Parsed GRUB key-value entries from the last successful load.
     pub entries: HashMap<String, String>,
     /// Current ETag of the GRUB config file on disk.
@@ -16,34 +15,31 @@ pub struct ViewModel {
 }
 
 impl ViewModel {
-    /// Create a new [`ViewModel`] with an empty state.
-    pub fn new(conn: Connection) -> Self {
+    /// Create a new [`ViewModel`] with the given backend.
+    pub fn new(backend: Arc<dyn BootBackend>) -> Self {
         Self {
-            conn,
+            backend,
             entries: HashMap::new(),
             etag: String::new(),
             active_backend: "grub".to_string(),
         }
     }
 
-    /// Fetch the current GRUB config and backend name from the daemon.
-    pub async fn load(&mut self) -> zbus::Result<()> {
-        let manager = ManagerProxy::new(&self.conn).await?;
-        let (config, etag) = manager.read_grub_config().await?;
+    /// Fetch the current GRUB config and backend name from the backend.
+    pub async fn load(&mut self) -> Result<(), zbus::Error> {
+        let (config, etag) = self.backend.read_config().await?;
         self.entries = config;
         self.etag = etag;
-        self.active_backend = manager
+        self.active_backend = self.backend
             .get_active_backend()
             .await
             .unwrap_or_else(|_| "grub".to_string());
         Ok(())
     }
 
-    /// Commit a single key-value edit to the daemon.
-    pub async fn commit_edit(&mut self, key: &str, value: &str) -> zbus::Result<()> {
-        let manager = ManagerProxy::new(&self.conn).await?;
-        manager.set_grub_value(key, value, &self.etag).await?;
-        // ETag usually needs to be re-fetched after commit, but load() handles that.
+    /// Commit a single key-value edit to the backend.
+    pub async fn commit_edit(&mut self, key: &str, value: &str) -> Result<(), zbus::Error> {
+        self.backend.set_value(key, value, &self.etag).await?;
         Ok(())
     }
 }

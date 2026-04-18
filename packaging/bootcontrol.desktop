@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=BootControl
+Comment=Manage bootloader configuration and Secure Boot
+Exec=bootcontrol-gui
+Icon=bootcontrol
+Terminal=false
+Type=Application
+Categories=Settings;System;Qt;
+Keywords=grub;boot;secureboot;mok;
+StartupNotify=true
+X-KDE-SubstituteUID=false

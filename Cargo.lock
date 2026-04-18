@@ -684,6 +684,7 @@ name = "bootcontrol-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bootcontrol-core",
  "nix 0.29.0",
  "slint",
