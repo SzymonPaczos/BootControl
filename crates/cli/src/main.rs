@@ -79,7 +79,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             let (config, etag) = proxy.read_grub_config().await?;
-            let active_backend = proxy.get_active_backend().await.unwrap_or_else(|_| "unknown".to_string());
+            let active_backend = proxy
+                .get_active_backend()
+                .await
+                .unwrap_or_else(|_| "unknown".to_string());
 
             println!("Active Backend: {}", active_backend);
             println!("ETag: {}", etag);
@@ -92,14 +95,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             let etag = proxy.get_etag().await?;
-            
+
             println!("{}", etag);
         }
         Commands::Set { key, value, etag } => {
             let connection = zbus::Connection::system().await?;
             let proxy = dbus::ManagerProxy::new(&connection).await?;
             proxy.set_grub_value(&key, &value, &etag).await?;
-            
+
             println!("Successfully set {}={}", key, value);
         }
     }

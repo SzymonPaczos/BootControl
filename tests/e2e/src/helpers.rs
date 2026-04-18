@@ -145,13 +145,9 @@ pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
 
-    let pid = handle
-        .process
-        .id()
-        .context("daemon process has no PID")?;
+    let pid = handle.process.id().context("daemon process has no PID")?;
 
-    kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
-        .context("failed to SIGTERM bootcontrold")?;
+    kill(Pid::from_raw(pid as i32), Signal::SIGTERM).context("failed to SIGTERM bootcontrold")?;
 
     // Give the daemon a moment to exit gracefully, then force-kill if needed.
     let waited = tokio::task::spawn_blocking(move || handle.process.wait()).await??;
@@ -218,10 +214,16 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     }
 
     // The binary lands in target/debug/ relative to the workspace root.
-    let binary = workspace_root.join("target").join("debug").join("bootcontrold");
+    let binary = workspace_root
+        .join("target")
+        .join("debug")
+        .join("bootcontrold");
 
     if !binary.exists() {
-        bail!("expected binary not found after build: {}", binary.display());
+        bail!(
+            "expected binary not found after build: {}",
+            binary.display()
+        );
     }
 
     Ok(binary)

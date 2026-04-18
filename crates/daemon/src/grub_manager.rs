@@ -53,7 +53,7 @@ use bootcontrol_core::{
 use nix::fcntl::{Flock, FlockArg};
 use tracing::{error, info, warn};
 
-use crate::failsafe;
+use crate::{failsafe, grub_rebuild};
 
 /// Read `/etc/default/grub` (or any path), parse it, and compute its ETag.
 ///
@@ -130,10 +130,12 @@ pub fn fetch_etag(path: &Path) -> Result<String, BootControlError> {
 /// flock is acquired **before** reading the file content, eliminating the
 /// race window between ETag check and write.
 ///
-/// After the atomic write succeeds, calls
-/// [`failsafe::refresh_failsafe_entry`] to regenerate the golden-parachute
-/// GRUB snippet so that a safe boot option is always available regardless of
-/// the new `GRUB_CMDLINE_LINUX_DEFAULT` value.
+/// After the atomic write succeeds this function:
+/// 1. Calls [`failsafe::refresh_failsafe_entry`] to regenerate the
+///    golden-parachute GRUB snippet (Step 8).
+/// 2. Calls [`grub_rebuild::run_grub_mkconfig`] to regenerate
+///    `/boot/grub/grub.cfg` so the change becomes active at the next boot
+///    (Step 9).
 ///
 /// # Arguments
 ///
@@ -146,11 +148,15 @@ pub fn fetch_etag(path: &Path) -> Result<String, BootControlError> {
 /// * `failsafe_cfg` — Path where the failsafe GRUB snippet is written.
 ///   Production code passes `/etc/bootcontrol/failsafe.cfg`; tests pass a
 ///   path inside a `tempfile::TempDir`.
+/// * `grub_cfg_path` — Destination for the regenerated `grub.cfg`.
+///   Production code passes `/boot/grub/grub.cfg`; tests inject a path
+///   inside a `tempfile::TempDir` so `grub-mkconfig` (if present) writes
+///   there instead of touching the live boot partition.
 ///
 /// # Errors
 ///
-/// - [`BootControlError::EspScanFailed`] — file read/write I/O error, or
-///   failsafe entry write failure.
+/// - [`BootControlError::EspScanFailed`] — file read/write I/O error,
+///   failsafe entry write failure, or `grub-mkconfig` execution failure.
 /// - [`BootControlError::ConcurrentModification`] — another process holds an
 ///   exclusive lock (`flock EWOULDBLOCK`). This is checked **before** reading.
 /// - [`BootControlError::StateMismatch`] — the provided ETag does not match
@@ -166,8 +172,9 @@ pub fn fetch_etag(path: &Path) -> Result<String, BootControlError> {
 ///
 /// let path = Path::new("/etc/default/grub");
 /// let failsafe = Path::new("/etc/bootcontrol/failsafe.cfg");
+/// let grub_cfg = Path::new("/boot/grub/grub.cfg");
 /// let (_, etag) = read_grub_config(path).unwrap();
-/// set_grub_value(path, "GRUB_TIMEOUT", "10", &etag, failsafe).unwrap();
+/// set_grub_value(path, "GRUB_TIMEOUT", "10", &etag, failsafe, grub_cfg).unwrap();
 /// ```
 pub fn set_grub_value(
     path: &Path,
@@ -175,6 +182,7 @@ pub fn set_grub_value(
     value: &str,
     etag: &str,
     failsafe_cfg: &Path,
+    grub_cfg_path: &Path,
 ) -> Result<(), BootControlError> {
     // ── Step 1: Open file handle ────────────────────────────────────────────
     // We open the file BEFORE acquiring the lock so we have a fd to flock on.
@@ -195,8 +203,8 @@ pub fn set_grub_value(
     // TOCTOU safety: the lock is held from this point until the end of the
     // function (when `locked` is dropped). No other BootControl instance or
     // package manager can modify the file while we hold it.
-    let mut locked = Flock::lock(lock_file, FlockArg::LockExclusiveNonblock).map_err(
-        |(_file, errno)| {
+    let mut locked =
+        Flock::lock(lock_file, FlockArg::LockExclusiveNonblock).map_err(|(_file, errno)| {
             if errno == nix::errno::Errno::EWOULDBLOCK {
                 warn!(?path, "flock EWOULDBLOCK — package manager holds the lock");
                 BootControlError::ConcurrentModification {
@@ -208,8 +216,7 @@ pub fn set_grub_value(
                     reason: format!("flock error: {errno}"),
                 }
             }
-        },
-    )?;
+        })?;
 
     // ── Step 3: Read content THROUGH the locked file handle ─────────────────
     //
@@ -251,7 +258,11 @@ pub fn set_grub_value(
     // first occurrence while a later duplicate exists would leave a stale value
     // as the effective one.
     let new_line = build_assignment_line(key, value);
-    match config.lines.iter().rposition(|l| is_assignment_for_key(l, key)) {
+    match config
+        .lines
+        .iter()
+        .rposition(|l| is_assignment_for_key(l, key))
+    {
         Some(idx) => config.lines[idx] = new_line,
         None => config.lines.push(new_line),
     }
@@ -269,6 +280,17 @@ pub fn set_grub_value(
     // callers can log / surface it if the output directory is inaccessible.
     info!(key, "GRUB config updated — refreshing failsafe entry");
     failsafe::refresh_failsafe_entry(failsafe_cfg)?;
+
+    // ── Step 9: Regenerate /boot/grub/grub.cfg via grub-mkconfig ─────────
+    //
+    // The atomic write above only updated /etc/default/grub. GRUB reads
+    // /boot/grub/grub.cfg at boot time. Without this call the user's change
+    // would be written to disk but would never take effect at the next boot.
+    //
+    // run_grub_mkconfig is called AFTER the failsafe refresh so both
+    // safeguards are in place before the live boot config is regenerated.
+    info!(key, grub_cfg = ?grub_cfg_path, "triggering grub-mkconfig");
+    grub_rebuild::run_grub_mkconfig(grub_cfg_path)?;
 
     Ok(())
     // `locked` drops here → flock released automatically via Drop.
@@ -333,14 +355,12 @@ fn write_file_atomically(
         }
     })?;
 
-    tmp_file
-        .write_all(new_content.as_bytes())
-        .map_err(|e| {
-            error!(?tmp_path, io_error = %e, "failed to write temp file");
-            BootControlError::EspScanFailed {
-                reason: format!("temp file write failed: {e}"),
-            }
-        })?;
+    tmp_file.write_all(new_content.as_bytes()).map_err(|e| {
+        error!(?tmp_path, io_error = %e, "failed to write temp file");
+        BootControlError::EspScanFailed {
+            reason: format!("temp file write failed: {e}"),
+        }
+    })?;
 
     // fsync ensures the data reaches persistent storage before the rename.
     tmp_file.sync_all().map_err(|e| {
@@ -373,7 +393,7 @@ fn write_file_atomically(
 mod tests {
     use super::*;
     use bootcontrol_core::hash::compute_etag_str;
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -382,6 +402,50 @@ mod tests {
         f.write_all(content.as_bytes()).expect("tempfile write");
         f.flush().expect("tempfile flush");
         f
+    }
+
+    /// Create a temporary directory containing a `grub-mkconfig` stub that
+    /// immediately exits 0, set `PATH` to that directory, and return a guard
+    /// that holds the `PATH_LOCK`.
+    ///
+    /// Both the `TempDir` (keeps the fake binary alive) and the `MutexGuard`
+    /// (prevents concurrent PATH manipulation by other tests) must be kept
+    /// alive for the duration of the test.  When they are dropped, `PATH` is
+    /// restored and the lock is released.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(TempDir, MutexGuard)`.  Bind both to `_` prefixed names
+    /// so Rust does not drop them before the assertion:
+    ///
+    /// ```text
+    /// let (_bin_dir, _guard) = setup_fake_grub_mkconfig();
+    /// ```
+    fn setup_fake_grub_mkconfig() -> (TempDir, std::sync::MutexGuard<'static, ()>) {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Acquire the global PATH lock FIRST so no concurrent test can observe
+        // the changed PATH between set_var and the actual command execution.
+        let guard = crate::grub_rebuild::tests::PATH_LOCK
+            .lock()
+            .expect("PATH lock poisoned");
+
+        let dir = TempDir::new().expect("fake grub-mkconfig tempdir");
+        let script_path = dir.path().join("grub-mkconfig");
+
+        let mut f = std::fs::File::create(&script_path).expect("create fake grub-mkconfig");
+        writeln!(f, "#!/bin/sh").expect("write shebang");
+        writeln!(f, "exit 0").expect("write body");
+        drop(f);
+
+        let mut perms = std::fs::metadata(&script_path)
+            .expect("metadata")
+            .permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script_path, perms).expect("chmod");
+
+        std::env::set_var("PATH", dir.path());
+        (dir, guard)
     }
 
     const SIMPLE_GRUB: &str = "\
@@ -426,13 +490,24 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
 
     // ── set_grub_value — ETag verification ───────────────────────────────────
 
+    /// A stale ETag must be rejected before any write happens — grub-mkconfig
+    /// is never reached, so no fake binary is needed for this test.
     #[test]
     fn set_grub_value_rejects_stale_etag() {
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let stale_etag = compute_etag_str("completely different content\n");
-        let result = set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &stale_etag, &failsafe_path);
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "10",
+            &stale_etag,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
         assert!(
             matches!(result, Err(BootControlError::StateMismatch { .. })),
             "expected StateMismatch, got {result:?}"
@@ -444,9 +519,22 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &etag, &failsafe_path)
-            .expect("write should succeed");
+
+        // Provide a fake grub-mkconfig on PATH so Step 9 succeeds.
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "10",
+            &etag,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("write should succeed");
 
         let (map, _) = read_grub_config(f.path()).expect("re-read");
         assert_eq!(map.get("GRUB_TIMEOUT").map(String::as_str), Some("10"));
@@ -457,9 +545,21 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_GFXMODE", "auto", &etag, &failsafe_path)
-            .expect("write should succeed");
+
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_GFXMODE",
+            "auto",
+            &etag,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("write should succeed");
 
         let (map, _) = read_grub_config(f.path()).expect("re-read");
         assert_eq!(map.get("GRUB_GFXMODE").map(String::as_str), Some("auto"));
@@ -478,9 +578,21 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         let f = write_temp(content);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let etag = compute_etag_str(content);
 
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "10", &etag, &failsafe_path).expect("write");
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "10",
+            &etag,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("write");
 
         let written = fs::read_to_string(f.path()).expect("re-read raw");
 
@@ -512,8 +624,21 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "99", &etag, &failsafe_path).expect("write");
+
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "99",
+            &etag,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("write");
 
         let written = fs::read_to_string(f.path()).expect("re-read");
         assert!(
@@ -527,8 +652,21 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let etag = compute_etag_str(SIMPLE_GRUB);
-        set_grub_value(f.path(), "GRUB_TIMEOUT", "99", &etag, &failsafe_path).expect("write");
+
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "99",
+            &etag,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("write");
 
         let (map, _) = read_grub_config(f.path()).expect("re-read");
         assert_eq!(map.get("GRUB_DEFAULT").map(String::as_str), Some("0"));
@@ -544,11 +682,15 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
 
     // ── ETag round-trip ───────────────────────────────────────────────────────
 
+    /// `StateMismatch` is returned before grub-mkconfig is reached, so no
+    /// fake binary is needed here.
     #[test]
     fn etag_changes_after_external_modification() {
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
         let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let grub_cfg_path = grub_cfg_dir.path().join("grub.cfg");
         let etag_before = compute_etag_str(SIMPLE_GRUB);
 
         // Symulacja zewnętrznej modyfikacji (np. przez apt).
@@ -559,8 +701,18 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
         assert_ne!(etag_before, etag_after, "ETag musi się zmienić po mutacji");
 
         // Próba zapisu ze starym ETag musi się nie udać.
-        let result = set_grub_value(f.path(), "GRUB_DEFAULT", "1", &etag_before, &failsafe_path);
-        assert!(matches!(result, Err(BootControlError::StateMismatch { .. })));
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_DEFAULT",
+            "1",
+            &etag_before,
+            &failsafe_path,
+            &grub_cfg_path,
+        );
+        assert!(matches!(
+            result,
+            Err(BootControlError::StateMismatch { .. })
+        ));
     }
 
     // ── Helper unit tests ─────────────────────────────────────────────────────
