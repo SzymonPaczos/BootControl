@@ -667,6 +667,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bootcontrol-core",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "zbus",
@@ -728,6 +730,8 @@ dependencies = [
  "bootcontrol-core",
  "chrono",
  "nix 0.29.0",
+ "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "tracing",

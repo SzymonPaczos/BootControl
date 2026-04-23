@@ -44,11 +44,11 @@ pub enum Mode {
 /// to enforce invariants (e.g. selection always in bounds).
 #[derive(Debug)]
 pub struct App {
-    /// Sorted list of GRUB entries displayed in the table.
+    /// Sorted list of boot entries displayed in the table.
     pub entries: Vec<GrubEntry>,
     /// Zero-based index of the highlighted row.
     pub selected: usize,
-    /// Current ETag — must be sent with every `SetGrubValue` call.
+    /// Current ETag — must be sent with every write call.
     pub etag: String,
     /// Which interaction mode the UI is currently in.
     pub mode: Mode,
@@ -60,6 +60,8 @@ pub struct App {
     pub error_msg: Option<String>,
     /// Set to `true` by `q` / `Esc` in Browse mode to signal the event loop to exit.
     pub should_quit: bool,
+    /// Name of the active bootloader backend (e.g. `"grub"`, `"systemd-boot"`, `"uki"`).
+    pub backend_name: String,
 }
 
 impl App {
@@ -96,6 +98,23 @@ impl App {
             status_msg: String::from("Ready."),
             error_msg: None,
             should_quit: false,
+            backend_name: "grub".to_string(),
+        }
+    }
+
+    /// Construct a new [`App`] with an explicit backend name.
+    pub fn new_with_backend(mut entries: Vec<GrubEntry>, etag: String, backend_name: String) -> Self {
+        entries.sort_by(|a, b| a.key.cmp(&b.key));
+        Self {
+            entries,
+            selected: 0,
+            etag,
+            mode: Mode::default(),
+            edit_buf: String::new(),
+            status_msg: String::from("Ready."),
+            error_msg: None,
+            should_quit: false,
+            backend_name,
         }
     }
 
