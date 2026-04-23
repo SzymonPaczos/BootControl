@@ -3,103 +3,105 @@
 This document tracks the full development plan from initial scaffolding to a feature-complete release.
 Each version represents a stable, shippable milestone. Work within a version is ordered as Pull Requests.
 
-> **Current status:** Pre-alpha — workspace not yet initialized.
+> **Current status:** Alpha — v0.1.0 in development. Phases 0, 1, 4 (core), and 5 (MOK + Paranoia) are functionally complete. Phase 2 (packaging) and Phase 3 (GUI appearance) are in progress.
 
 ---
 
-## Phase 0 — Foundation `v0.1`
+## Phase 0 — Foundation `v0.1` ✅ Complete
 
 **Goal:** A working Cargo Workspace with CI/CD. No features yet, but the project can be cloned, built, and tested by any contributor.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `chore(init): create cargo workspace with crate stubs` | Workspace with empty crates under `crates/`: `core`, `daemon`, `cli`, `tui`, `gui` |
-| 2 | `chore(ci): add github actions pipeline` | CI checks: `rustfmt`, `clippy --deny warnings`, `cargo test --workspace` |
-| 3 | `chore(ci): add integration test matrix` | Test matrix across stable + beta Rust toolchains |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `chore(init): create cargo workspace with crate stubs` | Workspace with crates: `core`, `daemon`, `cli`, `tui`, `gui`, `client` | ✅ Done |
+| 2 | `chore(ci): add github actions pipeline` | CI checks: `rustfmt`, `clippy --deny warnings`, `cargo test --workspace` | ✅ Done |
+| 3 | `chore(ci): add integration test matrix` | Test matrix across stable + beta Rust toolchains | ✅ Done |
 
 **Exit criteria:** Green CI on every push. A fresh `cargo build --workspace` succeeds.
 
 ---
 
-## Phase 1 — GRUB Support (Linux) `v1.0`
+## Phase 1 — GRUB Support (Linux) `v1.0` ✅ Complete
 
 **Goal:** A fully functional, safe GRUB manager on Linux. This is the foundation every future version builds on. No GUI yet.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `feat(core): implement sha-256 stateless file hashing` | Hash computation for `/boot/efi` and `/etc/default/grub`; ETag generation |
-| 2 | `feat(parser): implement /etc/default/grub parser` | Safe key-value extraction and mutation; user comments preserved exactly |
-| 3 | `feat(daemon): add d-bus interface and polkit authorization` | Socket-activated daemon; Polkit check before every write; ETag validation |
-| 4 | `feat(failsafe): add golden parachute and rescue module` | Auto-inject `Linux (Failsafe)` entry on every write; basic `--rescue` CLI module for chroot recovery (dynamically linked; full static `musl` wizard planned in Backlog) |
-| 5 | `feat(cli): wire cli frontend to d-bus daemon` | `bootcontrol list`, `bootcontrol set <key> <value>`, `bootcontrol --rescue` |
-| 6 | `feat(tui): wire tui frontend to d-bus daemon` | Interactive terminal UI (ratatui); end-to-end tests in headless container |
-| 7 | `test(e2e): add container-based end-to-end test suite` | Full write/verify/rollback cycle tested in isolation without real hardware |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `feat(core): implement sha-256 stateless file hashing` | Hash computation for `/boot/efi` and `/etc/default/grub`; ETag generation | ✅ Done |
+| 2 | `feat(parser): implement /etc/default/grub parser` | Safe key-value extraction and mutation; user comments preserved exactly | ✅ Done |
+| 3 | `feat(daemon): add d-bus interface and polkit authorization` | Socket-activated daemon; Polkit check before every write; ETag validation | ✅ Done |
+| 4 | `feat(failsafe): add golden parachute and rescue module` | Auto-inject `Linux (Failsafe)` entry on every write; basic `--rescue` CLI module | ✅ Done |
+| 5 | `feat(cli): wire cli frontend to d-bus daemon` | `bootcontrol list`, `bootcontrol set <key> <value>`, `bootcontrol --rescue` | ✅ Done |
+| 6 | `feat(tui): wire tui frontend to d-bus daemon` | Interactive terminal UI (ratatui); end-to-end tests in headless container | ✅ Done |
+| 7 | `test(e2e): add container-based end-to-end test suite` | Full write/verify/rollback cycle tested in isolation without real hardware | ✅ Done |
 
 **Exit criteria:** A user on Fedora, Arch, or Ubuntu can install BootControl, change a GRUB parameter via CLI or TUI, and the system boots correctly. If anything goes wrong, the Failsafe entry guarantees recovery.
 
 ---
 
-## Phase 2 — Packaging & Distribution `v1.1`
+## Phase 2 — Packaging & Distribution `v1.1` 🔨 In progress
 
 **Goal:** BootControl is installable via standard package managers. No source compilation required for end users.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `chore(pkg): add systemd unit and socket files` | `bootcontrol-daemon.service` + `bootcontrol-daemon.socket` for socket activation |
-| 2 | `chore(pkg): add debian packaging` | `.deb` package buildable via `dpkg-buildpackage` |
-| 3 | `chore(pkg): add rpm spec file` | `.rpm` package for Fedora/openSUSE |
-| 4 | `chore(pkg): add aur pkgbuild` | `PKGBUILD` for Arch Linux AUR submission |
-| 5 | `chore(pkg): add polkit policy file` | `.policy` file installed to `/usr/share/polkit-1/actions/` |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `chore(pkg): add systemd unit and socket files` | `bootcontrol-daemon.service` + `bootcontrol-daemon.socket` for socket activation | ✅ Done |
+| 2 | `chore(pkg): add polkit policy file` | `.policy` file installed to `/usr/share/polkit-1/actions/` | ✅ Done |
+| 3 | `chore(pkg): add d-bus system policy` | `.conf` file for `org.bootcontrol.Manager` system bus | ✅ Done |
+| 4 | `chore(pkg): add debian packaging` | `.deb` package buildable via `dpkg-buildpackage` | 📋 Planned |
+| 5 | `chore(pkg): add rpm spec file` | `.rpm` package for Fedora/openSUSE | 📋 Planned |
+| 6 | `chore(pkg): add aur pkgbuild` | `PKGBUILD` for Arch Linux AUR submission | 📋 Planned |
 
 **Exit criteria:** `sudo apt install bootcontrol` or `yay -S bootcontrol` works. No manual configuration required post-install.
 
 ---
 
-## Phase 3 — Desktop GUI `v1.2`
+## Phase 3 — Desktop GUI `v1.2` 🔨 In progress (appearance pending)
 
 **Goal:** A graphical interface for desktop users. Same daemon, same D-Bus API — new frontend only.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `feat(gui): add slint application shell` | App window, navigation skeleton, D-Bus connection |
-| 2 | `feat(gui): implement boot entry list view` | Visual list of boot entries with status indicators |
-| 3 | `feat(gui): implement parameter editor` | Form-based GRUB parameter editing with live validation |
-| 4 | `feat(gui): implement failsafe status panel` | Shows current Failsafe entry state; one-click rescue launch |
-| 5 | `test(gui): add gui smoke tests` | Automated UI tests verifying core flows without real hardware |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `feat(gui): add slint application shell` | App window, navigation skeleton, D-Bus connection | ✅ Done |
+| 2 | `feat(gui): implement boot entry list view` | Visual list of boot entries with status indicators | ✅ Done |
+| 3 | `feat(gui): implement parameter editor` | Form-based GRUB parameter editing with live validation | ✅ Done |
+| 4 | `feat(gui): implement failsafe status panel` | Shows current Failsafe entry state; one-click rescue launch | ✅ Done |
+| 5 | `feat(gui): implement secure boot panel` | NVRAM backup, MOK enrollment, Paranoia Mode controls | ✅ Done |
+| 6 | `test(gui): add gui smoke tests` | Automated UI tests verifying core flows without real hardware | ✅ Done |
 
 **Exit criteria:** A non-technical user can change their GRUB timeout or default OS using a point-and-click interface.
 
 ---
 
-## Phase 4 — Modern Linux Boot (UKI & systemd-boot) `v2.0`
+## Phase 4 — Modern Linux Boot (UKI & systemd-boot) `v2.0` ✅ Complete (core)
 
 **Goal:** Support the modern Linux boot stack. GRUB is now one of multiple supported backends.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `feat(core): add bootmanager trait abstraction` | Rust trait that all bootloader drivers implement |
-| 2 | `feat(core): add initramfs driver abstraction` | Pluggable driver selection: `dracut`, `kernel-install`, `mkinitcpio` |
-| 3 | `feat(parser): add mkinitcpio driver` | Modify `/etc/mkinitcpio.conf`, invoke `mkinitcpio -P` |
-| 4 | `feat(parser): add dracut driver` | Modify kernel cmdline, invoke `dracut --regenerate-all` |
-| 5 | `feat(parser): add kernel-install driver` | Integrate with `kernel-install add` workflow |
-| 6 | `feat(core): add systemd-boot manager` | Read/write systemd-boot loader entries; detect bootloader from ESP |
-| 7 | `feat(core): add uki manager` | Build and sign UKI images; manage `/etc/kernel/cmdline` |
-| 8 | `feat(daemon): add bootloader auto-detection` | Detect installed bootloader at daemon startup; select correct driver |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `feat(core): add bootmanager trait abstraction` | Rust trait that all bootloader drivers implement | ✅ Done |
+| 2 | `feat(core): add initramfs driver abstraction` | Pluggable driver selection: `dracut`, `kernel-install`, `mkinitcpio` | ✅ Done |
+| 3 | `feat(core): add mkinitcpio driver` | Invoke `mkinitcpio -P`; binary_path detection | ✅ Done |
+| 4 | `feat(core): add dracut driver` | Invoke `dracut --regenerate-all`; binary_path detection | ✅ Done |
+| 5 | `feat(core): add kernel-install driver` | Invoke `kernel-install add <version>`; binary_path detection | ✅ Done |
+| 6 | `feat(core): add systemd-boot manager` | Read/write systemd-boot loader entries; detect bootloader from ESP | ✅ Done |
+| 7 | `feat(core): add uki manager` | Build and sign UKI images; manage `/etc/kernel/cmdline` | ✅ Done |
+| 8 | `feat(daemon): add bootloader auto-detection` | Detect installed bootloader at daemon startup; select correct driver | ✅ Done |
 
 **Exit criteria:** BootControl works on a Fedora Silverblue (UKI) and an Arch system (systemd-boot + mkinitcpio) without manual driver selection.
 
 ---
 
-## Phase 5 — Secure Boot `v2.1`
+## Phase 5 — Secure Boot `v2.1` ✅ Complete
 
 **Goal:** Full Secure Boot support — from the simple MOK workflow to full custom key ownership.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `feat(secureboot): add shim/mok signing mode` | Auto-sign rebuilt UKI with MOK private key; generate MokManager enrollment request |
-| 2 | `feat(secureboot): add nvram backup utility` | Back up `db` and `KEK` EFI variables to `/var/lib/bootcontrol/certs/` before any key operation |
-| 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM |
-| 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `feat(secureboot): add shim/mok signing mode` | Auto-sign rebuilt UKI with MOK private key; generate MokManager enrollment request | ✅ Done |
+| 2 | `feat(secureboot): add nvram backup utility` | Back up `db` and `KEK` EFI variables to `/var/lib/bootcontrol/certs/` before any key operation | ✅ Done |
+| 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | ✅ Done (`experimental_paranoia` feature flag) |
+| 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | 📋 Planned |
 
 **Exit criteria:** A user can enroll BootControl's MOK key (Shim mode) or take full ownership of Secure Boot keys (Paranoia mode) without touching the internet.
 
