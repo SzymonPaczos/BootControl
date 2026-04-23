@@ -6,6 +6,10 @@ authors.workspace   = true
 license.workspace   = true
 repository.workspace = true
 
+[lib]
+name = "bootcontrol_tui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bootcontrol-tui"
 path = "src/main.rs"
