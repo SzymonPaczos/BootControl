@@ -96,3 +96,144 @@ pub(crate) fn run_command(
 
     Ok(())
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── detect_driver ─────────────────────────────────────────────────────────
+    //
+    // `detect_driver` resolves binaries via `which::which` at runtime, so we
+    // cannot control its output without controlling `$PATH`. We therefore test
+    // the behaviour through the public contract: the return value is either
+    // `None` (no tool found) or `Some(box dyn InitramfsDriver)` whose `name()`
+    // matches the expected priority.
+    //
+    // To avoid flakiness on developer machines that have mkinitcpio or dracut
+    // installed, these tests validate properties that always hold regardless of
+    // the environment.
+
+    #[test]
+    fn detect_driver_returns_none_when_no_tool_on_path() {
+        // Acquire the workspace-wide PATH lock to prevent concurrent modification.
+        let original_path = std::env::var("PATH").unwrap_or_default();
+        let _guard = crate::grub_rebuild::tests::PATH_LOCK
+            .lock()
+            .expect("PATH lock poisoned");
+
+        // Point PATH at a temp dir that contains none of the expected binaries.
+        let empty_dir = tempfile::tempdir().expect("tempdir");
+        std::env::set_var("PATH", empty_dir.path());
+
+        let result = detect_driver("6.8.1");
+
+        // Restore PATH before any assertions that might panic.
+        std::env::set_var("PATH", &original_path);
+        // _guard drops here, releasing the lock.
+
+        assert!(
+            result.is_none(),
+            "detect_driver must return None when no initramfs tool is on PATH"
+        );
+    }
+
+    #[test]
+    fn detect_driver_result_is_some_when_tool_is_available() {
+        // Create a fake `mkinitcpio` script on PATH.
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = crate::grub_rebuild::tests::PATH_LOCK
+            .lock()
+            .expect("PATH lock poisoned");
+        let original_path = std::env::var("PATH").unwrap_or_default();
+
+        let bin_dir = tempfile::tempdir().expect("tempdir");
+        let script = bin_dir.path().join("mkinitcpio");
+
+        {
+            let mut f = std::fs::File::create(&script).expect("create stub");
+            writeln!(f, "#!/bin/sh").expect("write shebang");
+            writeln!(f, "exit 0").expect("write body");
+        }
+        let mut perms = std::fs::metadata(&script).expect("metadata").permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script, perms).expect("chmod");
+
+        std::env::set_var("PATH", bin_dir.path());
+        let result = detect_driver("6.8.1");
+        std::env::set_var("PATH", &original_path);
+        // _guard drops here.
+
+        let driver = result.expect("detect_driver must return Some when mkinitcpio is on PATH");
+        assert_eq!(driver.name(), "mkinitcpio");
+    }
+
+    #[test]
+    fn detect_driver_prefers_mkinitcpio_over_dracut() {
+        // Create both `mkinitcpio` and `dracut` stubs on PATH.
+        // detect_driver must return mkinitcpio (higher priority).
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let _guard = crate::grub_rebuild::tests::PATH_LOCK
+            .lock()
+            .expect("PATH lock poisoned");
+        let original_path = std::env::var("PATH").unwrap_or_default();
+
+        let bin_dir = tempfile::tempdir().expect("tempdir");
+
+        for name in ["mkinitcpio", "dracut"] {
+            let script = bin_dir.path().join(name);
+            let mut f = std::fs::File::create(&script).expect("create stub");
+            writeln!(f, "#!/bin/sh").expect("write");
+            writeln!(f, "exit 0").expect("write");
+            drop(f);
+            let mut perms = std::fs::metadata(&script).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script, perms).expect("chmod");
+        }
+
+        std::env::set_var("PATH", bin_dir.path());
+        let result = detect_driver("6.8.1");
+        std::env::set_var("PATH", &original_path);
+        // _guard drops here.
+
+        let driver = result.expect("detect_driver must return Some");
+        assert_eq!(
+            driver.name(),
+            "mkinitcpio",
+            "mkinitcpio has higher priority than dracut"
+        );
+    }
+
+    // ── run_command ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn run_command_succeeds_for_true_binary() {
+        // `/bin/true` exits 0 on any POSIX system.
+        let bin = std::path::PathBuf::from("/bin/true");
+        if bin.exists() {
+            assert!(
+                run_command(&bin, &[], "test").is_ok(),
+                "run_command must return Ok for a zero-exit binary"
+            );
+        }
+    }
+
+    #[test]
+    fn run_command_fails_for_false_binary() {
+        // `/bin/false` exits 1 on any POSIX system.
+        let bin = std::path::PathBuf::from("/bin/false");
+        if bin.exists() {
+            assert!(
+                run_command(&bin, &[], "test").is_err(),
+                "run_command must return Err for a non-zero-exit binary"
+            );
+        }
+    }
+}
