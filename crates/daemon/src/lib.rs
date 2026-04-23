@@ -17,6 +17,8 @@
 //! | [`sanitize`] | Payload blacklist enforcement. |
 //! | [`dbus_error`] | `BootControlError` → `zbus::fdo::Error` mapping. |
 //! | [`secureboot`] | Secure Boot utilities: NVRAM backup, MOK signing and enrollment. |
+//! | [`systemd_boot_manager`] | Filesystem read/write for systemd-boot loader entries. |
+//! | [`uki_manager`] | Filesystem read/write for `/etc/kernel/cmdline`. |
 
 #![deny(warnings)]
 #![deny(missing_docs)]
@@ -31,3 +33,5 @@ pub mod polkit;
 pub mod prober;
 pub mod sanitize;
 pub mod secureboot;
+pub mod systemd_boot_manager;
+pub mod uki_manager;

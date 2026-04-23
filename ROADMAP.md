@@ -3,7 +3,7 @@
 This document tracks the full development plan from initial scaffolding to a feature-complete release.
 Each version represents a stable, shippable milestone. Work within a version is ordered as Pull Requests.
 
-> **Current status:** Alpha — v0.1.0 in development. Phases 0, 1, 4 (core), and 5 (MOK + Paranoia) are functionally complete. Phase 2 (packaging) and Phase 3 (GUI appearance) are in progress.
+> **Current status:** Alpha — v0.1.0 in development. Phases 0–5 are complete. Phase 6 is not yet started. Phases 7–8 are not yet started.
 
 ---
 
@@ -39,7 +39,7 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 ---
 
-## Phase 2 — Packaging & Distribution `v1.1` 🔨 In progress
+## Phase 2 — Packaging & Distribution `v1.1` ✅ Complete
 
 **Goal:** BootControl is installable via standard package managers. No source compilation required for end users.
 
@@ -48,15 +48,15 @@ Each version represents a stable, shippable milestone. Work within a version is 
 | 1 | `chore(pkg): add systemd unit and socket files` | `bootcontrol-daemon.service` + `bootcontrol-daemon.socket` for socket activation | ✅ Done |
 | 2 | `chore(pkg): add polkit policy file` | `.policy` file installed to `/usr/share/polkit-1/actions/` | ✅ Done |
 | 3 | `chore(pkg): add d-bus system policy` | `.conf` file for `org.bootcontrol.Manager` system bus | ✅ Done |
-| 4 | `chore(pkg): add debian packaging` | `.deb` package buildable via `dpkg-buildpackage` | 📋 Planned |
-| 5 | `chore(pkg): add rpm spec file` | `.rpm` package for Fedora/openSUSE | 📋 Planned |
-| 6 | `chore(pkg): add aur pkgbuild` | `PKGBUILD` for Arch Linux AUR submission | 📋 Planned |
+| 4 | `chore(pkg): add debian packaging` | `.deb` package buildable via `dpkg-buildpackage` | ✅ Done |
+| 5 | `chore(pkg): add rpm spec file` | `.rpm` package for Fedora/openSUSE | ✅ Done |
+| 6 | `chore(pkg): add aur pkgbuild` | `PKGBUILD` for Arch Linux AUR submission | ✅ Done |
 
 **Exit criteria:** `sudo apt install bootcontrol` or `yay -S bootcontrol` works. No manual configuration required post-install.
 
 ---
 
-## Phase 3 — Desktop GUI `v1.2` 🔨 In progress (appearance pending)
+## Phase 3 — Desktop GUI `v1.2` ✅ Complete
 
 **Goal:** A graphical interface for desktop users. Same daemon, same D-Bus API — new frontend only.
 
@@ -73,7 +73,7 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 ---
 
-## Phase 4 — Modern Linux Boot (UKI & systemd-boot) `v2.0` ✅ Complete (core)
+## Phase 4 — Modern Linux Boot (UKI & systemd-boot) `v2.0` ✅ Complete
 
 **Goal:** Support the modern Linux boot stack. GRUB is now one of multiple supported backends.
 
@@ -87,6 +87,12 @@ Each version represents a stable, shippable milestone. Work within a version is 
 | 6 | `feat(core): add systemd-boot manager` | Read/write systemd-boot loader entries; detect bootloader from ESP | ✅ Done |
 | 7 | `feat(core): add uki manager` | Build and sign UKI images; manage `/etc/kernel/cmdline` | ✅ Done |
 | 8 | `feat(daemon): add bootloader auto-detection` | Detect installed bootloader at daemon startup; select correct driver | ✅ Done |
+| 9 | `feat(daemon): expose systemd-boot via D-Bus` | `ListLoaderEntries`, `SetLoaderDefault`, `GetLoaderConfEtag` D-Bus methods; Polkit-authorized writes | ✅ Done |
+| 10 | `feat(daemon): expose uki cmdline via D-Bus` | `ReadKernelCmdline`, `AddKernelParam`, `RemoveKernelParam` D-Bus methods; Polkit-authorized writes | ✅ Done |
+| 11 | `feat(client): extend backend trait for systemd-boot + uki` | `BootBackend` trait + `DbusBackend` + `MockBackend` all implement new methods; `LoaderEntryDto` DTO | ✅ Done |
+| 12 | `feat(cli): add boot and cmdline subcommands` | `boot list`, `boot set-default`, `cmdline get/add/remove`; backend-aware `config get/etag` | ✅ Done |
+| 13 | `feat(tui): add multi-backend support` | TUI branches on active backend: systemd-boot (Enter=set-default), UKI (a=add, d=delete) | ✅ Done |
+| 14 | `feat(gui): add multi-backend view model` | `ViewModel.load()` and `commit_edit()` branch on active backend; loader entries + cmdline params fields | ✅ Done |
 
 **Exit criteria:** BootControl works on a Fedora Silverblue (UKI) and an Arch system (systemd-boot + mkinitcpio) without manual driver selection.
 
@@ -101,7 +107,7 @@ Each version represents a stable, shippable milestone. Work within a version is 
 | 1 | `feat(secureboot): add shim/mok signing mode` | Auto-sign rebuilt UKI with MOK private key; generate MokManager enrollment request | ✅ Done |
 | 2 | `feat(secureboot): add nvram backup utility` | Back up `db` and `KEK` EFI variables to `/var/lib/bootcontrol/certs/` before any key operation | ✅ Done |
 | 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | ✅ Done (`experimental_paranoia` feature flag) |
-| 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | 📋 Planned |
+| 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | ✅ Done |
 
 **Exit criteria:** A user can enroll BootControl's MOK key (Shim mode) or take full ownership of Secure Boot keys (Paranoia mode) without touching the internet.
 
@@ -165,7 +171,8 @@ Each version represents a stable, shippable milestone. Work within a version is 
 | Failsafe + rescue | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Distro packages (.deb/.rpm/AUR) | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | GUI (Slint) | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| systemd-boot + UKI | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| systemd-boot + UKI (core) | — | — | — | ✅ | ✅ | ✅ | ✅ |
+| systemd-boot + UKI (daemon D-Bus) | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | mkinitcpio / dracut / kernel-install | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | Secure Boot (Shim/MOK) | — | — | — | — | ✅ | ✅ | ✅ |
 | Secure Boot (Paranoia/custom PK) | — | — | — | — | ✅ | ✅ | ✅ |

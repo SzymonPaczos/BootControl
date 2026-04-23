@@ -5,21 +5,17 @@
 //! ```text
 //! ┌──────────────────────────────────────────────────────────┐
 //! │  main()                                                  │
-//! │  ├─ connect to D-Bus system bus                          │
-//! │  ├─ build ManagerProxy (org.bootcontrol.Manager)         │
-//! │  ├─ ReadGrubConfig → App::new(entries, etag)             │
+//! │  ├─ resolve_backend (D-Bus or Mock)                      │
+//! │  ├─ detect active backend (grub / systemd-boot / uki)    │
+//! │  ├─ load entries → App::new_with_backend(entries, etag)  │
 //! │  └─ event loop                                           │
-//! │       tokio::select!                                     │
-//! │         ├─ crossterm event → handle_key_event()          │
-//! │         │     ├─ Browse: ↑↓ navigate, Enter edit, r reload, q quit │
-//! │         │     ├─ Editing: printable appended, Enter saves via D-Bus │
-//! │         │     └─ ErrorPopup: any key dismisses           │
-//! │         └─ 250 ms tick → Tick (reserved for animations)  │
+//! │       ├─ Browse: ↑↓ navigate, Enter edit/set-default,   │
+//! │       │          a=add-param (UKI), d=delete-param (UKI) │
+//! │       │          r=reload, q=quit                        │
+//! │       ├─ Editing: printable appended, Enter saves        │
+//! │       └─ ErrorPopup: any key dismisses                   │
 //! └──────────────────────────────────────────────────────────┘
 //! ```
-//!
-//! All D-Bus calls are `await`-ed inside the event loop.  The terminal is
-//! always restored on exit, even when the daemon is unreachable.
 
 #![deny(warnings)]
 
@@ -49,15 +45,12 @@ use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // ── Structured logging ────────────────────────────────────────────────────
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    // ── Resolve Backend (D-Bus or Mock) ───────────────────────────────────────
     let backend = resolve_backend().await;
 
-    // ── Initial config load ───────────────────────────────────────────────────
     info!("loading initial boot configuration");
     let app = match load_app(backend.as_ref()).await {
         Ok(a) => a,
@@ -67,7 +60,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // ── Terminal setup ────────────────────────────────────────────────────────
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -75,10 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend_tui)?;
     terminal.clear()?;
 
-    // ── Run the event loop ────────────────────────────────────────────────────
     let result = run_event_loop(&mut terminal, app, backend.clone()).await;
 
-    // ── Terminal teardown (always runs) ───────────────────────────────────────
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -91,7 +81,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 // Event loop
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Run the main TUI event loop until the user requests a quit.
 async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: App,
@@ -102,14 +91,12 @@ async fn run_event_loop(
     let mut stream = EventStream::new();
 
     loop {
-        // ── Render ────────────────────────────────────────────────────────────
         terminal.draw(|frame| ui::render(frame, &app))?;
 
         if app.should_quit {
             break;
         }
 
-        // ── Poll for the next event ───────────────────────────────────────────
         let Some(event) = next_event(&mut stream, tick_rate, &mut last_tick).await else {
             break;
         };
@@ -127,7 +114,6 @@ async fn run_event_loop(
 // Key event dispatch
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Dispatch a keyboard event to the correct handler based on `app.mode`.
 async fn handle_key_event(key: KeyEvent, app: &mut App, backend: &dyn BootBackend) {
     match app.mode {
         Mode::Browse => handle_browse_key(key, app, backend).await,
@@ -144,10 +130,34 @@ async fn handle_browse_key(key: KeyEvent, app: &mut App, backend: &dyn BootBacke
         return;
     }
 
+    let is_uki = app.backend_name.contains("uki");
+    let is_sdb = app.backend_name.contains("systemd-boot");
+
     match key.code {
         KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),
         KeyCode::Down | KeyCode::Char('j') => app.move_selection_down(),
-        KeyCode::Enter => app.open_edit_popup(),
+        KeyCode::Enter => {
+            if is_sdb {
+                // systemd-boot: Enter sets selected entry as default
+                set_default_entry(app, backend).await;
+            } else if is_uki {
+                // UKI: Enter edits the parameter text
+                app.open_edit_popup();
+            } else {
+                // GRUB: Enter opens value editor
+                app.open_edit_popup();
+            }
+        }
+        KeyCode::Char('a') | KeyCode::Char('A') if is_uki => {
+            // UKI: 'a' opens empty editor to add a new parameter
+            app.edit_buf.clear();
+            app.mode = Mode::Editing;
+            app.status_msg = "Type new kernel parameter, Enter to add.".into();
+        }
+        KeyCode::Char('d') | KeyCode::Char('D') if is_uki => {
+            // UKI: 'd' removes the selected parameter
+            delete_kernel_param(app, backend).await;
+        }
         KeyCode::Char('r') | KeyCode::Char('R') => {
             reload_config(app, backend).await;
         }
@@ -159,31 +169,16 @@ async fn handle_browse_key(key: KeyEvent, app: &mut App, backend: &dyn BootBacke
 
 async fn handle_editing_key(key: KeyEvent, app: &mut App, backend: &dyn BootBackend) {
     match key {
-        // Confirm edit → call backend
-        KeyEvent {
-            code: KeyCode::Enter,
-            ..
-        } => {
+        KeyEvent { code: KeyCode::Enter, .. } => {
             commit_edit(app, backend).await;
         }
-
-        // Cancel edit
-        KeyEvent {
-            code: KeyCode::Esc, ..
-        } => {
+        KeyEvent { code: KeyCode::Esc, .. } => {
             app.cancel_edit();
             app.status_msg = "Edit cancelled.".into();
         }
-
-        // Backspace
-        KeyEvent {
-            code: KeyCode::Backspace,
-            ..
-        } => {
+        KeyEvent { code: KeyCode::Backspace, .. } => {
             app.pop_char();
         }
-
-        // Printable characters
         KeyEvent {
             code: KeyCode::Char(c),
             modifiers,
@@ -191,7 +186,6 @@ async fn handle_editing_key(key: KeyEvent, app: &mut App, backend: &dyn BootBack
         } if modifiers == KeyModifiers::NONE || modifiers == KeyModifiers::SHIFT => {
             app.push_char(c);
         }
-
         _ => {}
     }
 }
@@ -206,41 +200,161 @@ fn handle_error_key(key: KeyEvent, app: &mut App) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Backend helpers
+// Backend helpers — multi-backend aware
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Call `read_config` and build a fresh [`App`].
+/// Load the initial app state from the backend, branching on active backend type.
 async fn load_app(backend: &dyn BootBackend) -> Result<App, zbus::Error> {
+    let backend_name = backend.get_active_backend().await.unwrap_or_else(|_| "grub".to_string());
+
+    if backend_name.contains("systemd-boot") {
+        load_systemd_boot(backend, backend_name).await
+    } else if backend_name.contains("uki") {
+        load_uki(backend, backend_name).await
+    } else {
+        load_grub(backend, backend_name).await
+    }
+}
+
+async fn load_grub(backend: &dyn BootBackend, backend_name: String) -> Result<App, zbus::Error> {
     let (config, etag) = backend.read_config().await?;
     let mut entries: Vec<GrubEntry> = config
         .into_iter()
         .map(|(key, value)| GrubEntry { key, value })
         .collect();
     entries.sort_by(|a, b| a.key.cmp(&b.key));
-    Ok(App::new(entries, etag))
+    Ok(App::new_with_backend(entries, etag, backend_name))
+}
+
+async fn load_systemd_boot(backend: &dyn BootBackend, backend_name: String) -> Result<App, zbus::Error> {
+    let entries_dto = backend.list_loader_entries().await?;
+    let etag = backend.get_loader_conf_etag().await.unwrap_or_default();
+    let entries: Vec<GrubEntry> = entries_dto
+        .iter()
+        .map(|e| GrubEntry {
+            key: e.id.clone(),
+            value: e.title.clone().unwrap_or_else(|| "(no title)".to_string()),
+        })
+        .collect();
+    Ok(App::new_with_backend(entries, etag, backend_name))
+}
+
+async fn load_uki(backend: &dyn BootBackend, backend_name: String) -> Result<App, zbus::Error> {
+    let (params, etag) = backend.read_kernel_cmdline().await?;
+    let entries: Vec<GrubEntry> = params
+        .into_iter()
+        .map(|p| GrubEntry { key: p, value: String::new() })
+        .collect();
+    Ok(App::new_with_backend(entries, etag, backend_name))
 }
 
 /// Reload the config and update `app` in place.
 async fn reload_config(app: &mut App, backend: &dyn BootBackend) {
-    match backend.read_config().await {
-        Ok((config, etag)) => {
-            let mut entries: Vec<GrubEntry> = config
-                .into_iter()
-                .map(|(key, value)| GrubEntry { key, value })
-                .collect();
-            entries.sort_by(|a, b| a.key.cmp(&b.key));
-            app.apply_grub_entries(entries, etag);
-            app.status_msg = "Configuration reloaded.".into();
+    let backend_name = app.backend_name.clone();
+
+    if backend_name.contains("systemd-boot") {
+        match backend.list_loader_entries().await {
+            Ok(entries_dto) => {
+                let etag = backend.get_loader_conf_etag().await.unwrap_or_default();
+                let entries: Vec<GrubEntry> = entries_dto
+                    .iter()
+                    .map(|e| GrubEntry {
+                        key: e.id.clone(),
+                        value: e.title.clone().unwrap_or_else(|| "(no title)".to_string()),
+                    })
+                    .collect();
+                app.apply_grub_entries(entries, etag);
+                app.status_msg = "Loader entries reloaded.".into();
+            }
+            Err(e) => {
+                warn!(error = %e, "reload failed");
+                app.show_error(dbus_error_message(&e));
+            }
+        }
+    } else if backend_name.contains("uki") {
+        match backend.read_kernel_cmdline().await {
+            Ok((params, etag)) => {
+                let entries: Vec<GrubEntry> = params
+                    .into_iter()
+                    .map(|p| GrubEntry { key: p, value: String::new() })
+                    .collect();
+                app.apply_grub_entries(entries, etag);
+                app.status_msg = "Kernel cmdline reloaded.".into();
+            }
+            Err(e) => {
+                warn!(error = %e, "reload failed");
+                app.show_error(dbus_error_message(&e));
+            }
+        }
+    } else {
+        match backend.read_config().await {
+            Ok((config, etag)) => {
+                let mut entries: Vec<GrubEntry> = config
+                    .into_iter()
+                    .map(|(key, value)| GrubEntry { key, value })
+                    .collect();
+                entries.sort_by(|a, b| a.key.cmp(&b.key));
+                app.apply_grub_entries(entries, etag);
+                app.status_msg = "Configuration reloaded.".into();
+            }
+            Err(e) => {
+                warn!(error = %e, "reload failed");
+                app.show_error(dbus_error_message(&e));
+            }
+        }
+    }
+}
+
+/// Set the selected systemd-boot entry as default.
+async fn set_default_entry(app: &mut App, backend: &dyn BootBackend) {
+    let (id, etag) = match app.current_entry() {
+        Some(entry) => (entry.key.clone(), app.etag.clone()),
+        None => return,
+    };
+
+    match backend.set_loader_default(&id, &etag).await {
+        Ok(()) => {
+            app.status_msg = format!("Default entry set to: {id}");
+            reload_config(app, backend).await;
         }
         Err(e) => {
-            warn!(error = %e, "reload failed");
+            warn!(id = %id, error = %e, "SetLoaderDefault failed");
             app.show_error(dbus_error_message(&e));
         }
     }
 }
 
-/// Call `set_value` with the current edit buffer contents.
+/// Delete the selected UKI kernel parameter.
+async fn delete_kernel_param(app: &mut App, backend: &dyn BootBackend) {
+    let (param, etag) = match app.current_entry() {
+        Some(entry) => (entry.key.clone(), app.etag.clone()),
+        None => return,
+    };
+
+    match backend.remove_kernel_param(&param, &etag).await {
+        Ok(()) => {
+            app.status_msg = format!("Removed parameter: {param}");
+            reload_config(app, backend).await;
+        }
+        Err(e) => {
+            warn!(param = %param, error = %e, "RemoveKernelParam failed");
+            app.show_error(dbus_error_message(&e));
+        }
+    }
+}
+
+/// Commit the current edit, branching on backend type.
 async fn commit_edit(app: &mut App, backend: &dyn BootBackend) {
+    let backend_name = app.backend_name.clone();
+
+    if backend_name.contains("uki") {
+        commit_uki_edit(app, backend).await;
+    } else {
+        commit_grub_edit(app, backend).await;
+    }
+}
+
+async fn commit_grub_edit(app: &mut App, backend: &dyn BootBackend) {
     let (key, value, etag) = match app.current_entry() {
         Some(entry) => (entry.key.clone(), app.edit_buf.clone(), app.etag.clone()),
         None => {
@@ -263,3 +377,38 @@ async fn commit_edit(app: &mut App, backend: &dyn BootBackend) {
     }
 }
 
+async fn commit_uki_edit(app: &mut App, backend: &dyn BootBackend) {
+    let new_param = app.edit_buf.trim().to_string();
+    if new_param.is_empty() {
+        app.cancel_edit();
+        return;
+    }
+
+    // If there's a selected entry, it's an edit (remove old, add new).
+    // If the edit_buf was pre-populated, remove the old param first.
+    let old_param = app.current_entry().map(|e| e.key.clone());
+    let etag = app.etag.clone();
+
+    // Add the new parameter.
+    match backend.add_kernel_param(&new_param, &etag).await {
+        Ok(()) => {
+            // If we replaced an existing param, also remove the old one.
+            if let Some(old) = old_param {
+                if old != new_param {
+                    // Reload ETag after add, then remove old.
+                    if let Ok((_, new_etag)) = backend.read_kernel_cmdline().await {
+                        let _ = backend.remove_kernel_param(&old, &new_etag).await;
+                    }
+                }
+            }
+            app.cancel_edit();
+            app.status_msg = format!("✓  Added: {new_param}");
+            reload_config(app, backend).await;
+        }
+        Err(e) => {
+            warn!(param = %new_param, error = %e, "AddKernelParam failed");
+            app.cancel_edit();
+            app.show_error(dbus_error_message(&e));
+        }
+    }
+}

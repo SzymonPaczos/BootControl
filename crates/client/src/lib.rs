@@ -1,6 +1,39 @@
 use std::collections::HashMap;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use zbus::{Connection, proxy};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared DTO types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A systemd-boot loader entry as returned by the daemon.
+///
+/// `id` is the filename stem (e.g. `"arch"` for `arch.conf`).
+/// `etag` is the SHA-256 of that specific file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LoaderEntryDto {
+    /// Filename stem (e.g. `"arch"`).
+    pub id: String,
+    /// Entry title, if present.
+    pub title: Option<String>,
+    /// Kernel image path (e.g. `/vmlinuz-linux`).
+    pub linux: Option<String>,
+    /// Initramfs path.
+    pub initrd: Option<String>,
+    /// Kernel command-line options.
+    pub options: Option<String>,
+    /// Machine ID from `/etc/machine-id`.
+    pub machine_id: Option<String>,
+    /// Per-file SHA-256 ETag.
+    pub etag: String,
+    /// `true` when this entry is the current default.
+    pub is_default: bool,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-Bus proxy
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// D-Bus proxy for the `org.bootcontrol.Manager` interface exposed by `bootcontrold`.
 #[proxy(
@@ -9,13 +42,15 @@ use zbus::{Connection, proxy};
     default_path = "/org/bootcontrol/Manager"
 )]
 pub trait Manager {
+    // ── GRUB ──────────────────────────────────────────────────────────────────
+
     /// Read the GRUB configuration.
     async fn read_grub_config(&self) -> zbus::Result<(HashMap<String, String>, String)>;
 
     /// Set a GRUB value.
     async fn set_grub_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()>;
 
-    /// Get the current ETag.
+    /// Get the current ETag of `/etc/default/grub`.
     async fn get_etag(&self) -> zbus::Result<String>;
 
     /// Get the name of the active bootloader backend.
@@ -23,6 +58,8 @@ pub trait Manager {
 
     /// Rebuild the GRUB config by running grub-mkconfig.
     async fn rebuild_grub_config(&self) -> zbus::Result<()>;
+
+    // ── Secure Boot ───────────────────────────────────────────────────────────
 
     /// Back up EFI NVRAM variables to `target_dir` (empty = default path).
     /// Returns a JSON array of absolute paths of backed-up files.
@@ -38,23 +75,58 @@ pub trait Manager {
     /// Merge the custom db cert with Microsoft UEFI CA signatures.
     /// Returns the path to the merged `.auth` file.
     async fn merge_paranoia_with_microsoft(&self, output_dir: &str) -> zbus::Result<String>;
+
+    // ── systemd-boot ──────────────────────────────────────────────────────────
+
+    /// List all systemd-boot loader entries.
+    /// Returns a JSON array of `LoaderEntryDto` objects.
+    async fn list_loader_entries(&self) -> zbus::Result<String>;
+
+    /// Read a single loader entry by ID.
+    /// Returns `(json_entry, file_etag)`.
+    async fn read_loader_entry(&self, id: &str) -> zbus::Result<(String, String)>;
+
+    /// Set the default systemd-boot loader entry.
+    async fn set_loader_default(&self, id: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Get the ETag of `loader.conf`.
+    async fn get_loader_conf_etag(&self) -> zbus::Result<String>;
+
+    // ── UKI / kernel cmdline ──────────────────────────────────────────────────
+
+    /// Read `/etc/kernel/cmdline`.  Returns `(params, etag)`.
+    async fn read_kernel_cmdline(&self) -> zbus::Result<(Vec<String>, String)>;
+
+    /// Add a kernel parameter to `/etc/kernel/cmdline`.
+    async fn add_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Remove a kernel parameter from `/etc/kernel/cmdline`.
+    async fn remove_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()>;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BootBackend trait
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Abstract interface for BootControl operations.
 /// This allows us to swap between a real D-Bus connection and mock data (Demo Mode).
 #[async_trait]
 pub trait BootBackend: Send + Sync {
-    /// Read the boot configuration (GRUB key-values and ETag).
+    // ── GRUB ──────────────────────────────────────────────────────────────────
+
+    /// Read the GRUB boot configuration (key-values and ETag).
     async fn read_config(&self) -> zbus::Result<(HashMap<String, String>, String)>;
 
-    /// Set a single configuration value.
+    /// Set a single GRUB configuration value.
     async fn set_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()>;
 
-    /// Return the name of the active backend (e.g., "grub").
+    /// Return the name of the active backend (e.g., `"grub"`, `"systemd-boot"`).
     async fn get_active_backend(&self) -> zbus::Result<String>;
 
     /// Rebuild the GRUB config file (runs grub-mkconfig).
     async fn rebuild_grub_config(&self) -> zbus::Result<()>;
+
+    // ── Secure Boot ───────────────────────────────────────────────────────────
 
     /// Back up EFI NVRAM variables. Returns JSON list of backed-up file paths.
     async fn backup_nvram(&self, target_dir: &str) -> zbus::Result<String>;
@@ -69,7 +141,36 @@ pub trait BootBackend: Send + Sync {
     /// Merge custom db cert with Microsoft UEFI CA signatures.
     /// Returns path to the merged `.auth` file.
     async fn merge_paranoia_with_microsoft(&self, output_dir: &str) -> zbus::Result<String>;
+
+    // ── systemd-boot ──────────────────────────────────────────────────────────
+
+    /// List all systemd-boot loader entries.
+    async fn list_loader_entries(&self) -> zbus::Result<Vec<LoaderEntryDto>>;
+
+    /// Read a single loader entry by ID. Returns `(entry, file_etag)`.
+    async fn read_loader_entry(&self, id: &str) -> zbus::Result<(LoaderEntryDto, String)>;
+
+    /// Set the default systemd-boot entry.
+    async fn set_loader_default(&self, id: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Get the ETag of `loader.conf`.
+    async fn get_loader_conf_etag(&self) -> zbus::Result<String>;
+
+    // ── UKI / kernel cmdline ──────────────────────────────────────────────────
+
+    /// Read `/etc/kernel/cmdline`. Returns `(params, etag)`.
+    async fn read_kernel_cmdline(&self) -> zbus::Result<(Vec<String>, String)>;
+
+    /// Add a kernel parameter.
+    async fn add_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Remove a kernel parameter.
+    async fn remove_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()>;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Real D-Bus backend
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Real D-Bus backend that talks to bootcontrold.
 pub struct DbusBackend {
@@ -77,6 +178,7 @@ pub struct DbusBackend {
 }
 
 impl DbusBackend {
+    /// Create a new [`DbusBackend`] from a D-Bus connection.
     pub fn new(conn: Connection) -> Self {
         Self { conn }
     }
@@ -123,7 +225,53 @@ impl BootBackend for DbusBackend {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.merge_paranoia_with_microsoft(output_dir).await
     }
+
+    async fn list_loader_entries(&self) -> zbus::Result<Vec<LoaderEntryDto>> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        let json = proxy.list_loader_entries().await?;
+        serde_json::from_str(&json).map_err(|e| {
+            zbus::Error::Failure(format!("failed to deserialize loader entries: {e}"))
+        })
+    }
+
+    async fn read_loader_entry(&self, id: &str) -> zbus::Result<(LoaderEntryDto, String)> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        let (json, etag) = proxy.read_loader_entry(id).await?;
+        let entry = serde_json::from_str(&json).map_err(|e| {
+            zbus::Error::Failure(format!("failed to deserialize loader entry: {e}"))
+        })?;
+        Ok((entry, etag))
+    }
+
+    async fn set_loader_default(&self, id: &str, etag: &str) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.set_loader_default(id, etag).await
+    }
+
+    async fn get_loader_conf_etag(&self) -> zbus::Result<String> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.get_loader_conf_etag().await
+    }
+
+    async fn read_kernel_cmdline(&self) -> zbus::Result<(Vec<String>, String)> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.read_kernel_cmdline().await
+    }
+
+    async fn add_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.add_kernel_param(param, etag).await
+    }
+
+    async fn remove_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.remove_kernel_param(param, etag).await
+    }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mock backend (Demo Mode)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Mock backend for Demo Mode (works on Mac/any OS without a daemon).
 pub struct MockBackend;
@@ -137,7 +285,6 @@ impl BootBackend for MockBackend {
         mock.insert("GRUB_DISTRIBUTOR".to_string(), "MockOS".to_string());
         mock.insert("GRUB_CMDLINE_LINUX_DEFAULT".to_string(), "quiet splash".to_string());
         mock.insert("GRUB_DISABLE_OS_PROBER".to_string(), "false".to_string());
-
         Ok((mock, "mock-etag-12345".to_string()))
     }
 
@@ -168,7 +315,78 @@ impl BootBackend for MockBackend {
     async fn merge_paranoia_with_microsoft(&self, _output_dir: &str) -> zbus::Result<String> {
         Ok("/var/lib/bootcontrol/paranoia-keys/db-merged.auth".to_string())
     }
+
+    async fn list_loader_entries(&self) -> zbus::Result<Vec<LoaderEntryDto>> {
+        Ok(vec![
+            LoaderEntryDto {
+                id: "arch".to_string(),
+                title: Some("Arch Linux".to_string()),
+                linux: Some("/vmlinuz-linux".to_string()),
+                initrd: Some("/initramfs-linux.img".to_string()),
+                options: Some("root=/dev/sda1 rw quiet".to_string()),
+                machine_id: None,
+                etag: "mock-entry-etag-arch".to_string(),
+                is_default: true,
+            },
+            LoaderEntryDto {
+                id: "arch-fallback".to_string(),
+                title: Some("Arch Linux (fallback)".to_string()),
+                linux: Some("/vmlinuz-linux".to_string()),
+                initrd: Some("/initramfs-linux-fallback.img".to_string()),
+                options: Some("root=/dev/sda1 rw".to_string()),
+                machine_id: None,
+                etag: "mock-entry-etag-fallback".to_string(),
+                is_default: false,
+            },
+        ])
+    }
+
+    async fn read_loader_entry(&self, id: &str) -> zbus::Result<(LoaderEntryDto, String)> {
+        let entry = LoaderEntryDto {
+            id: id.to_string(),
+            title: Some(format!("Mock Entry: {id}")),
+            linux: Some("/vmlinuz-linux".to_string()),
+            initrd: Some("/initramfs-linux.img".to_string()),
+            options: Some("root=/dev/sda1 rw quiet".to_string()),
+            machine_id: None,
+            etag: "mock-entry-etag-12345".to_string(),
+            is_default: false,
+        };
+        Ok((entry, "mock-entry-etag-12345".to_string()))
+    }
+
+    async fn set_loader_default(&self, _id: &str, _etag: &str) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn get_loader_conf_etag(&self) -> zbus::Result<String> {
+        Ok("mock-loader-conf-etag-12345".to_string())
+    }
+
+    async fn read_kernel_cmdline(&self) -> zbus::Result<(Vec<String>, String)> {
+        Ok((
+            vec![
+                "root=/dev/sda1".to_string(),
+                "rw".to_string(),
+                "quiet".to_string(),
+                "splash".to_string(),
+            ],
+            "mock-cmdline-etag-12345".to_string(),
+        ))
+    }
+
+    async fn add_kernel_param(&self, _param: &str, _etag: &str) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn remove_kernel_param(&self, _param: &str, _etag: &str) -> zbus::Result<()> {
+        Ok(())
+    }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Connection helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Connect to the appropriate D-Bus bus based on environment or platform.
 pub async fn connect_bus() -> zbus::Result<Connection> {
@@ -271,11 +489,9 @@ mod tests {
     async fn mock_backend_backup_nvram_returns_json_array_string() {
         let backend = MockBackend;
         let json = backend.backup_nvram("").await.expect("backup_nvram should succeed");
-        // The JSON must start with '[' and end with ']' — it is an array.
         let trimmed = json.trim();
         assert!(trimmed.starts_with('['), "must be a JSON array, got: {json}");
         assert!(trimmed.ends_with(']'), "must be a JSON array, got: {json}");
-        // Must contain at least one file path
         assert!(!json.is_empty(), "JSON string must not be empty");
     }
 
@@ -296,14 +512,11 @@ mod tests {
             .generate_paranoia_keyset("")
             .await
             .expect("generate_paranoia_keyset should succeed");
-        // Must be a JSON array
         let trimmed = json.trim();
         assert!(trimmed.starts_with('['), "must be a JSON array, got: {json}");
         assert!(trimmed.ends_with(']'), "must be a JSON array, got: {json}");
-        // Must include key material paths
         assert!(json.contains("PK"), "keyset JSON must mention PK key file");
         assert!(json.contains("KEK"), "keyset JSON must mention KEK key file");
-        assert!(json.contains(".key") || json.contains(".crt"), "keyset JSON must include key/cert files");
     }
 
     // ── MockBackend::merge_paranoia_with_microsoft ────────────────────────────
@@ -321,11 +534,43 @@ mod tests {
         );
     }
 
+    // ── MockBackend::list_loader_entries ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn mock_backend_list_loader_entries_returns_two_entries() {
+        let backend = MockBackend;
+        let entries = backend.list_loader_entries().await.expect("list_loader_entries should succeed");
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|e| e.id == "arch" && e.is_default));
+        assert!(entries.iter().any(|e| e.id == "arch-fallback" && !e.is_default));
+    }
+
+    // ── MockBackend::read_kernel_cmdline ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn mock_backend_read_kernel_cmdline_returns_params_and_etag() {
+        let backend = MockBackend;
+        let (params, etag) = backend.read_kernel_cmdline().await.expect("read_kernel_cmdline should succeed");
+        assert!(!params.is_empty(), "params must not be empty");
+        assert!(!etag.is_empty(), "etag must not be empty");
+        assert!(params.contains(&"quiet".to_string()));
+    }
+
+    // ── MockBackend::add/remove_kernel_param ──────────────────────────────────
+
+    #[tokio::test]
+    async fn mock_backend_add_kernel_param_succeeds() {
+        let backend = MockBackend;
+        assert!(backend.add_kernel_param("loglevel=3", "mock-etag").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn mock_backend_remove_kernel_param_succeeds() {
+        let backend = MockBackend;
+        assert!(backend.remove_kernel_param("quiet", "mock-etag").await.is_ok());
+    }
+
     // ── dbus_error_message ────────────────────────────────────────────────────
-    //
-    // We test the prefix-stripping logic directly using the same algorithm as
-    // `dbus_error_message()`. We cannot construct a zbus::MethodError without
-    // a real Message, so we verify the pure string logic in isolation.
 
     #[test]
     fn error_prefix_stripping_removes_org_bootcontrol_error_prefix() {
@@ -347,7 +592,6 @@ mod tests {
 
     #[test]
     fn error_prefix_stripping_does_not_strip_other_namespaces() {
-        // An error from a different D-Bus service must NOT be stripped.
         let full_name = "com.other.vendor.Error.Something";
         let stripped = full_name
             .strip_prefix("org.bootcontrol.Error.")

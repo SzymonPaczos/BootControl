@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use bootcontrol_client::BootBackend;
+use bootcontrol_client::{BootBackend, LoaderEntryDto};
 
 /// View model bridging the boot backend and the Slint UI layer.
 pub struct ViewModel {
@@ -8,10 +8,14 @@ pub struct ViewModel {
     pub backend: Arc<dyn BootBackend>,
     /// Parsed GRUB key-value entries from the last successful load.
     pub entries: HashMap<String, String>,
-    /// Current ETag of the GRUB config file on disk.
+    /// Current ETag of the config file on disk.
     pub etag: String,
     /// Name of the active bootloader backend reported by the daemon.
     pub active_backend: String,
+    /// systemd-boot loader entries (populated when backend = "systemd-boot").
+    pub loader_entries: Vec<LoaderEntryDto>,
+    /// UKI kernel cmdline parameters (populated when backend = "uki").
+    pub cmdline_params: Vec<String>,
 }
 
 impl ViewModel {
@@ -22,25 +26,71 @@ impl ViewModel {
             entries: HashMap::new(),
             etag: String::new(),
             active_backend: "grub".to_string(),
+            loader_entries: Vec::new(),
+            cmdline_params: Vec::new(),
         }
     }
 
-    /// Fetch the current GRUB config and backend name from the backend.
+    /// Fetch the current boot configuration and backend name.
+    ///
+    /// Branches on `active_backend` to call the appropriate D-Bus method:
+    /// - `"grub"` → `read_config()`
+    /// - `"systemd-boot"` → `list_loader_entries()` + `get_loader_conf_etag()`
+    /// - `"uki"` → `read_kernel_cmdline()`
     pub async fn load(&mut self) -> Result<(), zbus::Error> {
-        let (config, etag) = self.backend.read_config().await?;
-        self.entries = config;
-        self.etag = etag;
         self.active_backend = self.backend
             .get_active_backend()
             .await
             .unwrap_or_else(|_| "grub".to_string());
+
+        if self.active_backend.contains("systemd-boot") {
+            self.loader_entries = self.backend.list_loader_entries().await?;
+            self.etag = self.backend.get_loader_conf_etag().await.unwrap_or_default();
+            // Mirror entries as key-value pairs so existing GUI code works without changes.
+            self.entries = self.loader_entries
+                .iter()
+                .map(|e| (e.id.clone(), e.title.clone().unwrap_or_default()))
+                .collect();
+        } else if self.active_backend.contains("uki") {
+            let (params, etag) = self.backend.read_kernel_cmdline().await?;
+            self.cmdline_params = params.clone();
+            self.etag = etag;
+            // Mirror as key-value (param → empty value) for existing GUI table.
+            self.entries = params.into_iter().map(|p| (p, String::new())).collect();
+        } else {
+            // GRUB — existing path.
+            let (config, etag) = self.backend.read_config().await?;
+            self.entries = config;
+            self.etag = etag;
+        }
+
         Ok(())
     }
 
     /// Commit a single key-value edit to the backend.
+    ///
+    /// Semantics differ by backend:
+    /// - GRUB: set `key=value` in `/etc/default/grub`
+    /// - systemd-boot: not applicable via this method (use `set_default_entry`)
+    /// - UKI: add `value` as a new kernel parameter
     pub async fn commit_edit(&mut self, key: &str, value: &str) -> Result<(), zbus::Error> {
-        self.backend.set_value(key, value, &self.etag).await?;
+        if self.active_backend.contains("uki") {
+            // For UKI the "value" field isn't used; the key is the full parameter.
+            self.backend.add_kernel_param(key, &self.etag).await?;
+        } else {
+            self.backend.set_value(key, value, &self.etag).await?;
+        }
         Ok(())
+    }
+
+    /// Set the default systemd-boot entry (only meaningful for systemd-boot).
+    pub async fn set_default_entry(&mut self, id: &str) -> Result<(), zbus::Error> {
+        self.backend.set_loader_default(id, &self.etag).await
+    }
+
+    /// Remove a UKI kernel parameter (only meaningful for UKI).
+    pub async fn remove_kernel_param(&mut self, param: &str) -> Result<(), zbus::Error> {
+        self.backend.remove_kernel_param(param, &self.etag).await
     }
 
     /// Rebuild the GRUB config by running grub-mkconfig on the daemon.

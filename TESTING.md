@@ -39,7 +39,7 @@ cargo test --workspace --features "bootcontrold/experimental_paranoia"
 cargo test --workspace --doc
 ```
 
-Expected output: **300+ tests passing, 0 failures**.
+Expected output: **383+ tests passing, 0 failures**.
 
 ---
 

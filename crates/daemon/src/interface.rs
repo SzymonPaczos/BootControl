@@ -42,6 +42,7 @@ use crate::{
     sanitize,
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
+    systemd_boot_manager, uki_manager,
 };
 
 #[cfg(feature = "experimental_paranoia")]
@@ -85,6 +86,18 @@ pub struct GrubManager {
     grub_cfg_path: PathBuf,
     /// Active bootloader backend, selected by the prober at startup.
     backend: Box<dyn BootManager>,
+    /// Directory containing systemd-boot loader entry `.conf` files.
+    ///
+    /// Production default: `/boot/loader/entries`.
+    loader_entries_dir: PathBuf,
+    /// Path to `loader.conf` (systemd-boot global config).
+    ///
+    /// Production default: `/boot/loader/loader.conf`.
+    loader_conf_path: PathBuf,
+    /// Path to the UKI kernel command-line file.
+    ///
+    /// Production default: `/etc/kernel/cmdline`.
+    kernel_cmdline_path: PathBuf,
 }
 
 impl GrubManager {
@@ -116,6 +129,9 @@ impl GrubManager {
             failsafe_cfg_path: PathBuf::from("/etc/bootcontrol/failsafe.cfg"),
             grub_cfg_path: PathBuf::from("/boot/grub/grub.cfg"),
             backend,
+            loader_entries_dir: PathBuf::from("/boot/loader/entries"),
+            loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
+            kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
         }
     }
 
@@ -154,6 +170,9 @@ impl GrubManager {
             failsafe_cfg_path,
             grub_cfg_path: PathBuf::from("/boot/grub/grub.cfg"),
             backend,
+            loader_entries_dir: PathBuf::from("/boot/loader/entries"),
+            loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
+            kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
         }
     }
 
@@ -195,6 +214,33 @@ impl GrubManager {
             failsafe_cfg_path,
             grub_cfg_path,
             backend,
+            loader_entries_dir: PathBuf::from("/boot/loader/entries"),
+            loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
+            kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
+        }
+    }
+
+    /// Create a [`GrubManager`] with fully injectable paths including systemd-boot and UKI.
+    ///
+    /// Used by integration tests that need to avoid writing to system directories.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_extended_paths(
+        grub_path: PathBuf,
+        failsafe_cfg_path: PathBuf,
+        grub_cfg_path: PathBuf,
+        loader_entries_dir: PathBuf,
+        loader_conf_path: PathBuf,
+        kernel_cmdline_path: PathBuf,
+        backend: Box<dyn BootManager>,
+    ) -> Self {
+        Self {
+            grub_path,
+            failsafe_cfg_path,
+            grub_cfg_path,
+            backend,
+            loader_entries_dir,
+            loader_conf_path,
+            kernel_cmdline_path,
         }
     }
 
@@ -805,4 +851,251 @@ impl GrubManager {
         info!(auth_path = %auth_path.display(), "Signatures merged successfully");
         Ok(auth_path.display().to_string())
     }
+
+    // ── systemd-boot methods ──────────────────────────────────────────────────
+
+    /// List all systemd-boot loader entries.
+    ///
+    /// Reads every `.conf` file in `/boot/loader/entries/` and `loader.conf`
+    /// for the current default.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// ListLoaderEntries() -> s
+    /// ```
+    ///
+    /// ## Return value
+    ///
+    /// A JSON array of entry objects.  Each object has:
+    /// `id`, `title`, `linux`, `initrd`, `options`, `machine_id`, `etag`, `is_default`.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.EspScanFailed` — entries directory unreadable.
+    async fn list_loader_entries(&self) -> Result<String, DaemonError> {
+        info!(dir = ?self.loader_entries_dir, "D-Bus: ListLoaderEntries");
+        let records = systemd_boot_manager::read_all_entries(
+            &self.loader_entries_dir,
+            &self.loader_conf_path,
+        )
+        .map_err(to_daemon_error)?;
+        serde_json::to_string(&records).map_err(|e| {
+            DaemonError::EspScanFailed(format!("serialization error: {e}"))
+        })
+    }
+
+    /// Read a single systemd-boot loader entry by ID.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// ReadLoaderEntry(s) -> (s, s)
+    /// ```
+    ///
+    /// ## Return value
+    ///
+    /// `(json_entry, file_etag)` where `json_entry` is the serialized
+    /// [`systemd_boot_manager::EntryRecord`] and `file_etag` is the SHA-256
+    /// of the `.conf` file.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.EspScanFailed` — entry not found or unreadable.
+    async fn read_loader_entry(&self, id: String) -> Result<(String, String), DaemonError> {
+        info!(id = %id, "D-Bus: ReadLoaderEntry");
+        let (entry, etag) =
+            systemd_boot_manager::read_entry(&self.loader_entries_dir, &id)
+                .map_err(to_daemon_error)?;
+        let record = systemd_boot_manager::EntryRecord {
+            id: id.clone(),
+            title: entry.title,
+            linux: entry.linux,
+            initrd: entry.initrd,
+            options: entry.options,
+            machine_id: entry.machine_id,
+            etag: etag.clone(),
+            is_default: {
+                let def = systemd_boot_manager::read_loader_conf_default(&self.loader_conf_path)
+                    .unwrap_or_default();
+                def.trim() == id || def.trim() == format!("{id}.conf")
+            },
+        };
+        let json = serde_json::to_string(&record).map_err(|e| {
+            DaemonError::EspScanFailed(format!("serialization error: {e}"))
+        })?;
+        Ok((json, etag))
+    }
+
+    /// Set the default systemd-boot loader entry.
+    ///
+    /// Writes the `default <id>` key to `loader.conf`.
+    /// Requires Polkit authorization.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// SetLoaderDefault(s, s) -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// - `id`   — Entry ID (filename stem, e.g. `"arch"`).
+    /// - `etag` — Current `loader.conf` ETag.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied`
+    /// - `org.bootcontrol.Error.StateMismatch` — stale ETag.
+    /// - `org.bootcontrol.Error.ConcurrentModification`
+    async fn set_loader_default(
+        &self,
+        id: String,
+        etag: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(id = %id, "D-Bus: SetLoaderDefault");
+        let caller_uid = resolve_uid(&header, connection, "SetLoaderDefault").await?;
+        authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
+        systemd_boot_manager::set_loader_default(&self.loader_conf_path, &id, &etag)
+            .map_err(to_daemon_error)
+    }
+
+    /// Get the ETag of `loader.conf`.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// GetLoaderConfEtag() -> s
+    /// ```
+    async fn get_loader_conf_etag(&self) -> Result<String, DaemonError> {
+        info!("D-Bus: GetLoaderConfEtag");
+        systemd_boot_manager::fetch_loader_conf_etag(&self.loader_conf_path)
+            .map_err(to_daemon_error)
+    }
+
+    // ── UKI / kernel cmdline methods ──────────────────────────────────────────
+
+    /// Read `/etc/kernel/cmdline` and return the current kernel parameters.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// ReadKernelCmdline() -> (as, s)
+    /// ```
+    ///
+    /// ## Return value
+    ///
+    /// `(params, etag)` where `params` is an array of individual parameter
+    /// tokens and `etag` is the SHA-256 of the file.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.EspScanFailed` — file not found or unreadable.
+    async fn read_kernel_cmdline(&self) -> Result<(Vec<String>, String), DaemonError> {
+        info!(path = ?self.kernel_cmdline_path, "D-Bus: ReadKernelCmdline");
+        uki_manager::read_kernel_cmdline(&self.kernel_cmdline_path).map_err(to_daemon_error)
+    }
+
+    /// Add a kernel parameter to `/etc/kernel/cmdline`.
+    ///
+    /// Idempotent: if the parameter is already present this is a no-op.
+    /// Requires Polkit authorization.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// AddKernelParam(s, s) -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// - `param` — Parameter token (e.g. `"quiet"`, `"root=/dev/sda1"`).
+    /// - `etag`  — Current ETag of `/etc/kernel/cmdline`.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied`
+    /// - `org.bootcontrol.Error.SecurityPolicyViolation` — blacklisted pattern.
+    /// - `org.bootcontrol.Error.StateMismatch` — stale ETag.
+    /// - `org.bootcontrol.Error.ConcurrentModification`
+    async fn add_kernel_param(
+        &self,
+        param: String,
+        etag: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(param = %param, "D-Bus: AddKernelParam");
+        let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
+        authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
+        uki_manager::add_kernel_param(&self.kernel_cmdline_path, &param, &etag)
+            .map_err(to_daemon_error)
+    }
+
+    /// Remove a kernel parameter from `/etc/kernel/cmdline`.
+    ///
+    /// Requires Polkit authorization.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// RemoveKernelParam(s, s) -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// - `param` — Parameter token to remove (e.g. `"quiet"`).
+    /// - `etag`  — Current ETag of `/etc/kernel/cmdline`.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied`
+    /// - `org.bootcontrol.Error.KeyNotFound` — param not present.
+    /// - `org.bootcontrol.Error.StateMismatch` — stale ETag.
+    async fn remove_kernel_param(
+        &self,
+        param: String,
+        etag: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(param = %param, "D-Bus: RemoveKernelParam");
+        let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
+        authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
+        uki_manager::remove_kernel_param(&self.kernel_cmdline_path, &param, &etag)
+            .map_err(to_daemon_error)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Private helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resolve the caller's Unix UID from a D-Bus message header.
+///
+/// Shared by all write methods that need Polkit authorization.
+async fn resolve_uid(
+    header: &zbus::message::Header<'_>,
+    connection: &zbus::Connection,
+    method_name: &str,
+) -> Result<u32, DaemonError> {
+    let sender = header.sender().ok_or_else(|| {
+        warn!(method = method_name, "D-Bus message has no sender field");
+        DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+    })?.clone();
+
+    let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+        warn!(method = method_name, error = %e, "Failed to create DBus proxy");
+        DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {e}"))
+    })?;
+
+    dbus_proxy
+        .get_connection_unix_user(sender.into())
+        .await
+        .map_err(|e| {
+            warn!(method = method_name, error = %e, "GetConnectionUnixUser failed");
+            DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
+        })
 }

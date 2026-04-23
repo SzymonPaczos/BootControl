@@ -7,7 +7,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
 ![Language](https://img.shields.io/badge/language-Rust%202021-orange)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
-![Tests](https://img.shields.io/badge/tests-300%2B%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-383%2B%20passing-brightgreen)
 
 ---
 
