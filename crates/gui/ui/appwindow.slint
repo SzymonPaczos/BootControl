@@ -7,6 +7,8 @@ export struct GrubEntry {
     is_modified: bool,
 }
 
+// ─── Sidebar navigation item ──────────────────────────────────────────────────
+
 component SidebarItem inherits Rectangle {
     in property <string> text;
     in property <bool> active: false;
@@ -15,15 +17,14 @@ component SidebarItem inherits Rectangle {
     height: 48px;
     border-radius: 8px;
     background: root.active ? #313244 : (touch.has-hover ? #1e1e2e : transparent);
-    
+
     animate background { duration: 150ms; }
 
     HorizontalLayout {
         padding-left: 12px;
         spacing: 12px;
         alignment: start;
-        
-        // Icon placeholder
+
         Rectangle {
             width: 4px;
             height: 20px;
@@ -42,14 +43,18 @@ component SidebarItem inherits Rectangle {
     touch := TouchArea {}
 }
 
+// ─── Ghost (secondary) button ─────────────────────────────────────────────────
+
 component GhostButton inherits Rectangle {
     in-out property <string> text;
+    in property <bool> enabled: true;
     callback clicked <=> touch.clicked;
 
     height: 36px;
     border-radius: 8px;
     background: touch.pressed ? #313244 : (touch.has-hover ? #45475a : transparent);
-    
+    opacity: root.enabled ? 1.0 : 0.5;
+
     animate background { duration: 150ms; }
 
     Text {
@@ -60,23 +65,31 @@ component GhostButton inherits Rectangle {
         horizontal-alignment: center;
         vertical-alignment: center;
     }
-    touch := TouchArea {}
+    touch := TouchArea {
+        enabled: root.enabled;
+    }
 }
+
+// ─── Primary (blue/purple gradient) button ────────────────────────────────────
 
 component PrimaryButton inherits Rectangle {
     in-out property <string> text;
-    callback clicked <=> touch.clicked;
     in property <bool> enabled: true;
+    callback clicked <=> touch.clicked;
 
-    height: 36px;
+    height: 40px;
     border-radius: 8px;
-    background: root.enabled ? (touch.pressed ? @linear-gradient(90deg, #cba6f7 0%, #b4befe 100%) : @linear-gradient(90deg, #b4befe 0%, #cba6f7 100%)) : #45475a;
-    
+    background: root.enabled
+        ? (touch.pressed
+            ? @linear-gradient(90deg, #cba6f7 0%, #b4befe 100%)
+            : @linear-gradient(90deg, #b4befe 0%, #cba6f7 100%))
+        : #313244;
+
     animate background { duration: 150ms; }
 
     Text {
         text: root.text;
-        color: root.enabled ? #11111b : #a6adc8;
+        color: root.enabled ? #11111b : #585b70;
         font-size: 14px;
         font-weight: 700;
         horizontal-alignment: center;
@@ -87,16 +100,48 @@ component PrimaryButton inherits Rectangle {
     }
 }
 
+// ─── Danger (red outline) button ──────────────────────────────────────────────
+
+component DangerButton inherits Rectangle {
+    in-out property <string> text;
+    in property <bool> enabled: true;
+    callback clicked <=> touch.clicked;
+
+    height: 40px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: root.enabled ? #f38ba8 : #45475a;
+    background: root.enabled
+        ? (touch.pressed ? #f38ba8 : (touch.has-hover ? #2d1317 : transparent))
+        : transparent;
+
+    animate background, border-color { duration: 150ms; }
+
+    Text {
+        text: root.text;
+        color: root.enabled ? #f38ba8 : #585b70;
+        font-size: 14px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+    }
+}
+
+// ─── Styled text input ────────────────────────────────────────────────────────
+
 component StyledInput inherits Rectangle {
     in-out property <string> text <=> input.text;
     callback edited(string);
-    
+
     height: 36px;
     border-radius: 6px;
     background: #11111b;
     border-width: 1px;
     border-color: input.has-focus ? #b4befe : #313244;
-    
+
     animate border-color { duration: 150ms; }
 
     HorizontalLayout {
@@ -113,22 +158,24 @@ component StyledInput inherits Rectangle {
     }
 }
 
+// ─── Toast notification ───────────────────────────────────────────────────────
+
 component ToastNotification inherits Rectangle {
     in property <string> message;
     in property <string> toast_type: "error";
     in property <bool> is_visible: false;
     callback dismiss;
 
-    width: 400px;
-    height: 50px;
+    width: 420px;
+    height: 52px;
     border-radius: 10px;
     background: root.toast_type == "error" ? #f38ba8 : (root.toast_type == "success" ? #a6e3a1 : #89b4fa);
     opacity: root.is_visible ? 1.0 : 0.0;
-    
+
     animate opacity { duration: 200ms; }
 
     HorizontalLayout {
-        padding: 12px;
+        padding: 14px;
         spacing: 12px;
         Text {
             text: root.message;
@@ -137,6 +184,7 @@ component ToastNotification inherits Rectangle {
             font-weight: 700;
             vertical-alignment: center;
             horizontal-stretch: 1;
+            overflow: elide;
         }
         GhostButton {
             text: "✕";
@@ -146,61 +194,248 @@ component ToastNotification inherits Rectangle {
     }
 }
 
+// ─── Status card (icon + label + value) ──────────────────────────────────────
+
+component StatusCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> status: "neutral"; // "good" | "bad" | "info" | "neutral"
+
+    horizontal-stretch: 1;
+    height: 80px;
+    border-radius: 10px;
+    background: #181825;
+    border-width: 1px;
+    border-color: root.status == "good" ? #a6e3a1
+        : (root.status == "bad" ? #f38ba8
+        : (root.status == "info" ? #89b4fa
+        : #313244));
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 6px;
+        alignment: start;
+
+        Text {
+            text: root.label;
+            color: #6c7086;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        Text {
+            text: root.value;
+            color: root.status == "good" ? #a6e3a1
+                : (root.status == "bad" ? #f38ba8
+                : (root.status == "info" ? #89b4fa
+                : #cdd6f4));
+            font-size: 15px;
+            font-weight: 700;
+        }
+    }
+}
+
+// ─── Checkbox ─────────────────────────────────────────────────────────────────
+
+component CheckBox inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> label;
+
+    height: 28px;
+
+    HorizontalLayout {
+        spacing: 10px;
+        alignment: start;
+
+        Rectangle {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border-width: 2px;
+            border-color: root.checked ? #89b4fa : #45475a;
+            background: root.checked ? #89b4fa : transparent;
+
+            animate background, border-color { duration: 150ms; }
+
+            if root.checked : Text {
+                text: "✓";
+                color: #11111b;
+                font-size: 12px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: root.label;
+            color: #cdd6f4;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+    }
+
+    TouchArea {
+        clicked => { root.checked = !root.checked; }
+    }
+}
+
+// ─── Loading bar ──────────────────────────────────────────────────────────────
+
+component LoadingBar inherits Rectangle {
+    in property <bool> active: false;
+    in property <string> message: "Processing...";
+
+    height: root.active ? 44px : 0px;
+    border-radius: 8px;
+    background: #313244;
+    clip: true;
+
+    animate height { duration: 180ms; easing: ease-in-out; }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 12px;
+        alignment: start;
+
+        Text {
+            text: "⏳";
+            color: #89b4fa;
+            font-size: 15px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.message;
+            color: #cdd6f4;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// ─── Warning banner ───────────────────────────────────────────────────────────
+
+component WarningBanner inherits Rectangle {
+    in property <string> message;
+
+    border-radius: 8px;
+    background: #2d1317;
+    border-width: 1px;
+    border-color: #f38ba8;
+
+    HorizontalLayout {
+        padding-top: 14px;
+        padding-bottom: 14px;
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 12px;
+        alignment: start;
+
+        Text {
+            text: "⚠";
+            color: #f38ba8;
+            font-size: 17px;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.message;
+            color: #f38ba8;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+// ─── Section header text ──────────────────────────────────────────────────────
+
+component SectionHeader inherits Text {
+    color: #a6adc8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+// ─── Main window ─────────────────────────────────────────────────────────────
+
 export component AppWindow inherits Window {
     title: "BootControl";
     width: 1000px;
     height: 750px;
     background: #181825;
     default-font-family: "Inter, Roboto, sans-serif";
-    
+
+    // ── Existing properties ──────────────────────────────────────────────────
     in-out property <[GrubEntry]> entries: [];
     in property <string> toast_message: "";
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
     in property <string> active_backend: "grub";
     in-out property <int> active_tab: 0;
-    
+
+    // ── New properties ───────────────────────────────────────────────────────
+    in property <bool> show_loading: false;
+    in property <string> loading_message: "Processing...";
+    in property <string> secure_boot_status: "Unknown";
+    in property <string> mok_status: "Unknown";
+    in-out property <bool> paranoia_confirmed: false;
+
+    // ── Existing callbacks ───────────────────────────────────────────────────
     callback fetch_entries();
     callback save_entry(string, string);
     callback dismiss_toast();
 
+    // ── New callbacks ─────────────────────────────────────────────────────────
+    callback rebuild_grub();
+    callback backup_nvram();
+    callback enroll_mok();
+    callback generate_paranoia();
+    callback merge_paranoia();
+
     HorizontalLayout {
-        // Sidebar
+        // ── Sidebar ──────────────────────────────────────────────────────────
         Rectangle {
             width: 220px;
             background: #11111b;
-            
+
             VerticalLayout {
                 padding: 24px;
                 spacing: 8px;
                 alignment: start;
-                
+
                 Text {
                     text: "BootControl";
                     font-size: 20px;
                     font-weight: 800;
                     color: #cdd6f4;
-                    padding-bottom: 24px;
                 }
-                
-                SidebarItem { 
-                    text: "Boot Settings"; 
+
+                Rectangle { height: 16px; }
+
+                SidebarItem {
+                    text: "Boot Settings";
                     active: root.active_tab == 0;
                     clicked => { root.active_tab = 0; }
                 }
-                SidebarItem { 
-                    text: "Secure Boot"; 
+                SidebarItem {
+                    text: "Secure Boot";
                     active: root.active_tab == 1;
                     clicked => { root.active_tab = 1; }
                 }
-                SidebarItem { 
-                    text: "Security Lab"; 
+                SidebarItem {
+                    text: "Security Lab";
                     active: root.active_tab == 2;
                     clicked => { root.active_tab = 2; }
                 }
-                
-                Rectangle { vertical-stretch: 1; } // spacer
-                
+
+                Rectangle { vertical-stretch: 1; }
+
                 Text {
                     text: "v1.0.0-alpha";
                     color: #45475a;
@@ -208,23 +443,26 @@ export component AppWindow inherits Window {
                 }
             }
         }
-        
-        // Main Content
+
+        // ── Main Content ──────────────────────────────────────────────────────
         Rectangle {
             background: #1e1e2e;
-            
+
             VerticalLayout {
                 padding: 32px;
-                spacing: 24px;
-                
-                // Content Header
+                spacing: 16px;
+
+                // ── Page header ───────────────────────────────────────────────
                 HorizontalLayout {
                     alignment: space-between;
+
                     VerticalLayout {
                         spacing: 4px;
                         Text {
-                            text: root.active_tab == 0 ? "Configuration" : (root.active_tab == 1 ? "Secure Boot" : "Security Lab");
-                            font-size: 28px;
+                            text: root.active_tab == 0 ? "Boot Settings"
+                                : (root.active_tab == 1 ? "Secure Boot"
+                                : "Security Lab");
+                            font-size: 26px;
                             font-weight: 700;
                             color: #cdd6f4;
                         }
@@ -234,28 +472,51 @@ export component AppWindow inherits Window {
                             color: #6c7086;
                         }
                     }
-                    if root.active_tab == 0 : GhostButton {
-                        text: "↻ Refresh";
-                        width: 100px;
-                        clicked => { root.fetch_entries(); }
+
+                    // Tab 0 header actions
+                    if root.active_tab == 0 : HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+
+                        GhostButton {
+                            text: "↻ Refresh";
+                            width: 100px;
+                            enabled: !root.show_loading;
+                            clicked => { root.fetch_entries(); }
+                        }
+                        GhostButton {
+                            text: "⟳ Rebuild GRUB";
+                            width: 148px;
+                            enabled: !root.show_loading;
+                            clicked => { root.rebuild_grub(); }
+                        }
                     }
                 }
-                
-                // Tab Views
+
+                // ── Loading bar ───────────────────────────────────────────────
+                LoadingBar {
+                    active: root.show_loading;
+                    message: root.loading_message;
+                }
+
+                // ── Tab 0: Boot Settings ──────────────────────────────────────
                 if root.active_tab == 0 : Rectangle {
+                    vertical-stretch: 1;
                     background: #181825;
                     border-radius: 12px;
+
                     ScrollView {
-                        padding: 16px;
                         VerticalLayout {
+                            padding: 16px;
                             spacing: 8px;
+
                             for entry[i] in root.entries : Rectangle {
                                 height: 60px;
                                 background: #1e1e2e;
                                 border-radius: 8px;
                                 border-width: 1px;
                                 border-color: entry.is_modified ? #f9e2af : #313244;
-                                
+
                                 animate border-color { duration: 150ms; }
 
                                 HorizontalLayout {
@@ -263,7 +524,7 @@ export component AppWindow inherits Window {
                                     padding-right: 16px;
                                     spacing: 12px;
                                     alignment: center;
-                                    
+
                                     Text {
                                         width: 180px;
                                         text: entry.key;
@@ -272,20 +533,20 @@ export component AppWindow inherits Window {
                                         font-weight: 600;
                                         vertical-alignment: center;
                                     }
-                                    
+
                                     StyledInput {
                                         horizontal-stretch: 1;
                                         text: entry.value;
-                                        edited(tx) => { 
+                                        edited(tx) => {
                                             root.entries[i].value = tx;
                                             root.entries[i].is_modified = (tx != root.entries[i].original_value);
                                         }
                                     }
-                                    
+
                                     PrimaryButton {
                                         text: "Save";
                                         width: 80px;
-                                        enabled: entry.is_modified;
+                                        enabled: entry.is_modified && !root.show_loading;
                                         clicked => {
                                             root.save_entry(entry.key, entry.value);
                                         }
@@ -295,62 +556,180 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-                
+
+                // ── Tab 1: Secure Boot ────────────────────────────────────────
                 if root.active_tab == 1 : Rectangle {
+                    vertical-stretch: 1;
                     background: #181825;
                     border-radius: 12px;
+
                     VerticalLayout {
-                        padding: 40px;
+                        padding: 24px;
                         spacing: 20px;
                         alignment: start;
-                        Text {
-                            text: "Secure Boot Management";
-                            color: #cdd6f4;
-                            font-size: 18px;
-                            font-weight: 600;
-                        }
-                        Text {
-                            text: "Manage MOK certificates and UKI signing settings.";
-                            color: #6c7086;
-                            font-size: 14px;
-                        }
-                        
+
+                        // Status cards
+                        SectionHeader { text: "STATUS OVERVIEW"; }
+
                         HorizontalLayout {
                             spacing: 12px;
-                            PrimaryButton { text: "Backup NVRAM"; width: 150px; }
-                            PrimaryButton { text: "Enroll MOK"; width: 150px; }
+
+                            StatusCard {
+                                label: "SECURE BOOT";
+                                value: root.secure_boot_status;
+                                status: root.secure_boot_status == "Enabled" ? "good"
+                                    : (root.secure_boot_status == "Disabled" ? "bad"
+                                    : "neutral");
+                            }
+                            StatusCard {
+                                label: "MOK ENROLLED";
+                                value: root.mok_status;
+                                status: root.mok_status == "Yes" ? "good"
+                                    : (root.mok_status == "No" ? "bad"
+                                    : "neutral");
+                            }
+                            StatusCard {
+                                label: "ACTIVE BACKEND";
+                                value: root.active_backend;
+                                status: "info";
+                            }
+                        }
+
+                        // Separator
+                        Rectangle { height: 4px; }
+
+                        // Actions
+                        SectionHeader { text: "ACTIONS"; }
+
+                        HorizontalLayout {
+                            spacing: 12px;
+                            alignment: start;
+
+                            PrimaryButton {
+                                text: "Backup NVRAM";
+                                width: 160px;
+                                enabled: !root.show_loading;
+                                clicked => { root.backup_nvram(); }
+                            }
+                            PrimaryButton {
+                                text: "Enroll MOK";
+                                width: 140px;
+                                enabled: !root.show_loading;
+                                clicked => { root.enroll_mok(); }
+                            }
+                        }
+
+                        // Description
+                        Text {
+                            text: "Backup NVRAM saves all EFI Secure Boot variables to /var/lib/bootcontrol/certs/. Enroll MOK signs the UKI image and registers the machine owner key for the next reboot.";
+                            color: #585b70;
+                            font-size: 12px;
+                            wrap: word-wrap;
                         }
                     }
                 }
 
+                // ── Tab 2: Security Lab ───────────────────────────────────────
                 if root.active_tab == 2 : Rectangle {
+                    vertical-stretch: 1;
                     background: #181825;
                     border-radius: 12px;
+
                     VerticalLayout {
-                        padding: 40px;
-                        spacing: 20px;
+                        padding: 24px;
+                        spacing: 16px;
                         alignment: start;
-                        Text {
-                            text: "Paranoia Mode (Experimental)";
-                            color: #f38ba8;
-                            font-size: 18px;
-                            font-weight: 600;
+
+                        WarningBanner {
+                            message: "These operations take full ownership of EFI Secure Boot variables and can permanently break your system. Proceed only if you know what you are doing.";
                         }
-                        Text {
-                            text: "Take full ownership of EFI variables. Dangerous operations.";
-                            color: #6c7086;
-                            font-size: 14px;
+
+                        // Paranoia Mode section
+                        Rectangle {
+                            background: #1e1e2e;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: #313244;
+
+                            VerticalLayout {
+                                padding: 20px;
+                                spacing: 14px;
+                                alignment: start;
+
+                                HorizontalLayout {
+                                    alignment: start;
+                                    spacing: 10px;
+                                    Text {
+                                        text: "Paranoia Mode";
+                                        color: root.paranoia_confirmed ? #f38ba8 : #cdd6f4;
+                                        font-size: 16px;
+                                        font-weight: 700;
+                                        vertical-alignment: center;
+
+                                        animate color { duration: 200ms; }
+                                    }
+                                    Rectangle {
+                                        width: 80px;
+                                        height: 22px;
+                                        border-radius: 11px;
+                                        background: root.paranoia_confirmed ? #3d1317 : #313244;
+                                        border-width: 1px;
+                                        border-color: root.paranoia_confirmed ? #f38ba8 : #45475a;
+
+                                        animate background, border-color { duration: 200ms; }
+
+                                        Text {
+                                            text: root.paranoia_confirmed ? "Armed" : "Inactive";
+                                            color: root.paranoia_confirmed ? #f38ba8 : #6c7086;
+                                            font-size: 11px;
+                                            font-weight: 700;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    text: "Generates a custom PK/KEK/db key set and takes full ownership of the UEFI Secure Boot database. This permanently replaces your platform key.";
+                                    color: #6c7086;
+                                    font-size: 13px;
+                                    wrap: word-wrap;
+                                }
+
+                                CheckBox {
+                                    label: "I understand the risks and want to proceed";
+                                    checked <=> root.paranoia_confirmed;
+                                }
+
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: start;
+
+                                    DangerButton {
+                                        text: "Generate Custom PK/KEK";
+                                        width: 220px;
+                                        enabled: root.paranoia_confirmed && !root.show_loading;
+                                        clicked => { root.generate_paranoia(); }
+                                    }
+                                    DangerButton {
+                                        text: "Merge with Microsoft Sigs";
+                                        width: 220px;
+                                        enabled: root.paranoia_confirmed && !root.show_loading;
+                                        clicked => { root.merge_paranoia(); }
+                                    }
+                                }
+                            }
                         }
-                        PrimaryButton { text: "Generate Custom PK/KEK"; width: 200px; }
                     }
                 }
             }
         }
     }
 
+    // ── Toast (floats above everything) ───────────────────────────────────────
     ToastNotification {
         x: (parent.width - self.width) / 2;
-        y: root.show_toast ? parent.height - self.height - 20px : parent.height + 10px;
+        y: root.show_toast ? parent.height - self.height - 24px : parent.height + 10px;
         message: root.toast_message;
         toast_type: root.toast_type;
         is_visible: root.show_toast;
