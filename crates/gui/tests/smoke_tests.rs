@@ -1,6 +1,26 @@
+//! Smoke tests for the GUI ViewModel layer.
+//!
+//! These tests spawn a real `bootcontrold` binary on the D-Bus **session bus**
+//! and drive the ViewModel through the full call chain. All tests are `#[ignore]`
+//! by default — they require a running session bus and the daemon binary.
+//!
+//! # Running smoke tests
+//!
+//! ```bash
+//! BOOTCONTROL_BUS=session cargo test -p bootcontrol-gui --test smoke_tests -- --ignored
+//! ```
+
+use std::sync::Arc;
+use bootcontrol_client::{BootBackend, DbusBackend};
 use bootcontrol_gui::view_model::ViewModel;
 
 mod common;
+
+/// Helper: create a ViewModel backed by a real D-Bus connection from a DaemonHandle.
+fn make_view_model(conn: zbus::Connection) -> ViewModel {
+    let backend: Arc<dyn BootBackend> = Arc::new(DbusBackend::new(conn));
+    ViewModel::new(backend)
+}
 
 #[tokio::test]
 #[ignore]
@@ -9,7 +29,7 @@ async fn load_entries_from_daemon() -> anyhow::Result<()> {
     let handle = common::spawn_daemon(common::MINIMAL_GRUB).await?;
 
     // Create view model using the handle's connection (session bus)
-    let mut view_model = ViewModel::new(handle.conn.clone());
+    let mut view_model = make_view_model(handle.conn.clone());
     view_model
         .load()
         .await
@@ -36,7 +56,7 @@ async fn load_entries_from_daemon() -> anyhow::Result<()> {
 async fn commit_edit_calls_set_grub_value() -> anyhow::Result<()> {
     let handle = common::spawn_daemon(common::MINIMAL_GRUB).await?;
 
-    let mut view_model = ViewModel::new(handle.conn.clone());
+    let mut view_model = make_view_model(handle.conn.clone());
     view_model.load().await?;
 
     // Attempt edit
@@ -61,11 +81,11 @@ async fn stale_etag_shows_error() -> anyhow::Result<()> {
     let handle = common::spawn_daemon(common::MINIMAL_GRUB).await?;
 
     // ViewModel 1
-    let mut vm1 = ViewModel::new(handle.conn.clone());
+    let mut vm1 = make_view_model(handle.conn.clone());
     vm1.load().await?;
 
     // ViewModel 2 concurrent load
-    let mut vm2 = ViewModel::new(handle.conn.clone());
+    let mut vm2 = make_view_model(handle.conn.clone());
     vm2.load().await?;
 
     // vm1 commits a change, invalidating vm2's etag
