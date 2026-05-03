@@ -1,0 +1,41 @@
+[package]
+name = "bootcontrol-gui-spike"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "PR 0 — Slint a11y framework verification spike. See docs/slint-a11y-findings.md and docs/GUI_V2_SPEC_v2.md §16. Linux-only runtime testing."
+
+# Each binary tests one framework unknown.
+# Run with: cargo run -p bootcontrol-gui-spike --bin q1
+# Then introspect with `accerciser` (AT-SPI introspector) or `orca` (screen reader).
+
+[[bin]]
+name = "q1_modal_dialog"
+path = "src/bin/q1_modal_dialog.rs"
+
+[[bin]]
+name = "q2_description_change"
+path = "src/bin/q2_description_change.rs"
+
+[[bin]]
+name = "q3_live_region"
+path = "src/bin/q3_live_region.rs"
+
+[[bin]]
+name = "q4_focus_trap"
+path = "src/bin/q4_focus_trap.rs"
+
+[[bin]]
+name = "q5_reduced_motion"
+path = "src/bin/q5_reduced_motion.rs"
+
+[[bin]]
+name = "q6_shift_return"
+path = "src/bin/q6_shift_return.rs"
+
+[[bin]]
+name = "q7_global_override"
+path = "src/bin/q7_global_override.rs"
+
+[dependencies]
+slint = "1.8"
