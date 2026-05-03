@@ -1,0 +1,107 @@
+// crates/gui/ui/tokens.slint
+//
+// Single source of truth for visual tokens across all GUI v2 components.
+// No raw hex colour outside this file (with a few flagged TODO escapes
+// inherited from v1, to be cleared in PR 7 — WCAG pass).
+//
+// Mapping rationale: docs/GUI_V2_SPEC_v2.md §8 (Token system v2, post-WCAG)
+// and docs/UX_BRIEF.md §4. Catppuccin Mocha named colours feed the
+// semantic-role layer below; the role names are what components reference,
+// the hex values may shift in high-contrast mode (PR 7).
+//
+// Runtime override pattern: Slint globals are compile-time singletons,
+// BUT each in-out property below is mutable from Rust via generated
+// `set_*` setters and propagates reactively to every binding (confirmed
+// in PR 0 spike q7_global_override — see docs/slint-a11y-findings.md).
+
+export global Tokens {
+    // ── Surface hierarchy (background levels) ────────────────────────
+    in-out property <color> surface: #1e1e2e;                  // base — window/page
+    in-out property <color> surface-container: #181825;        // mantle — card
+    in-out property <color> surface-container-high: #11111b;   // crust — nested card / inputs
+    in-out property <color> surface-1: #313244;                // surface1 — sidebar active / button pressed
+    in-out property <color> surface-2: #45475a;                // surface2 — button hover
+    in-out property <color> surface-3: #585b70;                // overlay0 — disabled fill
+    in-out property <color> surface-error-tint: #2d1317;       // danger button hover bg
+    in-out property <color> surface-error-tint-strong: #3d1317; // armed/active state pill bg
+
+    // ── Text on surfaces ─────────────────────────────────────────────
+    in-out property <color> on-surface: #cdd6f4;               // text — primary (12.6:1 vs surface ✓ AAA)
+    in-out property <color> on-surface-muted: #bac2de;         // subtext1 — secondary (10.5:1 ✓ AAA)
+    in-out property <color> on-surface-dim: #a6adc8;           // subtext0 — tertiary (sidebar inactive)
+    in-out property <color> on-surface-faint: #6c7086;         // overlay1 — captions / metadata
+    in-out property <color> on-surface-disabled: #9399b2;      // overlay2 — disabled (5.4:1 ✓ AA)
+
+    // ── Accent (non-destructive primary) ─────────────────────────────
+    in-out property <color> accent: #cba6f7;                   // mauve
+    in-out property <color> accent-secondary: #b4befe;         // lavender — gradient pair
+    in-out property <color> accent-info: #89b4fa;              // blue — sidebar active marker
+    in-out property <color> on-accent: #11111b;                // crust on accent (8.8:1 ✓ AAA)
+
+    // ── Semantic banner / state colours ──────────────────────────────
+    in-out property <color> info: #74c7ec;                     // sapphire
+    in-out property <color> success: #a6e3a1;                  // green
+    in-out property <color> warning: #fab387;                  // peach
+    in-out property <color> warning-soft: #f9e2af;             // yellow — modified-row border
+    in-out property <color> error: #f38ba8;                    // red — destructive
+    in-out property <color> on-error: #11111b;                 // crust on error (5.9:1 ✓ AA)
+
+    // ── Focus ring (composite per spec_v2 §8) ────────────────────────
+    in-out property <color> focus-ring-outer: #11111b;         // surface-container-high
+    in-out property <color> focus-ring-inner: #cba6f7;         // accent
+    in-out property <length> focus-ring-width: 2px;            // each layer; total stroke 4 px
+
+    // ── Spacing scale ────────────────────────────────────────────────
+    in-out property <length> space-xs: 4px;
+    in-out property <length> space-sm: 8px;
+    in-out property <length> space-md: 12px;
+    in-out property <length> space-lg: 16px;
+    in-out property <length> space-xl: 24px;
+    in-out property <length> space-2xl: 32px;
+    in-out property <length> space-3xl: 48px;
+
+    // ── Layout constants ─────────────────────────────────────────────
+    in-out property <length> sidebar-width: 220px;             // current GUI; spec target 240 (PR 3)
+    in-out property <length> inspector-width: 320px;
+    in-out property <length> footer-height: 56px;
+    in-out property <length> page-padding: 24px;
+
+    // ── Typography scale (size / weight) ─────────────────────────────
+    in-out property <length> font-display: 28px;
+    in-out property <length> font-title-large: 20px;
+    in-out property <length> font-title-small: 14px;
+    in-out property <length> font-body-medium: 14px;
+    in-out property <length> font-label-large: 13px;
+    in-out property <length> font-meta: 11px;                  // captions / metadata
+    in-out property <int> weight-display: 800;
+    in-out property <int> weight-title: 700;
+    in-out property <int> weight-strong: 700;
+    in-out property <int> weight-medium: 600;
+    in-out property <int> weight-label: 500;
+    in-out property <int> weight-body: 400;
+
+    // ── Component sizing constants (extracted from current appwindow.slint) ──
+    in-out property <length> sidebar-item-height: 48px;
+    in-out property <length> button-height-md: 36px;
+    in-out property <length> button-height-lg: 40px;
+    in-out property <length> input-height: 36px;
+    in-out property <length> radius-sm: 6px;
+    in-out property <length> radius-md: 8px;
+    in-out property <length> radius-lg: 10px;
+    in-out property <length> radius-pill: 11px;
+    in-out property <length> radius-card: 12px;
+
+    // ── Motion ───────────────────────────────────────────────────────
+    in-out property <duration> motion-fast: 150ms;
+    in-out property <duration> motion-medium: 200ms;
+    // Set from Rust at startup by reading gsettings
+    // org.gnome.desktop.interface enable-animations (KDE follow-up).
+    // Components that animate must gate on this:
+    //   animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+    in-out property <bool> reduced-motion: false;
+
+    // ── High-contrast (toggled at runtime by Rust apply_high_contrast()) ──
+    // Boolean is read by components that branch on it for non-hex things;
+    // for colours, the colour properties themselves get re-set in batch.
+    in-out property <bool> high-contrast: false;
+}

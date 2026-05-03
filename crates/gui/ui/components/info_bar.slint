@@ -1,0 +1,71 @@
+// crates/gui/ui/components/info_bar.slint
+//
+// Persistent app/system state banner. Severity-coloured background + verb
+// action affordances. Persists until dismissed or page navigated-away
+// (docs/GUI_V2_SPEC_v2.md §2 Q8 verdict + §13).
+//
+// Live-region announce: Slint 1.14 has no AT-SPI live regions
+// (docs/slint-a11y-findings.md Q3). The `announce-on-show` callback fires
+// when `severity != "none"` transitions in; the parent runs a focus-jiggle
+// pattern from Rust: briefly focus a hidden Text whose accessible-description
+// equals the message, then restore focus. PR 6 wires the Rust side.
+
+import { Tokens } from "../tokens.slint";
+import { GhostButton } from "ghost_button.slint";
+
+export component InfoBar inherits Rectangle {
+    in property <string> severity: "none";  // "none" | "info" | "warning" | "error" | "success"
+    in property <string> message;
+    in property <bool> dismissible: false;
+    callback dismiss();
+    callback announce-on-show();
+
+    height: root.severity == "none" ? 0px : 48px;
+    border-radius: Tokens.radius-md;
+    background: root.severity == "warning" ? Tokens.warning
+        : (root.severity == "error" ? Tokens.error
+        : (root.severity == "success" ? Tokens.success
+        : (root.severity == "info" ? Tokens.info : transparent)));
+    clip: true;
+
+    accessible-role: text;
+    accessible-label: root.severity == "warning" ? "Warning" : (root.severity == "error" ? "Error" : (root.severity == "success" ? "Success" : "Info"));
+    accessible-description: root.message;
+
+    animate height { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-medium; easing: ease-in-out; }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-lg;
+        spacing: Tokens.space-md;
+        alignment: stretch;
+
+        Text {
+            text: root.severity == "warning" ? "⚠"
+                : (root.severity == "error" ? "✕"
+                : (root.severity == "success" ? "✓"
+                : (root.severity == "info" ? "ℹ" : "")));
+            color: Tokens.on-accent;
+            font-size: 16px;
+            font-weight: Tokens.weight-strong;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.message;
+            color: Tokens.on-accent;
+            font-size: Tokens.font-label-large;
+            font-weight: Tokens.weight-medium;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: word-wrap;
+            overflow: elide;
+        }
+
+        if root.dismissible : GhostButton {
+            text: "✕";
+            width: 32px;
+            clicked => { root.dismiss(); }
+        }
+    }
+}

@@ -1,0 +1,26 @@
+// crates/gui/ui/types.slint
+// Shared structs imported by appwindow.slint, page modules, and components.
+// Lives in its own file to break cycles between appwindow and pages/.
+
+export struct GrubEntry {
+    key: string,
+    value: string,
+    original_value: string,
+    is_modified: bool,
+}
+
+// Diff hunk line for DiffPreview component (PR 4).
+// `side`: "context" | "add" | "remove"
+export struct DiffLine {
+    side: string,
+    text: string,
+    file_path: string,  // empty unless this row is a file-path header
+}
+
+// Pre-flight check row for PreflightCard component (PR 4).
+// `state`: "pending" | "running" | "pass" | "fail"
+export struct PreflightCheck {
+    name: string,
+    state: string,
+    detail: string,
+}

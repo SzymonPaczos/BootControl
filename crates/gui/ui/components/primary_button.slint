@@ -1,0 +1,40 @@
+// crates/gui/ui/components/primary_button.slint
+//
+// Non-destructive primary action button. Gradient accent fill.
+// Use for: Save, Apply, Continue, Open. Never for destructive ops
+// (those go through Confirmation Sheet's destructive primary).
+// Anatomy: see docs/GUI_V2_SPEC_v2.md §13 component public APIs.
+
+import { Tokens } from "../tokens.slint";
+
+export component PrimaryButton inherits Rectangle {
+    in-out property <string> text;
+    in property <bool> enabled: true;
+    callback clicked <=> touch.clicked;
+
+    height: Tokens.button-height-lg;
+    border-radius: Tokens.radius-md;
+    background: root.enabled
+        ? (touch.pressed
+            ? @linear-gradient(90deg, Tokens.accent 0%, Tokens.accent-secondary 100%)
+            : @linear-gradient(90deg, Tokens.accent-secondary 0%, Tokens.accent 100%))
+        : Tokens.surface-1;
+
+    animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+
+    Text {
+        text: root.text;
+        color: root.enabled ? Tokens.on-accent : Tokens.on-surface-disabled;
+        font-size: Tokens.font-body-medium;
+        font-weight: Tokens.weight-strong;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+    }
+}

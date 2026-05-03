@@ -1,0 +1,45 @@
+// crates/gui/ui/components/loading_bar.slint
+//
+// In-page progress indicator. Collapses to height 0 when inactive.
+// Used as a generic "something is happening" surface above page content.
+// PR 4 will add the Live Job Log component for long-running ops with output.
+
+import { Tokens } from "../tokens.slint";
+
+export component LoadingBar inherits Rectangle {
+    in property <bool> active: false;
+    in property <string> message: "Processing...";
+
+    accessible-role: progress-indicator;
+    accessible-label: "Loading";
+    accessible-description: root.message;
+
+    height: root.active ? 44px : 0px;
+    border-radius: Tokens.radius-md;
+    background: Tokens.surface-1;
+    clip: true;
+
+    animate height { duration: Tokens.reduced-motion ? 0ms : 180ms; easing: ease-in-out; }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-lg;
+        spacing: Tokens.space-md;
+        alignment: start;
+
+        Text {
+            text: "⏳";
+            color: Tokens.accent-info;
+            font-size: 15px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.message;
+            color: Tokens.on-surface;
+            font-size: Tokens.font-label-large;
+            font-weight: Tokens.weight-medium;
+            vertical-alignment: center;
+        }
+    }
+}

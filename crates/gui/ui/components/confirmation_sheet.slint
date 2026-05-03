@@ -1,0 +1,156 @@
+// crates/gui/ui/components/confirmation_sheet.slint
+//
+// The destructive-action gate (docs/GUI_V2_SPEC_v2.md §6, §11).
+// Modal-by-convention overlay (Slint 1.14 has no AT-SPI MODAL flag —
+// docs/slint-a11y-findings.md Q1). Behaviour:
+//
+//   1. Restate target (file paths, fingerprints) in body — never "this action".
+//   2. Verb-labelled primary button (`verb-label` property).
+//   3. Cancel left/bold-default; primary right + destructive-styled.
+//   4. Auto-snapshot statement inline.
+//   5. Recovery-path one-liner inline.
+//
+// Type-to-confirm: when `required-confirm-text` is non-empty the primary
+// button stays disabled until the typed text matches exactly. Activate
+// destructive primary via Ctrl+Return after type-to-confirm passes
+// (docs/GUI_V2_SPEC_v2.md §15 keyboard map; not Enter).
+
+import { Tokens } from "../tokens.slint";
+import { GhostButton } from "ghost_button.slint";
+import { DangerButton } from "danger_button.slint";
+import { StyledInput } from "styled_input.slint";
+import { DiffPreview } from "diff_preview.slint";
+import { PreflightCard } from "preflight_card.slint";
+import { CommandDisclosure } from "command_disclosure.slint";
+import { DiffLine, PreflightCheck } from "../types.slint";
+
+export component ConfirmationSheet inherits Rectangle {
+    in property <bool> visible-prop: false;
+    in property <string> verb-label;            // "Rewrite GRUB", "Replace Platform Key", …
+    in property <string> restated-target;       // file paths or fingerprint, restated
+    in property <string> required-confirm-text; // empty = no type-to-confirm gate
+    in-out property <string> typed-text;
+    in property <[DiffLine]> diff;
+    in property <[PreflightCheck]> preflight;
+    in property <bool> preflight-all-pass: false;
+    in property <string> command-cli;
+    in property <string> snapshot-id;
+    in property <string> recovery-note: "If boot fails, follow /var/lib/bootcontrol/RECOVERY.md from a USB rescue stick.";
+    callback cancel();
+    callback confirm();
+    callback copy-command();
+
+    visible: root.visible-prop;
+    width: 100%;
+    height: 100%;
+
+    accessible-role: groupbox;
+    accessible-label: "Confirmation: " + root.verb-label;
+    accessible-description: root.restated-target;
+
+    // Backdrop dim; clicks are swallowed but do NOT auto-cancel
+    // (consistency with destructive UX — only Cancel button cancels).
+    Rectangle {
+        background: #00000099;
+        TouchArea {
+            // swallow
+        }
+    }
+
+    // Sheet panel
+    Rectangle {
+        width: 480px;
+        height: sheet-content.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        background: Tokens.surface-container;
+        border-radius: Tokens.radius-card;
+        border-width: 1px;
+        border-color: Tokens.surface-1;
+
+        sheet-content := VerticalLayout {
+            padding: Tokens.space-xl;
+            spacing: Tokens.space-md;
+
+            // Verb-labelled title
+            Text {
+                text: root.verb-label;
+                color: Tokens.on-surface;
+                font-size: Tokens.font-title-large;
+                font-weight: Tokens.weight-strong;
+            }
+
+            // Restated target
+            if root.restated-target != "" : Text {
+                text: root.restated-target;
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+                wrap: word-wrap;
+            }
+
+            // Diff preview (only when non-empty)
+            if root.diff.length > 0 : DiffPreview {
+                lines: root.diff;
+            }
+
+            // Pre-flight checks (only when present)
+            if root.preflight.length > 0 : PreflightCard {
+                checks: root.preflight;
+            }
+
+            // Snapshot statement
+            if root.snapshot-id != "" : Text {
+                text: "A snapshot will be saved as " + root.snapshot-id + " before this runs.";
+                color: Tokens.on-surface-faint;
+                font-size: Tokens.font-meta;
+                wrap: word-wrap;
+            }
+
+            // CLI parity disclosure
+            if root.command-cli != "" : CommandDisclosure {
+                command: root.command-cli;
+                copy => { root.copy-command(); }
+            }
+
+            // Type-to-confirm input (when required)
+            if root.required-confirm-text != "" : VerticalLayout {
+                spacing: Tokens.space-xs;
+                Text {
+                    text: "Type " + "\"" + root.required-confirm-text + "\"" + " to confirm:";
+                    color: Tokens.on-surface-muted;
+                    font-size: Tokens.font-meta;
+                }
+                StyledInput {
+                    text <=> root.typed-text;
+                }
+            }
+
+            // Recovery footer
+            Text {
+                text: root.recovery-note;
+                color: Tokens.on-surface-faint;
+                font-size: Tokens.font-meta;
+                wrap: word-wrap;
+            }
+
+            // Footer buttons
+            HorizontalLayout {
+                spacing: Tokens.space-xl;  // 24 px gap between Cancel and Destructive (spec §6.3)
+                alignment: stretch;
+                GhostButton {
+                    text: "Cancel";
+                    width: 120px;
+                    clicked => { root.cancel(); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                DangerButton {
+                    text: root.verb-label;
+                    width: 200px;
+                    enabled: root.preflight-all-pass
+                        && (root.required-confirm-text == "" || root.typed-text == root.required-confirm-text);
+                    clicked => { root.confirm(); }
+                }
+            }
+        }
+    }
+}

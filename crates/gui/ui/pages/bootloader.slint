@@ -1,0 +1,39 @@
+// crates/gui/ui/pages/bootloader.slint
+//
+// Placeholder. v2 spec §3.3 reshapes this into the home for typed GRUB
+// settings (Boot behaviour / Detection / Kernel command line / Display
+// cards) plus initramfs driver selection. PR 6 ships an empty shell; the
+// real controls land once daemon-side typed-getter D-Bus methods exist.
+
+import { Tokens } from "../tokens.slint";
+import { Card } from "../components/card.slint";
+
+export component BootloaderPage inherits Rectangle {
+    in property <string> active-backend: "GRUB";
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-lg;
+
+        Card {
+            title: "Coming in PR 7";
+            subtitle: "Typed bootloader settings — boot behaviour, detection, kernel command line, display, initramfs driver — replace the flat key=value table currently on Boot Entries.";
+
+            Text {
+                text: "Active backend: " + root.active-backend;
+                color: Tokens.on-surface;
+                font-size: Tokens.font-body-medium;
+            }
+            Text {
+                text: "For now, edit settings on the Boot Entries page.";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

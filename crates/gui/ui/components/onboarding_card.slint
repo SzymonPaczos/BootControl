@@ -1,0 +1,119 @@
+// crates/gui/ui/components/onboarding_card.slint
+//
+// First-launch welcome card. Materialises on the Overview page when the
+// marker file ~/.config/bootcontrol/onboarded does not yet exist
+// (docs/GUI_V2_SPEC_v2.md §4 onboarding flow). Auto-hides on first
+// staged change OR when user clicks "Don't show this again".
+
+import { Tokens } from "../tokens.slint";
+import { GhostButton } from "ghost_button.slint";
+import { PrimaryButton } from "primary_button.slint";
+
+export component OnboardingCard inherits Rectangle {
+    in property <string> active-backend: "GRUB";
+    in property <bool> never-show-checked: false;
+    callback start-with-boot-entries();
+    callback learn-more();
+    callback never-show();
+
+    accessible-role: groupbox;
+    accessible-label: "Welcome to BootControl";
+    accessible-description: "First-launch introduction. Detected " + root.active-backend + " on this system.";
+
+    background: Tokens.surface-container-high;
+    border-radius: Tokens.radius-card;
+    border-width: 1px;
+    border-color: Tokens.accent;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-md;
+        alignment: start;
+
+        Text {
+            text: "Welcome to BootControl";
+            color: Tokens.on-surface;
+            font-size: Tokens.font-title-large;
+            font-weight: Tokens.weight-strong;
+        }
+
+        Text {
+            text: "Your computer needs a small program called a bootloader to start Linux. We detected " + root.active-backend + " on your system.";
+            color: Tokens.on-surface-muted;
+            font-size: Tokens.font-body-medium;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "This app helps you change boot settings safely. Every change is saved to a snapshot first, so you can always go back.";
+            color: Tokens.on-surface-muted;
+            font-size: Tokens.font-body-medium;
+            wrap: word-wrap;
+        }
+
+        VerticalLayout {
+            spacing: 4px;
+            Text {
+                text: "• If your screen looks wrong, change the timeout or default OS";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+            }
+            Text {
+                text: "• If you dual-boot Windows, switch the default here";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+            }
+            Text {
+                text: "• If something breaks, the Snapshots page lets you restore";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Tokens.space-md;
+            alignment: start;
+
+            GhostButton {
+                text: "Learn what a bootloader is";
+                width: 220px;
+                clicked => { root.learn-more(); }
+            }
+            PrimaryButton {
+                text: "Start with Boot Entries  →";
+                width: 220px;
+                clicked => { root.start-with-boot-entries(); }
+            }
+        }
+
+        TouchArea {
+            height: 24px;
+            clicked => { root.never-show(); }
+            HorizontalLayout {
+                spacing: Tokens.space-sm;
+                Rectangle {
+                    width: 16px;
+                    height: 16px;
+                    border-radius: 3px;
+                    border-width: 2px;
+                    border-color: root.never-show-checked ? Tokens.accent-info : Tokens.surface-2;
+                    background: root.never-show-checked ? Tokens.accent-info : transparent;
+                    if root.never-show-checked : Text {
+                        text: "✓";
+                        color: Tokens.on-accent;
+                        font-size: 10px;
+                        font-weight: Tokens.weight-strong;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                Text {
+                    text: "Don't show this again";
+                    color: Tokens.on-surface-faint;
+                    font-size: Tokens.font-meta;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}

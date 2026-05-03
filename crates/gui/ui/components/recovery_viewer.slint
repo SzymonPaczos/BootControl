@@ -1,0 +1,84 @@
+// crates/gui/ui/components/recovery_viewer.slint
+//
+// In-app viewer for /var/lib/bootcontrol/RECOVERY.md. Required to satisfy
+// beginner red-team finding (docs/red-team/beginner.md): "follow RECOVERY.md
+// from a rescue USB" assumes CLI knowledge — the GUI viewer is the bridge.
+//
+// PR 6 ships the viewer shell. Markdown rendering is plain-text in this
+// iteration (Slint has no built-in markdown widget); a future PR can swap
+// to a richer renderer or pre-format on the Rust side.
+
+import { Tokens } from "../tokens.slint";
+import { GhostButton } from "ghost_button.slint";
+
+export component RecoveryViewer inherits Rectangle {
+    in property <string> markdown-source;
+    in property <bool> visible-prop: false;
+    callback close();
+    callback copy-block(string);
+
+    visible: root.visible-prop;
+    width: 100%;
+    height: 100%;
+
+    accessible-role: groupbox;
+    accessible-label: "Recovery instructions";
+
+    Rectangle {
+        background: #00000099;
+        TouchArea {}
+    }
+
+    Rectangle {
+        width: 640px;
+        height: parent.height - 80px;
+        x: (parent.width - self.width) / 2;
+        y: 40px;
+        background: Tokens.surface-container;
+        border-radius: Tokens.radius-card;
+        border-width: 1px;
+        border-color: Tokens.surface-1;
+
+        VerticalLayout {
+            padding: Tokens.space-xl;
+            spacing: Tokens.space-md;
+
+            HorizontalLayout {
+                alignment: space-between;
+                Text {
+                    text: "Recovery instructions";
+                    color: Tokens.on-surface;
+                    font-size: Tokens.font-title-large;
+                    font-weight: Tokens.weight-strong;
+                }
+                GhostButton {
+                    text: "Close";
+                    width: 100px;
+                    clicked => { root.close(); }
+                }
+            }
+
+            Text {
+                text: "If your computer will not boot, follow these steps from a Linux live USB. The same instructions are saved as /var/lib/bootcontrol/RECOVERY.md on your disk.";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+                wrap: word-wrap;
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: Tokens.surface-container-high;
+                border-radius: Tokens.radius-md;
+                Text {
+                    text: root.markdown-source;
+                    color: Tokens.on-surface;
+                    font-size: Tokens.font-meta;
+                    wrap: word-wrap;
+                    horizontal-alignment: left;
+                    vertical-alignment: top;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}

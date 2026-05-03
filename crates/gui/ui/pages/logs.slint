@@ -1,0 +1,166 @@
+// crates/gui/ui/pages/logs.slint
+//
+// Live audit log viewer. Reads journald via `journalctl _SYSTEMD_UNIT=bootcontrold.service
+// --output=json --follow` filtered on the daemon's MESSAGE_ID set
+// (docs/GUI_V2_SPEC_v2.md §3.6 + §5).
+//
+// PR 6 ships the layout. Streaming wiring (the journalctl child process
+// pumping JSON lines into a Slint VecModel via slint::invoke_from_event_loop)
+// lands in the integration PR — non-blocking framework pattern, see
+// spec §5.
+
+import { Tokens } from "../tokens.slint";
+import { ScrollView } from "std-widgets.slint";
+import { GhostButton } from "../components/ghost_button.slint";
+
+export struct LogRow {
+    ts: string,
+    operation: string,
+    phase: string,           // "started" | "snapshot_taken" | "completed"
+    job_id: string,
+    exit_code: int,
+    stderr_tail: string,
+}
+
+export component LogsPage inherits Rectangle {
+    in property <[LogRow]> rows;
+    in property <bool> only-failures: false;
+    in property <bool> only-mine: false;
+    in property <string> time-window: "all";  // "all" | "24h" | "7d"
+    callback toggle-filter(string);
+    callback copy-row(string);
+    callback save-as();
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-md;
+
+        // Filter chips
+        HorizontalLayout {
+            spacing: Tokens.space-sm;
+            alignment: start;
+            Rectangle {
+                width: 130px;
+                height: 28px;
+                border-radius: 14px;
+                background: root.only-failures ? Tokens.error : Tokens.surface-1;
+                TouchArea {
+                    clicked => { root.toggle-filter("only-failures"); }
+                }
+                Text {
+                    text: "Only failures";
+                    color: root.only-failures ? Tokens.on-error : Tokens.on-surface-muted;
+                    font-size: Tokens.font-label-large;
+                    font-weight: Tokens.weight-medium;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle {
+                width: 110px;
+                height: 28px;
+                border-radius: 14px;
+                background: root.only-mine ? Tokens.accent : Tokens.surface-1;
+                TouchArea {
+                    clicked => { root.toggle-filter("only-mine"); }
+                }
+                Text {
+                    text: "Only mine";
+                    color: root.only-mine ? Tokens.on-accent : Tokens.on-surface-muted;
+                    font-size: Tokens.font-label-large;
+                    font-weight: Tokens.weight-medium;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle {
+                width: 100px;
+                height: 28px;
+                border-radius: 14px;
+                background: root.time-window == "24h" ? Tokens.accent-info : Tokens.surface-1;
+                TouchArea {
+                    clicked => { root.toggle-filter("24h"); }
+                }
+                Text {
+                    text: "Last 24h";
+                    color: root.time-window == "24h" ? Tokens.on-accent : Tokens.on-surface-muted;
+                    font-size: Tokens.font-label-large;
+                    font-weight: Tokens.weight-medium;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            GhostButton {
+                text: "Save as…";
+                width: 120px;
+                clicked => { root.save-as(); }
+            }
+        }
+
+        // Log list
+        if root.rows.length == 0 : Rectangle {
+            background: Tokens.surface-container-high;
+            border-radius: Tokens.radius-md;
+            height: 100px;
+            Text {
+                text: "No events match the current filter.";
+                color: Tokens.on-surface-faint;
+                font-size: Tokens.font-label-large;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        if root.rows.length > 0 : Rectangle {
+            vertical-stretch: 1;
+            ScrollView {
+                VerticalLayout {
+                    spacing: 2px;
+                    for row in root.rows : Rectangle {
+                        height: 48px;
+                        background: row.exit_code != 0 ? Tokens.surface-error-tint : Tokens.surface-container-high;
+                        border-radius: Tokens.radius-sm;
+                        HorizontalLayout {
+                            padding-left: Tokens.space-md;
+                            padding-right: Tokens.space-md;
+                            spacing: Tokens.space-md;
+                            alignment: stretch;
+                            Text {
+                                text: row.ts;
+                                color: Tokens.on-surface-faint;
+                                font-size: Tokens.font-meta;
+                                width: 160px;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: row.operation;
+                                color: row.exit_code != 0 ? Tokens.error : Tokens.on-surface;
+                                font-size: Tokens.font-label-large;
+                                font-weight: Tokens.weight-medium;
+                                vertical-alignment: center;
+                                width: 160px;
+                            }
+                            Text {
+                                text: row.phase;
+                                color: Tokens.on-surface-muted;
+                                font-size: Tokens.font-meta;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            GhostButton {
+                                text: "Copy id";
+                                width: 90px;
+                                clicked => { root.copy-row(row.job_id); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

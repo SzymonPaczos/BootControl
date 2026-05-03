@@ -1,0 +1,35 @@
+// crates/gui/ui/components/styled_input.slint
+//
+// Single-line text input. Surface-container-high background, accent border on focus.
+// Anatomy: see docs/GUI_V2_SPEC_v2.md §13.
+
+import { Tokens } from "../tokens.slint";
+
+export component StyledInput inherits Rectangle {
+    in-out property <string> text <=> input.text;
+    callback edited(string);
+
+    height: Tokens.input-height;
+    border-radius: Tokens.radius-sm;
+    background: Tokens.surface-container-high;
+    border-width: 1px;
+    border-color: input.has-focus ? Tokens.accent-secondary : Tokens.surface-1;
+
+    accessible-role: text-input;
+    accessible-label: "Text input";
+
+    animate border-color { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-md;
+        padding-right: Tokens.space-md;
+        input := TextInput {
+            horizontal-alignment: left;
+            vertical-alignment: center;
+            color: Tokens.on-surface;
+            font-size: Tokens.font-body-medium;
+            single-line: true;
+            edited => { root.edited(self.text); }
+        }
+    }
+}

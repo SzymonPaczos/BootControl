@@ -1,0 +1,82 @@
+// crates/gui/ui/pages/secure_boot.slint
+//
+// V1 ported page: Secure Boot status overview + actions. v2 spec §3.4
+// reshapes this with Setup Mode top-page banner, dynamic state from
+// efivarfs, and Strict Mode disclosure — that work lands in PR 6.
+
+import { Tokens } from "../tokens.slint";
+import { PrimaryButton } from "../components/primary_button.slint";
+import { StatusCard } from "../components/status_card.slint";
+import { SectionHeader } from "../components/section_header.slint";
+
+export component SecureBootPage inherits Rectangle {
+    in property <string> active-backend;
+    in property <string> secure-boot-status: "Unknown";
+    in property <string> mok-status: "Unknown";
+    in property <bool> show-loading;
+    callback backup-nvram();
+    callback enroll-mok();
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: 20px;
+        alignment: start;
+
+        SectionHeader { text: "STATUS OVERVIEW"; }
+
+        HorizontalLayout {
+            spacing: Tokens.space-md;
+
+            StatusCard {
+                label: "SECURE BOOT";
+                value: root.secure-boot-status;
+                status: root.secure-boot-status == "Enabled" ? "good"
+                    : (root.secure-boot-status == "Disabled" ? "bad" : "neutral");
+            }
+            StatusCard {
+                label: "MOK ENROLLED";
+                value: root.mok-status;
+                status: root.mok-status == "Yes" ? "good"
+                    : (root.mok-status == "No" ? "bad" : "neutral");
+            }
+            StatusCard {
+                label: "ACTIVE BACKEND";
+                value: root.active-backend;
+                status: "info";
+            }
+        }
+
+        Rectangle { height: 4px; }
+
+        SectionHeader { text: "ACTIONS"; }
+
+        HorizontalLayout {
+            spacing: Tokens.space-md;
+            alignment: start;
+
+            PrimaryButton {
+                text: "Backup NVRAM";
+                width: 160px;
+                enabled: !root.show-loading;
+                clicked => { root.backup-nvram(); }
+            }
+            PrimaryButton {
+                text: "Enroll MOK";
+                width: 140px;
+                enabled: !root.show-loading;
+                clicked => { root.enroll-mok(); }
+            }
+        }
+
+        Text {
+            text: "Backup NVRAM saves all EFI Secure Boot variables to /var/lib/bootcontrol/certs/. Enroll MOK signs the UKI image and registers the machine owner key for the next reboot.";
+            color: Tokens.on-surface-disabled;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+}

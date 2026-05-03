@@ -1,0 +1,100 @@
+// crates/gui/ui/pages/settings.slint
+//
+// User preferences. docs/GUI_V2_SPEC_v2.md §3.7 + §10.7.
+//   - Snapshots: retention preset (Q5 verdict)
+//   - Notifications: auto-dismiss successes (Q8 a11y option)
+//   - Accessibility: high contrast + reduced motion overrides
+//   - Strict Mode: read-only display from /etc/bootcontrol/policy.toml
+//
+// PR 6 ships the page layout. Real RetentionPicker / preset radio /
+// toggle widgets land in PR 7 once we have proper a11y form atoms.
+// Persistence to ~/.config/bootcontrol/settings.toml lives Rust-side
+// and is wired in the integration PR.
+
+import { Tokens } from "../tokens.slint";
+import { Card } from "../components/card.slint";
+
+export component SettingsPage inherits Rectangle {
+    in-out property <string> retention-preset: "default";
+    in-out property <bool> auto-dismiss-successes: false;
+    in-out property <string> high-contrast-override: "auto";
+    in-out property <string> reduced-motion-override: "auto";
+    in property <bool> strict-mode-allowed: false;
+
+    callback save();
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-lg;
+
+        Card {
+            title: "Snapshots";
+            subtitle: "Retention controls how long pre-write snapshots are kept under /var/lib/bootcontrol/snapshots/.";
+
+            Text {
+                text: "Current preset: " + root.retention-preset;
+                color: Tokens.on-surface;
+                font-size: Tokens.font-body-medium;
+                font-weight: Tokens.weight-medium;
+            }
+            Text {
+                text: "Available presets:\n• Conservative — 200 snapshots / 90 days\n• Default — 50 snapshots / 30 days (recommended)\n• Aggressive — 10 snapshots / 7 days";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+                wrap: word-wrap;
+            }
+            Text {
+                text: "(Preset radio picker ships in PR 7. Edit ~/.config/bootcontrol/settings.toml to change.)";
+                color: Tokens.on-surface-faint;
+                font-size: Tokens.font-meta;
+            }
+        }
+
+        Card {
+            title: "Notifications";
+            subtitle: "Control how success messages are displayed.";
+
+            Text {
+                text: root.auto-dismiss-successes
+                    ? "Success messages auto-dismiss after 8 seconds."
+                    : "Success messages persist until dismissed (recommended for screen-reader users).";
+                color: Tokens.on-surface;
+                font-size: Tokens.font-label-large;
+            }
+        }
+
+        Card {
+            title: "Accessibility";
+            subtitle: "Override OS-level accessibility hints. \"Auto\" follows your desktop session.";
+
+            Text {
+                text: "High contrast: " + root.high-contrast-override;
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+            }
+            Text {
+                text: "Reduced motion: " + root.reduced-motion-override;
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+            }
+        }
+
+        Card {
+            title: "Strict Mode";
+            subtitle: "Allows custom Secure Boot key generation and Platform Key replacement. Configured by the system administrator in /etc/bootcontrol/policy.toml.";
+
+            Text {
+                text: root.strict-mode-allowed
+                    ? "Strict Mode is allowed on this host."
+                    : "Strict Mode is disabled. Edit /etc/bootcontrol/policy.toml to enable.";
+                color: root.strict-mode-allowed ? Tokens.warning : Tokens.on-surface-muted;
+                font-size: Tokens.font-label-large;
+                font-weight: Tokens.weight-medium;
+            }
+        }
+    }
+}

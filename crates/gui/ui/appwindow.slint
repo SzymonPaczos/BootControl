@@ -1,164 +1,34 @@
-import { ScrollView } from "std-widgets.slint";
+// crates/gui/ui/appwindow.slint
+//
+// Top-level AppWindow router. PR 6 expands routing from 3 to 7 pages
+// (Overview / Boot Entries / Bootloader / Secure Boot / Snapshots / Logs /
+// Settings) per docs/GUI_V2_SPEC_v2.md §3 IA.
+//
+// Off-sidebar route: active_tab == 7 → SecurityLabPage (legacy Strict Mode
+// content). PR 7 surfaces this as a Strict Mode disclosure on Secure Boot
+// per Q4 verdict; PR 6 leaves the file in pages/ as the source of truth.
 
-export struct GrubEntry {
-    key: string,
-    value: string,
-    original_value: string,
-    is_modified: bool,
-}
+import { Tokens } from "tokens.slint";
+import { GrubEntry, DiffLine, PreflightCheck } from "types.slint";
+import { GhostButton } from "components/ghost_button.slint";
+import { Sidebar } from "components/sidebar.slint";
+import { LoadingBar } from "components/loading_bar.slint";
+import { ConfirmationSheet } from "components/confirmation_sheet.slint";
+import { RecoveryViewer } from "components/recovery_viewer.slint";
+import { OverviewPage } from "pages/overview.slint";
+import { BootEntriesPage } from "pages/boot_entries.slint";
+import { BootloaderPage } from "pages/bootloader.slint";
+import { SecureBootPage } from "pages/secure_boot.slint";
+import { SnapshotsPage, SnapshotRow } from "pages/snapshots.slint";
+import { LogsPage, LogRow } from "pages/logs.slint";
+import { SettingsPage } from "pages/settings.slint";
+import { SecurityLabPage } from "pages/security_lab.slint";
 
-// ─── Sidebar navigation item ──────────────────────────────────────────────────
+// Re-export structs and globals so Rust generated bindings expose them.
+export { GrubEntry, DiffLine, PreflightCheck, SnapshotRow, LogRow }
+export { Tokens }
 
-component SidebarItem inherits Rectangle {
-    in property <string> text;
-    in property <bool> active: false;
-    callback clicked <=> touch.clicked;
-
-    height: 48px;
-    border-radius: 8px;
-    background: root.active ? #313244 : (touch.has-hover ? #1e1e2e : transparent);
-
-    animate background { duration: 150ms; }
-
-    HorizontalLayout {
-        padding-left: 12px;
-        spacing: 12px;
-        alignment: start;
-
-        Rectangle {
-            width: 4px;
-            height: 20px;
-            background: root.active ? #89b4fa : transparent;
-            border-radius: 2px;
-        }
-
-        Text {
-            text: root.text;
-            color: root.active ? #89b4fa : #a6adc8;
-            font-size: 14px;
-            font-weight: root.active ? 700 : 500;
-            vertical-alignment: center;
-        }
-    }
-    touch := TouchArea {}
-}
-
-// ─── Ghost (secondary) button ─────────────────────────────────────────────────
-
-component GhostButton inherits Rectangle {
-    in-out property <string> text;
-    in property <bool> enabled: true;
-    callback clicked <=> touch.clicked;
-
-    height: 36px;
-    border-radius: 8px;
-    background: touch.pressed ? #313244 : (touch.has-hover ? #45475a : transparent);
-    opacity: root.enabled ? 1.0 : 0.5;
-
-    animate background { duration: 150ms; }
-
-    Text {
-        text: root.text;
-        color: #cdd6f4;
-        font-size: 14px;
-        font-weight: 600;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    touch := TouchArea {
-        enabled: root.enabled;
-    }
-}
-
-// ─── Primary (blue/purple gradient) button ────────────────────────────────────
-
-component PrimaryButton inherits Rectangle {
-    in-out property <string> text;
-    in property <bool> enabled: true;
-    callback clicked <=> touch.clicked;
-
-    height: 40px;
-    border-radius: 8px;
-    background: root.enabled
-        ? (touch.pressed
-            ? @linear-gradient(90deg, #cba6f7 0%, #b4befe 100%)
-            : @linear-gradient(90deg, #b4befe 0%, #cba6f7 100%))
-        : #313244;
-
-    animate background { duration: 150ms; }
-
-    Text {
-        text: root.text;
-        color: root.enabled ? #11111b : #585b70;
-        font-size: 14px;
-        font-weight: 700;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    touch := TouchArea {
-        enabled: root.enabled;
-    }
-}
-
-// ─── Danger (red outline) button ──────────────────────────────────────────────
-
-component DangerButton inherits Rectangle {
-    in-out property <string> text;
-    in property <bool> enabled: true;
-    callback clicked <=> touch.clicked;
-
-    height: 40px;
-    border-radius: 8px;
-    border-width: 1px;
-    border-color: root.enabled ? #f38ba8 : #45475a;
-    background: root.enabled
-        ? (touch.pressed ? #f38ba8 : (touch.has-hover ? #2d1317 : transparent))
-        : transparent;
-
-    animate background, border-color { duration: 150ms; }
-
-    Text {
-        text: root.text;
-        color: root.enabled ? #f38ba8 : #585b70;
-        font-size: 14px;
-        font-weight: 700;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    touch := TouchArea {
-        enabled: root.enabled;
-    }
-}
-
-// ─── Styled text input ────────────────────────────────────────────────────────
-
-component StyledInput inherits Rectangle {
-    in-out property <string> text <=> input.text;
-    callback edited(string);
-
-    height: 36px;
-    border-radius: 6px;
-    background: #11111b;
-    border-width: 1px;
-    border-color: input.has-focus ? #b4befe : #313244;
-
-    animate border-color { duration: 150ms; }
-
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        input := TextInput {
-            horizontal-alignment: left;
-            vertical-alignment: center;
-            color: #cdd6f4;
-            font-size: 14px;
-            single-line: true;
-            edited => { root.edited(self.text); }
-        }
-    }
-}
-
-// ─── Toast notification ───────────────────────────────────────────────────────
+// ─── Toast notification (top-level overlay — kept inline) ───────────────────
 
 component ToastNotification inherits Rectangle {
     in property <string> message;
@@ -168,20 +38,22 @@ component ToastNotification inherits Rectangle {
 
     width: 420px;
     height: 52px;
-    border-radius: 10px;
-    background: root.toast_type == "error" ? #f38ba8 : (root.toast_type == "success" ? #a6e3a1 : #89b4fa);
+    border-radius: Tokens.radius-lg;
+    background: root.toast_type == "error"
+        ? Tokens.error
+        : (root.toast_type == "success" ? Tokens.success : Tokens.accent-info);
     opacity: root.is_visible ? 1.0 : 0.0;
 
-    animate opacity { duration: 200ms; }
+    animate opacity { duration: Tokens.motion-medium; }
 
     HorizontalLayout {
         padding: 14px;
-        spacing: 12px;
+        spacing: Tokens.space-md;
         Text {
             text: root.message;
-            color: #11111b;
-            font-size: 13px;
-            font-weight: 700;
+            color: Tokens.on-accent;
+            font-size: Tokens.font-label-large;
+            font-weight: Tokens.weight-strong;
             vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
@@ -194,288 +66,140 @@ component ToastNotification inherits Rectangle {
     }
 }
 
-// ─── Status card (icon + label + value) ──────────────────────────────────────
-
-component StatusCard inherits Rectangle {
-    in property <string> label;
-    in property <string> value;
-    in property <string> status: "neutral"; // "good" | "bad" | "info" | "neutral"
-
-    horizontal-stretch: 1;
-    height: 80px;
-    border-radius: 10px;
-    background: #181825;
-    border-width: 1px;
-    border-color: root.status == "good" ? #a6e3a1
-        : (root.status == "bad" ? #f38ba8
-        : (root.status == "info" ? #89b4fa
-        : #313244));
-
-    VerticalLayout {
-        padding: 16px;
-        spacing: 6px;
-        alignment: start;
-
-        Text {
-            text: root.label;
-            color: #6c7086;
-            font-size: 11px;
-            font-weight: 700;
-        }
-
-        Text {
-            text: root.value;
-            color: root.status == "good" ? #a6e3a1
-                : (root.status == "bad" ? #f38ba8
-                : (root.status == "info" ? #89b4fa
-                : #cdd6f4));
-            font-size: 15px;
-            font-weight: 700;
-        }
-    }
-}
-
-// ─── Checkbox ─────────────────────────────────────────────────────────────────
-
-component CheckBox inherits Rectangle {
-    in-out property <bool> checked: false;
-    in property <string> label;
-
-    height: 28px;
-
-    HorizontalLayout {
-        spacing: 10px;
-        alignment: start;
-
-        Rectangle {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            border-width: 2px;
-            border-color: root.checked ? #89b4fa : #45475a;
-            background: root.checked ? #89b4fa : transparent;
-
-            animate background, border-color { duration: 150ms; }
-
-            if root.checked : Text {
-                text: "✓";
-                color: #11111b;
-                font-size: 12px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-
-        Text {
-            text: root.label;
-            color: #cdd6f4;
-            font-size: 14px;
-            vertical-alignment: center;
-        }
-    }
-
-    TouchArea {
-        clicked => { root.checked = !root.checked; }
-    }
-}
-
-// ─── Loading bar ──────────────────────────────────────────────────────────────
-
-component LoadingBar inherits Rectangle {
-    in property <bool> active: false;
-    in property <string> message: "Processing...";
-
-    height: root.active ? 44px : 0px;
-    border-radius: 8px;
-    background: #313244;
-    clip: true;
-
-    animate height { duration: 180ms; easing: ease-in-out; }
-
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
-        spacing: 12px;
-        alignment: start;
-
-        Text {
-            text: "⏳";
-            color: #89b4fa;
-            font-size: 15px;
-            vertical-alignment: center;
-        }
-
-        Text {
-            text: root.message;
-            color: #cdd6f4;
-            font-size: 13px;
-            font-weight: 600;
-            vertical-alignment: center;
-        }
-    }
-}
-
-// ─── Warning banner ───────────────────────────────────────────────────────────
-
-component WarningBanner inherits Rectangle {
-    in property <string> message;
-
-    border-radius: 8px;
-    background: #2d1317;
-    border-width: 1px;
-    border-color: #f38ba8;
-
-    HorizontalLayout {
-        padding-top: 14px;
-        padding-bottom: 14px;
-        padding-left: 16px;
-        padding-right: 16px;
-        spacing: 12px;
-        alignment: start;
-
-        Text {
-            text: "⚠";
-            color: #f38ba8;
-            font-size: 17px;
-            font-weight: 700;
-            vertical-alignment: center;
-        }
-
-        Text {
-            text: root.message;
-            color: #f38ba8;
-            font-size: 13px;
-            font-weight: 600;
-            vertical-alignment: center;
-            wrap: word-wrap;
-            horizontal-stretch: 1;
-        }
-    }
-}
-
-// ─── Section header text ──────────────────────────────────────────────────────
-
-component SectionHeader inherits Text {
-    color: #a6adc8;
-    font-size: 11px;
-    font-weight: 700;
-}
-
 // ─── Main window ─────────────────────────────────────────────────────────────
 
 export component AppWindow inherits Window {
     title: "BootControl";
-    width: 1000px;
-    height: 750px;
-    background: #181825;
+    width: 1100px;
+    height: 780px;
+    background: Tokens.surface-container;
     default-font-family: "Inter, Roboto, sans-serif";
 
-    // ── Existing properties ──────────────────────────────────────────────────
+    // ── Existing state ───────────────────────────────────────────────────────
     in-out property <[GrubEntry]> entries: [];
     in property <string> toast_message: "";
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
     in property <string> active_backend: "grub";
     in-out property <int> active_tab: 0;
-
-    // ── New properties ───────────────────────────────────────────────────────
     in property <bool> show_loading: false;
     in property <string> loading_message: "Processing...";
     in property <string> secure_boot_status: "Unknown";
     in property <string> mok_status: "Unknown";
     in-out property <bool> paranoia_confirmed: false;
 
+    // ── Confirmation Sheet state (PR 4) ──────────────────────────────────────
+    in-out property <bool> show_confirmation: false;
+    in property <string> confirmation_verb: "";
+    in property <string> confirmation_target: "";
+    in property <string> confirmation_required_text: "";
+    in-out property <string> confirmation_typed_text: "";
+    in property <[DiffLine]> confirmation_diff: [];
+    in property <[PreflightCheck]> confirmation_preflight: [];
+    in property <bool> confirmation_preflight_all_pass: false;
+    in property <string> confirmation_command_cli: "";
+    in property <string> confirmation_snapshot_id: "";
+
+    // ── Overview page state (PR 6) ───────────────────────────────────────────
+    in property <string> overview_default_entry: "—";
+    in property <int> overview_grub_timeout: 0;
+    in property <string> overview_grub_path: "—";
+    in property <string> overview_grub_etag: "—";
+    in property <bool> overview_setup_mode: false;
+    in property <int> overview_mok_count: 0;
+    in property <int> overview_snapshot_count: 0;
+    in property <string> overview_last_snapshot: "—";
+    in-out property <bool> show_onboarding: false;
+
+    // ── Snapshots page state ─────────────────────────────────────────────────
+    in property <[SnapshotRow]> snapshot_rows: [];
+    in property <bool> snapshots_disk_pressure: false;
+    in property <string> snapshots_disk_usage: "";
+
+    // ── Logs page state ──────────────────────────────────────────────────────
+    in property <[LogRow]> log_rows: [];
+    in-out property <bool> logs_only_failures: false;
+    in-out property <bool> logs_only_mine: false;
+    in-out property <string> logs_time_window: "all";
+
+    // ── Settings page state ──────────────────────────────────────────────────
+    in-out property <string> settings_retention_preset: "default";
+    in-out property <bool> settings_auto_dismiss: false;
+    in-out property <string> settings_high_contrast: "auto";
+    in-out property <string> settings_reduced_motion: "auto";
+    in property <bool> settings_strict_mode_allowed: false;
+
+    // ── RecoveryViewer overlay state ─────────────────────────────────────────
+    in-out property <bool> show_recovery_viewer: false;
+    in property <string> recovery_markdown: "";
+
     // ── Existing callbacks ───────────────────────────────────────────────────
     callback fetch_entries();
     callback save_entry(string, string);
     callback dismiss_toast();
-
-    // ── New callbacks ─────────────────────────────────────────────────────────
     callback rebuild_grub();
     callback backup_nvram();
     callback enroll_mok();
     callback generate_paranoia();
     callback merge_paranoia();
 
+    // ── Confirmation Sheet callbacks ─────────────────────────────────────────
+    callback open_confirmation(string);
+    callback confirmation_confirmed();
+    callback copy_command(string);
+
+    // ── Onboarding + new page callbacks (PR 6) ───────────────────────────────
+    callback never_show_onboarding();
+    callback learn_more();
+    callback restore_snapshot(string);
+    callback open_recovery_viewer();
+    callback open_audit_log(string);
+    callback toggle_logs_filter(string);
+    callback copy_log_row(string);
+    callback save_logs_as();
+
     HorizontalLayout {
         // ── Sidebar ──────────────────────────────────────────────────────────
-        Rectangle {
-            width: 220px;
-            background: #11111b;
-
-            VerticalLayout {
-                padding: 24px;
-                spacing: 8px;
-                alignment: start;
-
-                Text {
-                    text: "BootControl";
-                    font-size: 20px;
-                    font-weight: 800;
-                    color: #cdd6f4;
-                }
-
-                Rectangle { height: 16px; }
-
-                SidebarItem {
-                    text: "Boot Settings";
-                    active: root.active_tab == 0;
-                    clicked => { root.active_tab = 0; }
-                }
-                SidebarItem {
-                    text: "Secure Boot";
-                    active: root.active_tab == 1;
-                    clicked => { root.active_tab = 1; }
-                }
-                SidebarItem {
-                    text: "Security Lab";
-                    active: root.active_tab == 2;
-                    clicked => { root.active_tab = 2; }
-                }
-
-                Rectangle { vertical-stretch: 1; }
-
-                Text {
-                    text: "v1.0.0-alpha";
-                    color: #45475a;
-                    font-size: 11px;
-                }
-            }
+        Sidebar {
+            active-tab <=> root.active_tab;
         }
 
-        // ── Main Content ──────────────────────────────────────────────────────
+        // ── Main content area ────────────────────────────────────────────────
         Rectangle {
-            background: #1e1e2e;
+            background: Tokens.surface;
 
             VerticalLayout {
-                padding: 32px;
-                spacing: 16px;
+                padding: Tokens.space-2xl;
+                spacing: Tokens.space-lg;
 
-                // ── Page header ───────────────────────────────────────────────
+                // ── Page header ──────────────────────────────────────────────
                 HorizontalLayout {
                     alignment: space-between;
 
                     VerticalLayout {
-                        spacing: 4px;
+                        spacing: Tokens.space-xs;
                         Text {
-                            text: root.active_tab == 0 ? "Boot Settings"
-                                : (root.active_tab == 1 ? "Secure Boot"
-                                : "Security Lab");
+                            text: root.active_tab == 0 ? "Overview"
+                                : (root.active_tab == 1 ? "Boot Entries"
+                                : (root.active_tab == 2 ? "Bootloader"
+                                : (root.active_tab == 3 ? "Secure Boot"
+                                : (root.active_tab == 4 ? "Snapshots"
+                                : (root.active_tab == 5 ? "Logs"
+                                : (root.active_tab == 6 ? "Settings"
+                                : "Strict Mode"))))));
                             font-size: 26px;
-                            font-weight: 700;
-                            color: #cdd6f4;
+                            font-weight: Tokens.weight-strong;
+                            color: Tokens.on-surface;
                         }
                         Text {
                             text: "Backend: " + root.active_backend;
-                            font-size: 13px;
-                            color: #6c7086;
+                            font-size: Tokens.font-label-large;
+                            color: Tokens.on-surface-faint;
                         }
                     }
 
-                    // Tab 0 header actions
-                    if root.active_tab == 0 : HorizontalLayout {
-                        spacing: 8px;
+                    if root.active_tab == 1 : HorizontalLayout {
+                        spacing: Tokens.space-sm;
                         alignment: end;
 
                         GhostButton {
@@ -488,248 +212,143 @@ export component AppWindow inherits Window {
                             text: "⟳ Rebuild GRUB";
                             width: 148px;
                             enabled: !root.show_loading;
-                            clicked => { root.rebuild_grub(); }
+                            clicked => {
+                                root.confirmation_typed_text = "";
+                                root.open_confirmation("rewrite-grub");
+                            }
                         }
                     }
                 }
 
-                // ── Loading bar ───────────────────────────────────────────────
                 LoadingBar {
                     active: root.show_loading;
                     message: root.loading_message;
                 }
 
-                // ── Tab 0: Boot Settings ──────────────────────────────────────
-                if root.active_tab == 0 : Rectangle {
-                    vertical-stretch: 1;
-                    background: #181825;
-                    border-radius: 12px;
+                // ── Page router ──────────────────────────────────────────────
+                if root.active_tab == 0 : OverviewPage {
+                    active-backend: root.active_backend;
+                    grub-default-entry: root.overview_default_entry;
+                    grub-timeout: root.overview_grub_timeout;
+                    grub-config-path: root.overview_grub_path;
+                    grub-config-etag: root.overview_grub_etag;
+                    secure-boot-status: root.secure_boot_status;
+                    setup-mode-active: root.overview_setup_mode;
+                    mok-count: root.overview_mok_count;
+                    snapshot-count: root.overview_snapshot_count;
+                    last-snapshot-ts: root.overview_last_snapshot;
+                    show-onboarding: root.show_onboarding;
 
-                    ScrollView {
-                        VerticalLayout {
-                            padding: 16px;
-                            spacing: 8px;
-
-                            for entry[i] in root.entries : Rectangle {
-                                height: 60px;
-                                background: #1e1e2e;
-                                border-radius: 8px;
-                                border-width: 1px;
-                                border-color: entry.is_modified ? #f9e2af : #313244;
-
-                                animate border-color { duration: 150ms; }
-
-                                HorizontalLayout {
-                                    padding-left: 16px;
-                                    padding-right: 16px;
-                                    spacing: 12px;
-                                    alignment: center;
-
-                                    Text {
-                                        width: 180px;
-                                        text: entry.key;
-                                        color: #89b4fa;
-                                        font-size: 14px;
-                                        font-weight: 600;
-                                        vertical-alignment: center;
-                                    }
-
-                                    StyledInput {
-                                        horizontal-stretch: 1;
-                                        text: entry.value;
-                                        edited(tx) => {
-                                            root.entries[i].value = tx;
-                                            root.entries[i].is_modified = (tx != root.entries[i].original_value);
-                                        }
-                                    }
-
-                                    PrimaryButton {
-                                        text: "Save";
-                                        width: 80px;
-                                        enabled: entry.is_modified && !root.show_loading;
-                                        clicked => {
-                                            root.save_entry(entry.key, entry.value);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    open-bootloader-page => { root.active_tab = 2; }
+                    open-secure-boot-page => { root.active_tab = 3; }
+                    open-snapshots-page => { root.active_tab = 4; }
+                    start-with-boot-entries => {
+                        root.show_onboarding = false;
+                        root.active_tab = 1;
+                        root.never_show_onboarding();
+                    }
+                    learn-more => { root.learn_more(); }
+                    never-show-onboarding => {
+                        root.show_onboarding = false;
+                        root.never_show_onboarding();
                     }
                 }
 
-                // ── Tab 1: Secure Boot ────────────────────────────────────────
-                if root.active_tab == 1 : Rectangle {
-                    vertical-stretch: 1;
-                    background: #181825;
-                    border-radius: 12px;
-
-                    VerticalLayout {
-                        padding: 24px;
-                        spacing: 20px;
-                        alignment: start;
-
-                        // Status cards
-                        SectionHeader { text: "STATUS OVERVIEW"; }
-
-                        HorizontalLayout {
-                            spacing: 12px;
-
-                            StatusCard {
-                                label: "SECURE BOOT";
-                                value: root.secure_boot_status;
-                                status: root.secure_boot_status == "Enabled" ? "good"
-                                    : (root.secure_boot_status == "Disabled" ? "bad"
-                                    : "neutral");
-                            }
-                            StatusCard {
-                                label: "MOK ENROLLED";
-                                value: root.mok_status;
-                                status: root.mok_status == "Yes" ? "good"
-                                    : (root.mok_status == "No" ? "bad"
-                                    : "neutral");
-                            }
-                            StatusCard {
-                                label: "ACTIVE BACKEND";
-                                value: root.active_backend;
-                                status: "info";
-                            }
-                        }
-
-                        // Separator
-                        Rectangle { height: 4px; }
-
-                        // Actions
-                        SectionHeader { text: "ACTIONS"; }
-
-                        HorizontalLayout {
-                            spacing: 12px;
-                            alignment: start;
-
-                            PrimaryButton {
-                                text: "Backup NVRAM";
-                                width: 160px;
-                                enabled: !root.show_loading;
-                                clicked => { root.backup_nvram(); }
-                            }
-                            PrimaryButton {
-                                text: "Enroll MOK";
-                                width: 140px;
-                                enabled: !root.show_loading;
-                                clicked => { root.enroll_mok(); }
-                            }
-                        }
-
-                        // Description
-                        Text {
-                            text: "Backup NVRAM saves all EFI Secure Boot variables to /var/lib/bootcontrol/certs/. Enroll MOK signs the UKI image and registers the machine owner key for the next reboot.";
-                            color: #585b70;
-                            font-size: 12px;
-                            wrap: word-wrap;
-                        }
-                    }
+                if root.active_tab == 1 : BootEntriesPage {
+                    entries <=> root.entries;
+                    show-loading: root.show_loading;
+                    save-entry(k, v) => { root.save_entry(k, v); }
                 }
 
-                // ── Tab 2: Security Lab ───────────────────────────────────────
-                if root.active_tab == 2 : Rectangle {
-                    vertical-stretch: 1;
-                    background: #181825;
-                    border-radius: 12px;
+                if root.active_tab == 2 : BootloaderPage {
+                    active-backend: root.active_backend;
+                }
 
-                    VerticalLayout {
-                        padding: 24px;
-                        spacing: 16px;
-                        alignment: start;
+                if root.active_tab == 3 : SecureBootPage {
+                    active-backend: root.active_backend;
+                    secure-boot-status: root.secure_boot_status;
+                    mok-status: root.mok_status;
+                    show-loading: root.show_loading;
+                    backup-nvram => { root.backup_nvram(); }
+                    enroll-mok => { root.enroll_mok(); }
+                }
 
-                        WarningBanner {
-                            message: "These operations take full ownership of EFI Secure Boot variables and can permanently break your system. Proceed only if you know what you are doing.";
-                        }
+                if root.active_tab == 4 : SnapshotsPage {
+                    snapshots: root.snapshot_rows;
+                    disk-pressure: root.snapshots_disk_pressure;
+                    disk-usage-text: root.snapshots_disk_usage;
+                    restore-clicked(id) => { root.restore_snapshot(id); }
+                    adjust-retention => { root.active_tab = 6; }
+                    prune-now => { /* PR 7 wires to daemon snapshot::reap */ }
+                    open-recovery-viewer => { root.open_recovery_viewer(); }
+                    open-audit-log(jid) => { root.open_audit_log(jid); }
+                }
 
-                        // Paranoia Mode section
-                        Rectangle {
-                            background: #1e1e2e;
-                            border-radius: 10px;
-                            border-width: 1px;
-                            border-color: #313244;
+                if root.active_tab == 5 : LogsPage {
+                    rows: root.log_rows;
+                    only-failures <=> root.logs_only_failures;
+                    only-mine <=> root.logs_only_mine;
+                    time-window <=> root.logs_time_window;
+                    toggle-filter(f) => { root.toggle_logs_filter(f); }
+                    copy-row(jid) => { root.copy_log_row(jid); }
+                    save-as => { root.save_logs_as(); }
+                }
 
-                            VerticalLayout {
-                                padding: 20px;
-                                spacing: 14px;
-                                alignment: start;
+                if root.active_tab == 6 : SettingsPage {
+                    retention-preset <=> root.settings_retention_preset;
+                    auto-dismiss-successes <=> root.settings_auto_dismiss;
+                    high-contrast-override <=> root.settings_high_contrast;
+                    reduced-motion-override <=> root.settings_reduced_motion;
+                    strict-mode-allowed: root.settings_strict_mode_allowed;
+                }
 
-                                HorizontalLayout {
-                                    alignment: start;
-                                    spacing: 10px;
-                                    Text {
-                                        text: "Paranoia Mode";
-                                        color: root.paranoia_confirmed ? #f38ba8 : #cdd6f4;
-                                        font-size: 16px;
-                                        font-weight: 700;
-                                        vertical-alignment: center;
-
-                                        animate color { duration: 200ms; }
-                                    }
-                                    Rectangle {
-                                        width: 80px;
-                                        height: 22px;
-                                        border-radius: 11px;
-                                        background: root.paranoia_confirmed ? #3d1317 : #313244;
-                                        border-width: 1px;
-                                        border-color: root.paranoia_confirmed ? #f38ba8 : #45475a;
-
-                                        animate background, border-color { duration: 200ms; }
-
-                                        Text {
-                                            text: root.paranoia_confirmed ? "Armed" : "Inactive";
-                                            color: root.paranoia_confirmed ? #f38ba8 : #6c7086;
-                                            font-size: 11px;
-                                            font-weight: 700;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-
-                                Text {
-                                    text: "Generates a custom PK/KEK/db key set and takes full ownership of the UEFI Secure Boot database. This permanently replaces your platform key.";
-                                    color: #6c7086;
-                                    font-size: 13px;
-                                    wrap: word-wrap;
-                                }
-
-                                CheckBox {
-                                    label: "I understand the risks and want to proceed";
-                                    checked <=> root.paranoia_confirmed;
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 12px;
-                                    alignment: start;
-
-                                    DangerButton {
-                                        text: "Generate Custom PK/KEK";
-                                        width: 220px;
-                                        enabled: root.paranoia_confirmed && !root.show_loading;
-                                        clicked => { root.generate_paranoia(); }
-                                    }
-                                    DangerButton {
-                                        text: "Merge with Microsoft Sigs";
-                                        width: 220px;
-                                        enabled: root.paranoia_confirmed && !root.show_loading;
-                                        clicked => { root.merge_paranoia(); }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                // Off-sidebar legacy route: Strict Mode (Q4 verdict will fold
+                // this into Secure Boot page in PR 7).
+                if root.active_tab == 7 : SecurityLabPage {
+                    show-loading: root.show_loading;
+                    paranoia-confirmed <=> root.paranoia_confirmed;
+                    generate-paranoia => { root.generate_paranoia(); }
+                    merge-paranoia => { root.merge_paranoia(); }
                 }
             }
         }
     }
 
-    // ── Toast (floats above everything) ───────────────────────────────────────
+    // ── Confirmation Sheet (overlays everything when active) ────────────────
+    ConfirmationSheet {
+        visible-prop: root.show_confirmation;
+        verb-label: root.confirmation_verb;
+        restated-target: root.confirmation_target;
+        required-confirm-text: root.confirmation_required_text;
+        typed-text <=> root.confirmation_typed_text;
+        diff: root.confirmation_diff;
+        preflight: root.confirmation_preflight;
+        preflight-all-pass: root.confirmation_preflight_all_pass;
+        command-cli: root.confirmation_command_cli;
+        snapshot-id: root.confirmation_snapshot_id;
+        cancel => {
+            root.show_confirmation = false;
+            root.confirmation_typed_text = "";
+        }
+        confirm => {
+            root.show_confirmation = false;
+            root.confirmation_confirmed();
+            root.confirmation_typed_text = "";
+        }
+        copy-command => { root.copy_command(root.confirmation_command_cli); }
+    }
+
+    // ── RecoveryViewer overlay ──────────────────────────────────────────────
+    RecoveryViewer {
+        visible-prop: root.show_recovery_viewer;
+        markdown-source: root.recovery_markdown;
+        close => { root.show_recovery_viewer = false; }
+    }
+
+    // ── Toast (floats above everything except overlays) ─────────────────────
     ToastNotification {
         x: (parent.width - self.width) / 2;
-        y: root.show_toast ? parent.height - self.height - 24px : parent.height + 10px;
+        y: root.show_toast ? parent.height - self.height - Tokens.space-xl : parent.height + 10px;
         message: root.toast_message;
         toast_type: root.toast_type;
         is_visible: root.show_toast;

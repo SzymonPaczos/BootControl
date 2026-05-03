@@ -1,0 +1,150 @@
+// crates/gui/ui/pages/snapshots.slint
+//
+// Lists pre-write snapshots and surfaces the disk-pressure InfoBar when
+// /var/lib/bootcontrol/snapshots/ exceeds the policy threshold (Q5 verdict).
+// docs/GUI_V2_SPEC_v2.md §3.5 + §10.5.
+//
+// Each row is one SnapshotInfo from the daemon. Restore opens a
+// Confirmation Sheet (paradox: restoring takes another snapshot first,
+// stated in the sheet). PR 6 ships the page; daemon-side
+// list_snapshots() / restore_snapshot() are exposed in the integration PR.
+
+import { Tokens } from "../tokens.slint";
+import { ScrollView } from "std-widgets.slint";
+import { GhostButton } from "../components/ghost_button.slint";
+import { DangerButton } from "../components/danger_button.slint";
+import { InfoBar } from "../components/info_bar.slint";
+import { AuditLogLink } from "../components/audit_log_link.slint";
+
+export struct SnapshotRow {
+    id: string,
+    op: string,
+    ts: string,
+    audit_job_id: string,
+}
+
+export component SnapshotsPage inherits Rectangle {
+    in property <[SnapshotRow]> snapshots;
+    in property <bool> disk-pressure: false;
+    in property <string> disk-usage-text: "";
+    callback restore-clicked(string);
+    callback adjust-retention();
+    callback prune-now();
+    callback open-recovery-viewer();
+    callback open-audit-log(string);
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-md;
+        alignment: stretch;
+
+        if root.disk-pressure : InfoBar {
+            severity: "info";
+            message: "Snapshots use " + root.disk-usage-text + ". Adjust retention or prune.";
+            dismissible: false;
+        }
+
+        HorizontalLayout {
+            alignment: space-between;
+            Text {
+                text: root.snapshots.length + " snapshots";
+                color: Tokens.on-surface;
+                font-size: Tokens.font-title-small;
+                font-weight: Tokens.weight-strong;
+                vertical-alignment: center;
+            }
+            HorizontalLayout {
+                spacing: Tokens.space-sm;
+                GhostButton {
+                    text: "Recovery instructions";
+                    width: 200px;
+                    clicked => { root.open-recovery-viewer(); }
+                }
+                GhostButton {
+                    text: "Adjust retention";
+                    width: 160px;
+                    clicked => { root.adjust-retention(); }
+                }
+            }
+        }
+
+        if root.snapshots.length == 0 : Rectangle {
+            background: Tokens.surface-container-high;
+            border-radius: Tokens.radius-md;
+            height: 120px;
+            VerticalLayout {
+                padding: Tokens.space-lg;
+                alignment: center;
+                Text {
+                    text: "No snapshots yet";
+                    color: Tokens.on-surface-muted;
+                    font-size: Tokens.font-title-small;
+                    font-weight: Tokens.weight-strong;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "Snapshots are created automatically before any change to your boot configuration.";
+                    color: Tokens.on-surface-faint;
+                    font-size: Tokens.font-label-large;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        if root.snapshots.length > 0 : Rectangle {
+            vertical-stretch: 1;
+            ScrollView {
+                VerticalLayout {
+                    spacing: Tokens.space-xs;
+                    for snap in root.snapshots : Rectangle {
+                        height: 64px;
+                        background: Tokens.surface-container-high;
+                        border-radius: Tokens.radius-md;
+                        border-width: 1px;
+                        border-color: Tokens.surface-1;
+                        HorizontalLayout {
+                            padding-left: Tokens.space-lg;
+                            padding-right: Tokens.space-lg;
+                            spacing: Tokens.space-md;
+                            alignment: stretch;
+
+                            VerticalLayout {
+                                spacing: 2px;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: snap.op;
+                                    color: Tokens.on-surface;
+                                    font-size: Tokens.font-body-medium;
+                                    font-weight: Tokens.weight-strong;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: snap.ts + " · id " + snap.id;
+                                    color: Tokens.on-surface-faint;
+                                    font-size: Tokens.font-meta;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            AuditLogLink {
+                                job-id: snap.audit_job_id;
+                                message-id: "";
+                                label: "Open in Logs";
+                                open => { root.open-audit-log(snap.audit_job_id); }
+                            }
+                            DangerButton {
+                                text: "Restore";
+                                width: 120px;
+                                clicked => { root.restore-clicked(snap.id); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
