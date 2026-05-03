@@ -1,0 +1,38 @@
+// crates/gui/ui/components/ghost_button.slint
+//
+// Secondary / tertiary button. No fill at rest, hover background.
+// Use for non-destructive non-primary actions: Cancel, Refresh, Dismiss, Close.
+// Anatomy: see docs/GUI_V2_SPEC_v2.md §13 component public APIs.
+
+import { Tokens } from "../tokens.slint";
+
+export component GhostButton inherits Rectangle {
+    in-out property <string> text;
+    in property <bool> enabled: true;
+    callback clicked <=> touch.clicked;
+
+    height: Tokens.button-height-md;
+    border-radius: Tokens.radius-md;
+    background: touch.pressed
+        ? Tokens.surface-1
+        : (touch.has-hover ? Tokens.surface-2 : transparent);
+    opacity: root.enabled ? 1.0 : 0.5;
+
+    animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+
+    Text {
+        text: root.text;
+        color: Tokens.on-surface;
+        font-size: Tokens.font-body-medium;
+        font-weight: Tokens.weight-medium;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+    }
+}

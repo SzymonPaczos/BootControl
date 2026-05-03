@@ -1,0 +1,73 @@
+// crates/gui/ui/pages/boot_entries.slint
+//
+// V1 ported page: flat key=value list of GRUB / systemd-boot / UKI entries
+// with per-row Save buttons. v2 spec §3.2 reshapes this into an icon-list
+// + Inspector + reorder arrows + per-row destructive actions; that work
+// lands in PR 6. PR 3 is a faithful port to the new file structure.
+
+import { ScrollView } from "std-widgets.slint";
+import { Tokens } from "../tokens.slint";
+import { GrubEntry } from "../types.slint";
+import { StyledInput } from "../components/styled_input.slint";
+import { PrimaryButton } from "../components/primary_button.slint";
+
+export component BootEntriesPage inherits Rectangle {
+    in-out property <[GrubEntry]> entries;
+    in property <bool> show-loading;
+    callback save-entry(string, string);
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    ScrollView {
+        VerticalLayout {
+            padding: Tokens.space-lg;
+            spacing: Tokens.space-sm;
+
+            for entry[i] in root.entries : Rectangle {
+                height: 60px;
+                background: Tokens.surface;
+                border-radius: Tokens.radius-md;
+                border-width: 1px;
+                border-color: entry.is_modified ? Tokens.warning-soft : Tokens.surface-1;
+
+                animate border-color { duration: Tokens.motion-fast; }
+
+                HorizontalLayout {
+                    padding-left: Tokens.space-lg;
+                    padding-right: Tokens.space-lg;
+                    spacing: Tokens.space-md;
+                    alignment: center;
+
+                    Text {
+                        width: 180px;
+                        text: entry.key;
+                        color: Tokens.accent-info;
+                        font-size: Tokens.font-body-medium;
+                        font-weight: Tokens.weight-medium;
+                        vertical-alignment: center;
+                    }
+
+                    StyledInput {
+                        horizontal-stretch: 1;
+                        text: entry.value;
+                        edited(tx) => {
+                            root.entries[i].value = tx;
+                            root.entries[i].is_modified = (tx != root.entries[i].original_value);
+                        }
+                    }
+
+                    PrimaryButton {
+                        text: "Save";
+                        width: 80px;
+                        enabled: entry.is_modified && !root.show-loading;
+                        clicked => {
+                            root.save-entry(entry.key, entry.value);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

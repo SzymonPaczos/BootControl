@@ -1,0 +1,44 @@
+// crates/gui/ui/components/danger_button.slint
+//
+// Destructive primary action button. Red outline at rest, fills on press.
+// Use ONLY inside Confirmation Sheets after type-to-confirm passes
+// (see docs/GUI_V2_SPEC_v2.md §6 destructive-action protocol step 3).
+// Outside a sheet — wrong tool; use Confirmation Sheet first.
+// Anatomy: §13 component public APIs.
+
+import { Tokens } from "../tokens.slint";
+
+export component DangerButton inherits Rectangle {
+    in-out property <string> text;
+    in property <bool> enabled: true;
+    callback clicked <=> touch.clicked;
+
+    height: Tokens.button-height-lg;
+    border-radius: Tokens.radius-md;
+    border-width: 1px;
+    border-color: root.enabled ? Tokens.error : Tokens.surface-2;
+    background: root.enabled
+        ? (touch.pressed
+            ? Tokens.error
+            : (touch.has-hover ? Tokens.surface-error-tint : transparent))
+        : transparent;
+
+    animate background, border-color { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-description: "Destructive action: " + root.text;
+    accessible-enabled: root.enabled;
+
+    Text {
+        text: root.text;
+        color: root.enabled ? Tokens.error : Tokens.on-surface-disabled;
+        font-size: Tokens.font-body-medium;
+        font-weight: Tokens.weight-strong;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+    }
+}

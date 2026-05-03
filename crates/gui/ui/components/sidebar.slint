@@ -1,0 +1,122 @@
+// crates/gui/ui/components/sidebar.slint
+//
+// Left navigation rail. v2 spec §3 IA: 6 items + footer Settings.
+//   0 Overview      — at-a-glance status
+//   1 Boot Entries  — list of menu entries (currently flat key=value, evolves PR 7)
+//   2 Bootloader    — typed GRUB settings (placeholder in PR 6)
+//   3 Secure Boot   — state + MOK + Strict Mode disclosure
+//   4 Snapshots     — pre-write snapshot list, restore
+//   5 Logs          — journald audit viewer
+//   6 Settings      — footer item (preferences)
+
+import { Tokens } from "../tokens.slint";
+
+component SidebarItem inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <bool> active: false;
+    callback clicked <=> touch.clicked;
+
+    height: Tokens.sidebar-item-height;
+    border-radius: Tokens.radius-md;
+    background: root.active
+        ? Tokens.surface-1
+        : (touch.has-hover ? Tokens.surface : transparent);
+
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-description: root.active ? "Currently selected" : "Navigate to " + root.text;
+
+    animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-md;
+        spacing: Tokens.space-md;
+        alignment: start;
+
+        Rectangle {
+            width: 4px;
+            height: 20px;
+            background: root.active ? Tokens.accent-info : transparent;
+            border-radius: 2px;
+        }
+
+        Text {
+            text: root.icon != "" ? (root.icon + " " + root.text) : root.text;
+            color: root.active ? Tokens.accent-info : Tokens.on-surface-dim;
+            font-size: Tokens.font-body-medium;
+            font-weight: root.active ? Tokens.weight-strong : Tokens.weight-label;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {}
+}
+
+export component Sidebar inherits Rectangle {
+    in-out property <int> active-tab: 0;
+
+    width: Tokens.sidebar-width;
+    background: Tokens.surface-container-high;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-sm;
+        alignment: start;
+
+        Text {
+            text: "BootControl";
+            font-size: Tokens.font-title-large;
+            font-weight: Tokens.weight-display;
+            color: Tokens.on-surface;
+        }
+
+        Rectangle { height: Tokens.space-lg; }
+
+        SidebarItem {
+            text: "Overview";
+            active: root.active-tab == 0;
+            clicked => { root.active-tab = 0; }
+        }
+        SidebarItem {
+            text: "Boot Entries";
+            active: root.active-tab == 1;
+            clicked => { root.active-tab = 1; }
+        }
+        SidebarItem {
+            text: "Bootloader";
+            active: root.active-tab == 2;
+            clicked => { root.active-tab = 2; }
+        }
+        SidebarItem {
+            text: "Secure Boot";
+            active: root.active-tab == 3;
+            clicked => { root.active-tab = 3; }
+        }
+        SidebarItem {
+            text: "Snapshots";
+            active: root.active-tab == 4;
+            clicked => { root.active-tab = 4; }
+        }
+        SidebarItem {
+            text: "Logs";
+            active: root.active-tab == 5;
+            clicked => { root.active-tab = 5; }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+
+        // Footer Settings (still binds to active-tab)
+        SidebarItem {
+            text: "Settings";
+            icon: "⚙";
+            active: root.active-tab == 6;
+            clicked => { root.active-tab = 6; }
+        }
+
+        Text {
+            text: "v1.0.0-alpha";
+            color: Tokens.surface-2;
+            font-size: Tokens.font-meta;
+        }
+    }
+}

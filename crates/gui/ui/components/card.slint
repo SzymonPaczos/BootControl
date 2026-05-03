@@ -1,0 +1,45 @@
+// crates/gui/ui/components/card.slint
+//
+// Generic content card. Surface-container background, radius-card,
+// optional inline title row. Use for grouping controls inside pages
+// per docs/GUI_V2_SPEC_v2.md §3 per-page anatomy ("Content — grouped
+// controls in surface-container cards, ≤ 4 cards per page").
+//
+// Use the `title` property for a card heading; leave empty for a bare
+// content surface. Children render inside the inner content area.
+
+import { Tokens } from "../tokens.slint";
+
+export component Card inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-lg;
+        spacing: Tokens.space-md;
+
+        if root.title != "" : VerticalLayout {
+            spacing: Tokens.space-xs;
+            Text {
+                text: root.title;
+                color: Tokens.on-surface;
+                font-size: Tokens.font-title-small;
+                font-weight: Tokens.weight-strong;
+            }
+            if root.subtitle != "" : Text {
+                text: root.subtitle;
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-meta;
+                wrap: word-wrap;
+            }
+        }
+
+        // Children of <Card> render inside this layout via slint's
+        // implicit child-injection mechanism — every element placed
+        // inside Card { ... } at the call site lands here.
+        @children
+    }
+}

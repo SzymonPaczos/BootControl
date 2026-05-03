@@ -1,0 +1,78 @@
+// crates/gui/ui/components/command_disclosure.slint
+//
+// "≡ Command" reveal showing the equivalent `bootcontrol` CLI invocation
+// for a GUI action. Promoted from P2 to P0 by power-user red-team review
+// (docs/GUI_V2_SPEC_v2.md §17 CLI parity ledger; UX_MAPPING.md updated).
+// Default collapsed; press 'c' (per §15 keyboard map) or click the row
+// to expand.
+
+import { Tokens } from "../tokens.slint";
+import { GhostButton } from "ghost_button.slint";
+
+export component CommandDisclosure inherits Rectangle {
+    in property <string> command;
+    in-out property <bool> expanded: false;
+    callback copy();
+
+    accessible-role: button;
+    accessible-label: root.expanded ? "Hide command" : "Show command";
+    accessible-description: "Reveal the equivalent bootcontrol CLI command";
+
+    background: Tokens.surface-container-high;
+    border-radius: Tokens.radius-sm;
+    border-width: 1px;
+    border-color: Tokens.surface-1;
+
+    VerticalLayout {
+        padding: Tokens.space-sm;
+        spacing: Tokens.space-xs;
+
+        TouchArea {
+            height: 24px;
+            clicked => { root.expanded = !root.expanded; }
+            HorizontalLayout {
+                spacing: Tokens.space-sm;
+                alignment: start;
+                Text {
+                    text: root.expanded ? "▾ Command" : "▸ Command";
+                    color: Tokens.on-surface-faint;
+                    font-size: Tokens.font-meta;
+                    font-weight: Tokens.weight-strong;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: "(this is what the CLI runs)";
+                    color: Tokens.on-surface-faint;
+                    font-size: Tokens.font-meta;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+
+        if root.expanded : Rectangle {
+            height: 32px;
+            background: Tokens.surface;
+            border-radius: Tokens.radius-sm;
+            HorizontalLayout {
+                padding-left: Tokens.space-sm;
+                padding-right: Tokens.space-sm;
+                spacing: Tokens.space-sm;
+                alignment: stretch;
+                Text {
+                    text: root.command;
+                    color: Tokens.accent-info;
+                    font-size: Tokens.font-meta;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+                GhostButton {
+                    text: "Copy";
+                    width: 60px;
+                    clicked => { root.copy(); }
+                }
+            }
+        }
+    }
+}

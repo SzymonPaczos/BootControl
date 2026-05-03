@@ -1,0 +1,63 @@
+// crates/gui/ui/components/diff_preview.slint
+//
+// Unified-diff hunk renderer. Mandatory inside every Confirmation Sheet
+// for ops that modify text files (docs/GUI_V2_SPEC_v2.md §13). For PR 4
+// the data comes from a stub on the GUI side; PR 5 wires real diffs from
+// the daemon's pre-flight pass.
+//
+// Layout: file path header rows interleaved with `+` / `-` / context lines.
+// Add lines coloured `--success`; remove lines coloured `--error`; context
+// rendered muted. Monospace would be ideal but Slint default fonts vary —
+// font-family pin is left for PR 7 type-scale audit.
+
+import { Tokens } from "../tokens.slint";
+import { DiffLine } from "../types.slint";
+
+export component DiffPreview inherits Rectangle {
+    in property <[DiffLine]> lines;
+
+    background: Tokens.surface-container-high;
+    border-radius: Tokens.radius-md;
+    border-width: 1px;
+    border-color: Tokens.surface-1;
+
+    VerticalLayout {
+        padding: Tokens.space-md;
+        spacing: 2px;
+
+        for line in root.lines : Rectangle {
+            height: 18px;
+            HorizontalLayout {
+                padding-left: line.file_path != "" ? 0px : Tokens.space-md;
+                spacing: Tokens.space-sm;
+
+                if line.file_path != "" : Text {
+                    text: line.file_path;
+                    color: Tokens.on-surface-muted;
+                    font-size: Tokens.font-meta;
+                    font-weight: Tokens.weight-strong;
+                    vertical-alignment: center;
+                }
+
+                if line.file_path == "" : Text {
+                    text: line.side == "add" ? "+" : (line.side == "remove" ? "-" : " ");
+                    color: line.side == "add" ? Tokens.success
+                        : (line.side == "remove" ? Tokens.error : Tokens.on-surface-faint);
+                    font-size: Tokens.font-label-large;
+                    font-weight: Tokens.weight-strong;
+                    width: 12px;
+                    vertical-alignment: center;
+                }
+
+                if line.file_path == "" : Text {
+                    text: line.text;
+                    color: line.side == "add" ? Tokens.success
+                        : (line.side == "remove" ? Tokens.error : Tokens.on-surface);
+                    font-size: Tokens.font-label-large;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+    }
+}

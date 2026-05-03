@@ -1,0 +1,108 @@
+// crates/gui/ui/pages/security_lab.slint
+//
+// V1 "Security Lab" page (Strict Mode pre-cursor) — Paranoia confirmation
+// + custom PK/KEK generation + Microsoft sigs merge. v2 spec §3.4 folds
+// this into a single Strict Mode disclosure on the Secure Boot page,
+// gated by a runtime policy file (PR 6).
+
+import { Tokens } from "../tokens.slint";
+import { DangerButton } from "../components/danger_button.slint";
+import { CheckBox } from "../components/checkbox.slint";
+import { WarningBanner } from "../components/warning_banner.slint";
+
+export component SecurityLabPage inherits Rectangle {
+    in property <bool> show-loading;
+    in-out property <bool> paranoia-confirmed: false;
+    callback generate-paranoia();
+    callback merge-paranoia();
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-lg;
+        alignment: start;
+
+        WarningBanner {
+            message: "These operations take full ownership of EFI Secure Boot variables and can permanently break your system. Proceed only if you know what you are doing.";
+        }
+
+        Rectangle {
+            background: Tokens.surface;
+            border-radius: Tokens.radius-lg;
+            border-width: 1px;
+            border-color: Tokens.surface-1;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+                alignment: start;
+
+                HorizontalLayout {
+                    alignment: start;
+                    spacing: Tokens.space-sm;
+                    Text {
+                        text: "Paranoia Mode";
+                        color: root.paranoia-confirmed ? Tokens.error : Tokens.on-surface;
+                        font-size: 16px;
+                        font-weight: Tokens.weight-strong;
+                        vertical-alignment: center;
+
+                        animate color { duration: Tokens.motion-medium; }
+                    }
+                    Rectangle {
+                        width: 80px;
+                        height: 22px;
+                        border-radius: Tokens.radius-pill;
+                        background: root.paranoia-confirmed ? Tokens.surface-error-tint-strong : Tokens.surface-1;
+                        border-width: 1px;
+                        border-color: root.paranoia-confirmed ? Tokens.error : Tokens.surface-2;
+
+                        animate background, border-color { duration: Tokens.motion-medium; }
+
+                        Text {
+                            text: root.paranoia-confirmed ? "Armed" : "Inactive";
+                            color: root.paranoia-confirmed ? Tokens.error : Tokens.on-surface-faint;
+                            font-size: Tokens.font-meta;
+                            font-weight: Tokens.weight-strong;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Text {
+                    text: "Generates a custom PK/KEK/db key set and takes full ownership of the UEFI Secure Boot database. This permanently replaces your platform key.";
+                    color: Tokens.on-surface-faint;
+                    font-size: Tokens.font-label-large;
+                    wrap: word-wrap;
+                }
+
+                CheckBox {
+                    label: "I understand the risks and want to proceed";
+                    checked <=> root.paranoia-confirmed;
+                }
+
+                HorizontalLayout {
+                    spacing: Tokens.space-md;
+                    alignment: start;
+
+                    DangerButton {
+                        text: "Generate Custom PK/KEK";
+                        width: 220px;
+                        enabled: root.paranoia-confirmed && !root.show-loading;
+                        clicked => { root.generate-paranoia(); }
+                    }
+                    DangerButton {
+                        text: "Merge with Microsoft Sigs";
+                        width: 220px;
+                        enabled: root.paranoia-confirmed && !root.show-loading;
+                        clicked => { root.merge-paranoia(); }
+                    }
+                }
+            }
+        }
+    }
+}

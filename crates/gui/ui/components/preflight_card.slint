@@ -1,0 +1,89 @@
+// crates/gui/ui/components/preflight_card.slint
+//
+// Pre-flight check list inside the Confirmation Sheet. Each check renders
+// with a state icon and an optional detail line. The Sheet's destructive
+// primary stays disabled until every check is in the `pass` state
+// (docs/GUI_V2_SPEC_v2.md §6 step 4 + §13).
+
+import { Tokens } from "../tokens.slint";
+import { PreflightCheck } from "../types.slint";
+
+component PreflightRow inherits Rectangle {
+    in property <PreflightCheck> check;
+
+    height: 36px;
+
+    HorizontalLayout {
+        padding-left: Tokens.space-sm;
+        padding-right: Tokens.space-sm;
+        spacing: Tokens.space-md;
+        alignment: start;
+
+        // Status icon
+        Rectangle {
+            width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            background: root.check.state == "pass" ? Tokens.success
+                : (root.check.state == "fail" ? Tokens.error
+                : (root.check.state == "running" ? Tokens.accent-info : Tokens.surface-2));
+            Text {
+                text: root.check.state == "pass" ? "✓"
+                    : (root.check.state == "fail" ? "✕"
+                    : (root.check.state == "running" ? "⋯" : "·"));
+                color: Tokens.on-accent;
+                font-size: Tokens.font-meta;
+                font-weight: Tokens.weight-strong;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.check.name;
+                color: Tokens.on-surface;
+                font-size: Tokens.font-label-large;
+                font-weight: Tokens.weight-medium;
+            }
+            if root.check.detail != "" : Text {
+                text: root.check.detail;
+                color: Tokens.on-surface-faint;
+                font-size: Tokens.font-meta;
+            }
+        }
+    }
+}
+
+export component PreflightCard inherits Rectangle {
+    in property <[PreflightCheck]> checks;
+    out property <bool> all-pass: {
+        // Slint expression — return true only if no check is non-pass.
+        // Implementation lives in Rust where we drive `checks`; this property
+        // is a derived hint for the Sheet's primary-button enabled binding.
+        // We cannot fold over arrays in Slint expressions, so the parent
+        // computes pass-state and gates the button itself.
+        true
+    };
+
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-md;
+    border-width: 1px;
+    border-color: Tokens.surface-1;
+
+    VerticalLayout {
+        padding: Tokens.space-md;
+        spacing: Tokens.space-xs;
+        Text {
+            text: "Pre-flight checks";
+            color: Tokens.on-surface-muted;
+            font-size: Tokens.font-meta;
+            font-weight: Tokens.weight-strong;
+        }
+        for check in root.checks : PreflightRow {
+            check: check;
+        }
+    }
+}

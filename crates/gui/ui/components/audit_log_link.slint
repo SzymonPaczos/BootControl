@@ -1,0 +1,47 @@
+// crates/gui/ui/components/audit_log_link.slint
+//
+// Compact "Open in Logs" affordance. Used on Overview activity rows and
+// on Snapshots list rows so the user can jump from a snapshot summary
+// to the journald audit row that originated it (docs/GUI_V2_SPEC_v2.md §5).
+
+import { Tokens } from "../tokens.slint";
+
+export component AuditLogLink inherits Rectangle {
+    in property <string> job-id;
+    in property <string> message-id;
+    in property <string> label: "Open in Logs";
+    callback open();
+
+    height: 22px;
+    border-radius: Tokens.radius-sm;
+    background: touch.has-hover ? Tokens.surface-1 : transparent;
+
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-description: "Opens journalctl with JOB_ID=" + root.job-id;
+
+    HorizontalLayout {
+        padding-left: Tokens.space-sm;
+        padding-right: Tokens.space-sm;
+        spacing: Tokens.space-xs;
+        alignment: start;
+
+        Text {
+            text: "≡";
+            color: Tokens.accent-info;
+            font-size: Tokens.font-meta;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.label;
+            color: Tokens.accent-info;
+            font-size: Tokens.font-meta;
+            font-weight: Tokens.weight-medium;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.open(); }
+    }
+}

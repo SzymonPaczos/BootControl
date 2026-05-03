@@ -1,0 +1,66 @@
+// crates/gui/ui/components/action_footer.slint
+//
+// Sticky bottom action footer. Materialises only when the page has
+// staged uncommitted changes; collapses otherwise.
+// docs/GUI_V2_SPEC_v2.md §3 per-page anatomy + §11 Confirmation Sheet flow.
+//
+// Behaviour:
+// - Left: change count summary, e.g. "3 changes pending"
+// - Right: Discard (ghost) and Apply N changes (primary)
+// - Apply triggers the destructive-action protocol (Confirmation Sheet)
+// - Keyboard: Ctrl+Shift+Return activates Apply when footer has focus
+//   (see GUI_V2_SPEC_v2.md §15 keyboard map; Ctrl+S removed)
+
+import { Tokens } from "../tokens.slint";
+import { GhostButton } from "ghost_button.slint";
+import { PrimaryButton } from "primary_button.slint";
+
+export component ActionFooter inherits Rectangle {
+    in property <int> pending-count: 0;
+    in property <bool> visible-when-clean: false;
+    in property <bool> apply-enabled: true;
+    callback discard();
+    callback apply();
+
+    height: (root.pending-count > 0 || root.visible-when-clean)
+        ? Tokens.footer-height
+        : 0px;
+    background: Tokens.surface-container-high;
+    clip: true;
+
+    animate height { duration: Tokens.motion-medium; easing: ease-in-out; }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-xl;
+        padding-right: Tokens.space-xl;
+        spacing: Tokens.space-md;
+        alignment: stretch;
+
+        Text {
+            text: root.pending-count == 0
+                ? "No pending changes"
+                : (root.pending-count == 1
+                    ? "1 change pending"
+                    : root.pending-count + " changes pending");
+            color: Tokens.on-surface-muted;
+            font-size: Tokens.font-body-medium;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+
+        GhostButton {
+            text: "Discard";
+            width: 100px;
+            enabled: root.pending-count > 0;
+            clicked => { root.discard(); }
+        }
+        PrimaryButton {
+            text: root.pending-count <= 1
+                ? "Apply"
+                : "Apply " + root.pending-count + " changes";
+            width: 200px;
+            enabled: root.pending-count > 0 && root.apply-enabled;
+            clicked => { root.apply(); }
+        }
+    }
+}

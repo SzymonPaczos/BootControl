@@ -1,0 +1,159 @@
+// crates/gui/ui/pages/overview.slint
+//
+// At-a-glance live status of the boot stack. Hero card + status row.
+// docs/GUI_V2_SPEC_v2.md §3.1 + §10.1 patches:
+//   - Setup Mode banner pinned above the hero when active
+//   - Onboarding card materialises on first launch (parent controls visibility)
+//   - Recent activity rows link to the originating journal entry
+//
+// PR 6 ships the layout with stub-friendly props. Real data sources
+// (BootBackend::read_secure_boot_state, list_snapshots) are wired in
+// the integration PR after the daemon-side D-Bus methods land.
+
+import { Tokens } from "../tokens.slint";
+import { StatusCard } from "../components/status_card.slint";
+import { SectionHeader } from "../components/section_header.slint";
+import { InfoBar } from "../components/info_bar.slint";
+import { OnboardingCard } from "../components/onboarding_card.slint";
+
+export component OverviewPage inherits Rectangle {
+    in property <string> active-backend;
+    in property <string> grub-default-entry: "—";
+    in property <int> grub-timeout: 0;
+    in property <string> grub-config-path: "—";
+    in property <string> grub-config-etag: "—";
+
+    in property <string> secure-boot-status: "Unknown";
+    in property <bool> setup-mode-active: false;
+    in property <int> mok-count: 0;
+    in property <int> snapshot-count: 0;
+    in property <string> last-snapshot-ts: "—";
+
+    in property <bool> show-onboarding: false;
+
+    callback open-bootloader-page();
+    callback open-secure-boot-page();
+    callback open-snapshots-page();
+    callback start-with-boot-entries();
+    callback learn-more();
+    callback never-show-onboarding();
+
+    vertical-stretch: 1;
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+
+    VerticalLayout {
+        padding: Tokens.space-xl;
+        spacing: Tokens.space-lg;
+        alignment: start;
+
+        // Setup Mode warning (top-page, Q2 verdict)
+        if root.setup-mode-active : InfoBar {
+            severity: "warning";
+            message: "Secure Boot is in Setup Mode — any signed binary can be enrolled.";
+            dismissible: false;
+        }
+
+        // Onboarding card (first-launch only)
+        if root.show-onboarding : OnboardingCard {
+            active-backend: root.active-backend;
+            start-with-boot-entries => { root.start-with-boot-entries(); }
+            learn-more => { root.learn-more(); }
+            never-show => { root.never-show-onboarding(); }
+        }
+
+        // Hero card
+        Rectangle {
+            background: Tokens.surface-container-high;
+            border-radius: Tokens.radius-card;
+            VerticalLayout {
+                padding: Tokens.space-lg;
+                spacing: Tokens.space-sm;
+                Text {
+                    text: "Boot system";
+                    color: Tokens.on-surface-muted;
+                    font-size: Tokens.font-meta;
+                    font-weight: Tokens.weight-strong;
+                }
+                Text {
+                    text: root.active-backend + " · " + root.grub-config-path;
+                    color: Tokens.on-surface;
+                    font-size: 16px;
+                    font-weight: Tokens.weight-medium;
+                }
+                HorizontalLayout {
+                    spacing: Tokens.space-2xl;
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Default entry";
+                            color: Tokens.on-surface-faint;
+                            font-size: Tokens.font-meta;
+                        }
+                        Text {
+                            text: root.grub-default-entry;
+                            color: Tokens.on-surface;
+                            font-size: Tokens.font-body-medium;
+                            font-weight: Tokens.weight-strong;
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Timeout";
+                            color: Tokens.on-surface-faint;
+                            font-size: Tokens.font-meta;
+                        }
+                        Text {
+                            text: root.grub-timeout + " s";
+                            color: Tokens.on-surface;
+                            font-size: Tokens.font-body-medium;
+                            font-weight: Tokens.weight-strong;
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "etag";
+                            color: Tokens.on-surface-faint;
+                            font-size: Tokens.font-meta;
+                        }
+                        Text {
+                            text: root.grub-config-etag;
+                            color: Tokens.on-surface-muted;
+                            font-size: Tokens.font-meta;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Status cards row
+        SectionHeader { text: "STATUS"; }
+        HorizontalLayout {
+            spacing: Tokens.space-md;
+            StatusCard {
+                label: "BACKEND";
+                value: root.active-backend;
+                status: "info";
+            }
+            StatusCard {
+                label: "SECURE BOOT";
+                value: root.secure-boot-status;
+                status: root.secure-boot-status == "Enabled" ? "good"
+                    : (root.secure-boot-status == "Disabled" ? "bad"
+                    : (root.setup-mode-active ? "bad" : "neutral"));
+            }
+            StatusCard {
+                label: "MOK KEYS";
+                value: root.mok-count + " enrolled";
+                status: root.mok-count > 0 ? "good" : "neutral";
+            }
+            StatusCard {
+                label: "SNAPSHOTS";
+                value: root.snapshot-count + " saved";
+                status: "info";
+            }
+        }
+    }
+}

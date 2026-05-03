@@ -1,0 +1,53 @@
+// crates/gui/ui/components/status_card.slint
+//
+// Status indicator card. Surface-container background, semantic-coloured
+// border + value text based on `status` ("good"/"bad"/"info"/"neutral").
+// Used on Overview hero row and Secure Boot status row.
+
+import { Tokens } from "../tokens.slint";
+
+export component StatusCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> status: "neutral";
+
+    accessible-role: text;
+    accessible-label: root.label;
+    accessible-description: root.label + ": " + root.value
+        + (root.status == "good" ? " (good)"
+        : (root.status == "bad" ? " (problem)"
+        : (root.status == "info" ? " (info)" : "")));
+
+    horizontal-stretch: 1;
+    height: 80px;
+    border-radius: Tokens.radius-lg;
+    background: Tokens.surface-container;
+    border-width: 1px;
+    border-color: root.status == "good" ? Tokens.success
+        : (root.status == "bad" ? Tokens.error
+        : (root.status == "info" ? Tokens.accent-info
+        : Tokens.surface-1));
+
+    VerticalLayout {
+        padding: Tokens.space-lg;
+        spacing: Tokens.space-xs;
+        alignment: start;
+
+        Text {
+            text: root.label;
+            color: Tokens.on-surface-faint;
+            font-size: Tokens.font-meta;
+            font-weight: Tokens.weight-strong;
+        }
+
+        Text {
+            text: root.value;
+            color: root.status == "good" ? Tokens.success
+                : (root.status == "bad" ? Tokens.error
+                : (root.status == "info" ? Tokens.accent-info
+                : Tokens.on-surface));
+            font-size: 15px;
+            font-weight: Tokens.weight-strong;
+        }
+    }
+}

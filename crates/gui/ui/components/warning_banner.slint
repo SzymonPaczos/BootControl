@@ -1,0 +1,47 @@
+// crates/gui/ui/components/warning_banner.slint
+//
+// Static warning banner used at the top of dangerous pages (Security Lab,
+// Strict Mode disclosure). NOT the same as the planned dynamic InfoBar
+// (PR 4) which is a runtime-state indicator.
+
+import { Tokens } from "../tokens.slint";
+
+export component WarningBanner inherits Rectangle {
+    in property <string> message;
+
+    accessible-role: text;
+    accessible-label: "Warning";
+    accessible-description: root.message;
+
+    border-radius: Tokens.radius-md;
+    background: Tokens.surface-error-tint;
+    border-width: 1px;
+    border-color: Tokens.error;
+
+    HorizontalLayout {
+        padding-top: 14px;
+        padding-bottom: 14px;
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-lg;
+        spacing: Tokens.space-md;
+        alignment: start;
+
+        Text {
+            text: "⚠";
+            color: Tokens.error;
+            font-size: 17px;
+            font-weight: Tokens.weight-strong;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.message;
+            color: Tokens.error;
+            font-size: Tokens.font-label-large;
+            font-weight: Tokens.weight-medium;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+}
