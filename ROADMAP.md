@@ -71,6 +71,21 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 **Exit criteria:** A non-technical user can change their GRUB timeout or default OS using a point-and-click interface.
 
+### Phase 3.5 — GUI v2 Redesign (in progress)
+
+GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with backend-aware views, snapshot-backed undo, full WCAG a11y, and Cockpit-style audit transparency. Authoritative spec: [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md). Supporting docs: [`docs/UX_BRIEF.md`](./docs/UX_BRIEF.md), [`docs/UX_MAPPING.md`](./docs/UX_MAPPING.md), `docs/red-team/`.
+
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 0 | `chore(gui): slint a11y framework verification spike` | Verify 7 Slint a11y unknowns; results to `docs/slint-a11y-findings.md`; blocks PR 1 | ⏳ Pending |
+| 1 | `feat(gui): extract token system into tokens.slint` | New `crates/gui/ui/tokens.slint`; refactor `appwindow.slint` to consume; zero visual change | ⏳ Pending |
+| 2 | `feat(gui): extract reusable atoms (buttons, input, card, action-footer)` | Component decomposition step 1 | ⏳ Pending |
+| 3 | `feat(gui): introduce sidebar router; port existing 3 tabs into pages` | Sidebar + page router; existing UI lifts into 3 of 6 pages | ⏳ Pending |
+| 4 | `feat(gui): confirmation sheet, diff preview, preflight card; wire to GRUB rewrite` | First end-to-end destructive flow (rewrite-grub) | ⏳ Pending |
+| 5 | `feat(daemon): expose snapshot ops, secure boot state, entry CRUD via D-Bus` | Daemon-only PR — 7 new D-Bus methods + audit + snapshot module | ⏳ Pending |
+| 6 | `feat(gui): implement remaining pages and onboarding` | Overview / Snapshots / Logs / Settings + onboarding card | ⏳ Pending |
+| 7 | `chore(gui): wcag pass, high-contrast variant, reduced-motion` | A11y final pass | ⏳ Pending |
+
 ---
 
 ## Phase 4 — Modern Linux Boot (UKI & systemd-boot) `v2.0` ✅ Complete
@@ -210,4 +225,27 @@ These are candidates for post-v3.0 work or earlier if a contributor picks them u
 **Representative commit:** `feat(rescue): add interactive luks/btrfs recovery wizard`
 
 **Why it is in backlog:** Requires stable `--rescue` foundation (Phase 1), LUKS keymap validation (Phase 6), and careful testing against real hardware topologies. Scope is significant enough to warrant its own release phase.
+
+---
+
+### Full Keyboard-Only GUI Operation ("Gothic 2 mode")
+
+**Idea:** Make the GUI 100% operable without ever touching the mouse — not just "Tab works" (already a launch criterion per [`docs/UX_BRIEF.md`](./docs/UX_BRIEF.md) §8) but full Gothic-2-style keybindings: every page, list, dialog, and disclosure reachable through a coherent keymap with no dead ends. Power users should be able to do a full key-rotation / GRUB-rewrite / snapshot-restore cycle from the keyboard alone, faster than with the mouse.
+
+**What this means concretely beyond v2 a11y baseline:**
+
+| Capability | v2 a11y baseline | "Gothic 2 mode" goes further |
+|---|---|---|
+| Sidebar navigation | Tab + Up/Down arrows when focused | `Ctrl+1..6` direct jump + `g g` / `G` to start/end of any list (vim-style) |
+| List navigation | Tab to focus, arrows to move | `j / k` next/prev, `J / K` move-row, `/` filter, `n` next match |
+| Dialogs | Tab order, Enter=Cancel, Esc=Cancel | `Ctrl+Enter` to activate destructive (after type-to-confirm), modal-stack escape via `Esc Esc` |
+| Disclosures | Tab into, Space to expand | Single-key toggle when focused (`a` for Advanced, `s` for Strict) |
+| Action footer | Ctrl+S to apply | `Ctrl+S` apply, `Ctrl+Z` discard staged, `Ctrl+Shift+Z` redo discard |
+| Help | None | `?` opens contextual key reference for the current page |
+
+**Priority:** Low. Not urgent, not blocking, not in v2 scope. Listed because the user explicitly asked it be tracked. Implementation only after GUI v2 ships and stabilises — early bindings risk colliding with whatever Slint accelerator API matures by then.
+
+**Representative commit:** `feat(gui): full keyboard-only operation with vim-style power keymap`
+
+**Why it is in backlog:** v2 a11y baseline (UX_BRIEF §8) already requires every action to be keyboard-reachable. This entry tracks the *next layer*: making keyboard the *fast* path, not just the *possible* path. Worth doing only after the GUI is otherwise stable and the keymap can be designed once, in one pass, against the finished IA — not iterated piecemeal during initial implementation.
 

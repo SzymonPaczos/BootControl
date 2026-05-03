@@ -48,7 +48,7 @@ Naming in Unix systems is an API. These identifiers are frozen — changing them
 | systemd socket | `bootcontrold.socket` |
 | D-Bus interface | `org.bootcontrol.Manager` |
 | D-Bus error namespace | `org.bootcontrol.Error.<Variant>` |
-| Polkit Action ID | `org.bootcontrol.manage` |
+| Polkit Action IDs (5, per-intent) | `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk` (see [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md) §7; legacy `org.bootcontrol.manage` deprecated) |
 
 ### D-Bus Error Convention
 
