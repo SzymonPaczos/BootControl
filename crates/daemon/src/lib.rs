@@ -19,10 +19,13 @@
 //! | [`secureboot`] | Secure Boot utilities: NVRAM backup, MOK signing and enrollment. |
 //! | [`systemd_boot_manager`] | Filesystem read/write for systemd-boot loader entries. |
 //! | [`uki_manager`] | Filesystem read/write for `/etc/kernel/cmdline`. |
+//! | [`snapshot`] | Pre-write filesystem snapshots (PR 5). Not yet integrated into write-paths. |
+//! | [`audit`] | Structured journald audit emission (PR 5). Not yet integrated into write-paths. |
 
 #![deny(warnings)]
 #![deny(missing_docs)]
 
+pub mod audit;
 pub mod dbus_error;
 pub mod failsafe;
 pub mod grub_manager;
@@ -33,5 +36,6 @@ pub mod polkit;
 pub mod prober;
 pub mod sanitize;
 pub mod secureboot;
+pub mod snapshot;
 pub mod systemd_boot_manager;
 pub mod uki_manager;
