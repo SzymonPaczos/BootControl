@@ -30,16 +30,18 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
 #[cfg(feature = "experimental_paranoia")]
 use bootcontrol_core::secureboot::ParanoiaKeySet;
 
 use crate::{
+    audit::{self, message_ids, AuditEvent, Phase},
     dbus_error::{to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
     polkit::authorize_with_polkit,
-    sanitize,
+    sanitize, snapshot,
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
     systemd_boot_manager, uki_manager,
@@ -49,6 +51,20 @@ use crate::{
 use crate::secureboot::paranoia::{generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR};
 use tracing::{info, warn};
 use zbus::interface;
+
+/// Generate a unique job_id for an audit transaction.
+///
+/// Format: `<epoch_ns>-<pid>` — non-cryptographic uniqueness suffices since
+/// audit job ids are strictly internal correlation keys, not security tokens.
+/// A real UUID v4 dependency is deferred to a future commit; the field type
+/// is `String` so the swap is non-breaking.
+fn new_job_id() -> String {
+    let ns = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{:x}-{}", ns, std::process::id())
+}
 
 /// The D-Bus object that implements `org.bootcontrol.Manager`.
 ///
@@ -98,6 +114,13 @@ pub struct GrubManager {
     ///
     /// Production default: `/etc/kernel/cmdline`.
     kernel_cmdline_path: PathBuf,
+    /// Root directory under which pre-write snapshots are written.
+    ///
+    /// Production default: `/var/lib/bootcontrol/snapshots/`. PR 5b integrates
+    /// `snapshot::create` into the `set_grub_value` write-path. Other write
+    /// paths (`rebuild_grub_config`, systemd-boot, UKI, secureboot) integrate
+    /// in follow-up commits using this same field.
+    snapshot_root: PathBuf,
 }
 
 impl GrubManager {
@@ -132,6 +155,7 @@ impl GrubManager {
             loader_entries_dir: PathBuf::from("/boot/loader/entries"),
             loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
             kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
+            snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
         }
     }
 
@@ -173,6 +197,7 @@ impl GrubManager {
             loader_entries_dir: PathBuf::from("/boot/loader/entries"),
             loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
             kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
+            snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
         }
     }
 
@@ -217,6 +242,7 @@ impl GrubManager {
             loader_entries_dir: PathBuf::from("/boot/loader/entries"),
             loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
             kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
+            snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
         }
     }
 
@@ -241,6 +267,7 @@ impl GrubManager {
             loader_entries_dir,
             loader_conf_path,
             kernel_cmdline_path,
+            snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
         }
     }
 
@@ -382,8 +409,66 @@ impl GrubManager {
             to_daemon_error(e)
         })?;
 
-        // ── Steps 3–9: flock → ETag verify → atomic write → failsafe refresh → grub-mkconfig ──
-        grub_manager::set_grub_value(
+        // ── Step 4: Snapshot + audit Started ────────────────────────────────
+        // Per docs/GUI_V2_SPEC_v2.md §6 daemon contract: a snapshot is the
+        // pre-write covenant; if snapshotting fails the operation must abort
+        // before any disk mutation.
+        let job_id = new_job_id();
+        let target_paths = vec![self.grub_path.display().to_string()];
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_value",
+            phase: Phase::Started,
+            target_paths: target_paths.clone(),
+            etag_before: Some(etag.clone()),
+            etag_after: None,
+            snapshot_id: None,
+            exit_code: None,
+            caller_uid,
+            polkit_action: "org.bootcontrol.write-bootloader",
+            job_id: job_id.clone(),
+            stderr_tail: String::new(),
+        });
+
+        // Capture the snapshot using the caller-supplied ETag as etag_before.
+        // Race window: another process could mutate /etc/default/grub between
+        // here and grub_manager's flock acquire — but the ETag check INSIDE
+        // grub_manager::set_grub_value will reject the write with
+        // StateMismatch in that case, leaving an orphan snapshot that
+        // snapshot::reap eventually clears. Tightening this to atomic
+        // snapshot+lock requires a refactor of grub_manager into a
+        // post-flock callback, deferred to a follow-up.
+        let snap_info = snapshot::create(snapshot::SnapshotRequest {
+            root: &self.snapshot_root,
+            op: "set_grub_value",
+            polkit_action: "org.bootcontrol.write-bootloader",
+            caller_uid,
+            etag_before: &etag,
+            files: &[self.grub_path.clone()],
+            audit_job_id: &job_id,
+        })
+        .map_err(|e| {
+            warn!(error = %e, "snapshot creation failed — aborting write");
+            DaemonError::EspScanFailed(format!("snapshot failed: {}", e))
+        })?;
+
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_value",
+            phase: Phase::SnapshotTaken,
+            target_paths: target_paths.clone(),
+            etag_before: Some(etag.clone()),
+            etag_after: None,
+            snapshot_id: Some(snap_info.id.clone()),
+            exit_code: None,
+            caller_uid,
+            polkit_action: "org.bootcontrol.write-bootloader",
+            job_id: job_id.clone(),
+            stderr_tail: String::new(),
+        });
+
+        // ── Steps 5–9: flock → ETag verify → atomic write → failsafe refresh → grub-mkconfig ──
+        let result = grub_manager::set_grub_value(
             &self.grub_path,
             &key,
             &value,
@@ -391,7 +476,27 @@ impl GrubManager {
             &self.failsafe_cfg_path,
             &self.grub_cfg_path,
         )
-        .map_err(to_daemon_error)
+        .map_err(to_daemon_error);
+
+        // ── Step 10: Audit Completed ────────────────────────────────────────
+        let exit_code = if result.is_ok() { 0 } else { 1 };
+        let stderr_tail = result.as_ref().err().map(|e| e.to_string()).unwrap_or_default();
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_value",
+            phase: Phase::Completed,
+            target_paths,
+            etag_before: Some(etag),
+            etag_after: None, // post-write ETag re-read deferred to follow-up
+            snapshot_id: Some(snap_info.id),
+            exit_code: Some(exit_code),
+            caller_uid,
+            polkit_action: "org.bootcontrol.write-bootloader",
+            job_id,
+            stderr_tail,
+        });
+
+        result
     }
 
     /// Return the SHA-256 ETag of the current on-disk GRUB configuration.
