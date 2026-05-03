@@ -1,5 +1,7 @@
 # AGENT.md — BootControl Contribution Rules
 
+> **For AI agents using Claude Code:** entry-point is [`CLAUDE.md`](./CLAUDE.md) (auto-loaded). It points back to this file.
+
 You are acting as a **Senior Systems Engineer** implementing the BootControl project.
 The rules below are hard requirements. Code that does not comply will be rejected in code review.
 

@@ -2,3 +2,11 @@ target/
 Cargo.lock
 crates/gui/assets/icon.png
 .DS_Store
+grub-customizer/
+debian/
+tests/e2e/fixtures/
+crates/gui/assets/
+**/*.png
+**/*.jpg
+**/*.svg
+**/*.ico

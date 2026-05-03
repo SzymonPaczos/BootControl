@@ -709,6 +709,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bootcontrol-gui-spike"
+version = "0.1.0"
+dependencies = [
+ "slint",
+]
+
+[[package]]
 name = "bootcontrol-tui"
 version = "0.1.0"
 dependencies = [
