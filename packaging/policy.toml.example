@@ -1,0 +1,26 @@
+# BootControl runtime policy — install to /etc/bootcontrol/policy.toml
+#
+# Daemon reads this at startup. Missing file = all defaults (safest).
+# Spec: docs/GUI_V2_SPEC_v2.md §7 (Strict Mode runtime gate) and §6 (snapshots).
+
+[strict_mode]
+# Whether the GUI's Strict Mode (custom PK/KEK/db generation, PK replacement)
+# is allowed on this host. Default: false.
+# Even when the daemon was compiled with --features experimental_paranoia,
+# this gate prevents the disclosure from rendering until an operator
+# explicitly opts the host in.
+allowed = false
+
+[snapshots]
+# Retention policy. The daemon keeps the larger of the two coverage windows.
+# Default: 50 most-recent snapshots OR everything from the last 30 days.
+keep_count = 50
+keep_days = 30
+
+# Disk-pressure threshold. When /var/lib/bootcontrol/snapshots/ exceeds
+# this size, the GUI shows an InfoBar suggesting prune. Default: 1 GiB.
+disk_pressure_warning_bytes = 1073741824
+
+[audit]
+# Override journald MESSAGE_ID per op type. Leave unset to use built-in defaults.
+# message_id_rewrite_grub = "f9c8a4d2-1e6b-4c3a-9f87-aabbccddeeff"

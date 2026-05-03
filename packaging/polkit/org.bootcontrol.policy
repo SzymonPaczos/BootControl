@@ -2,14 +2,71 @@
 <!DOCTYPE policyconfig PUBLIC
   "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
   "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<!--
+  BootControl polkit actions.
+  Five per-intent actions per docs/GUI_V2_SPEC_v2.md §7.
+  auth_admin_keep is acceptable for non-irreversible actions; auth_admin
+  (every-time) is mandatory for irreversible actions.
+
+  Legacy single-action `org.bootcontrol.manage` is deprecated; daemon will
+  refuse to start if it sees a stale policy file declaring only that action.
+-->
 <policyconfig>
   <vendor>BootControl</vendor>
   <vendor_url>https://github.com/YOUR_USERNAME/bootcontrol</vendor_url>
 
-  <action id="org.bootcontrol.manage">
-    <description>Modify boot configuration</description>
-    <message>Authentication is required to modify boot configuration</message>
+  <action id="org.bootcontrol.rewrite-grub">
+    <description>Rewrite GRUB configuration</description>
+    <message>BootControl needs to rewrite GRUB configuration at /boot/grub/grub.cfg</message>
     <icon_name>system-run</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootcontrold</annotate>
+  </action>
+
+  <action id="org.bootcontrol.write-bootloader">
+    <description>Modify boot entry</description>
+    <message>BootControl needs to modify a boot entry</message>
+    <icon_name>system-run</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootcontrold</annotate>
+  </action>
+
+  <action id="org.bootcontrol.enroll-mok">
+    <description>Enroll Machine Owner Key</description>
+    <message>BootControl needs to enroll a Machine Owner Key for next boot</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootcontrold</annotate>
+  </action>
+
+  <action id="org.bootcontrol.generate-keys">
+    <description>Generate custom Secure Boot keys (Strict Mode)</description>
+    <message>BootControl needs to generate custom Secure Boot keys (Platform Key, KEK, db)</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootcontrold</annotate>
+  </action>
+
+  <action id="org.bootcontrol.replace-pk">
+    <description>REPLACE Platform Key (irreversible)</description>
+    <message>BootControl needs to REPLACE the Platform Key — this can permanently lock your firmware out of using its current Secure Boot certificates</message>
+    <icon_name>dialog-warning</icon_name>
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
