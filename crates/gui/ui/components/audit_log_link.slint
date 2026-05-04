@@ -26,11 +26,12 @@ export component AuditLogLink inherits Rectangle {
         spacing: Tokens.space-xs;
         alignment: start;
 
-        Text {
-            text: "≡";
-            color: Tokens.accent-info;
-            font-size: Tokens.font-meta;
-            vertical-alignment: center;
+        Image {
+            source: @image-url("../../assets/icons/external-link.svg");
+            width: 12px;
+            height: 12px;
+            colorize: Tokens.accent-info;
+            y: (parent.height - self.height) / 2;
         }
         Text {
             text: root.label;

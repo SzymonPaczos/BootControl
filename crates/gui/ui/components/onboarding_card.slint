@@ -79,10 +79,43 @@ export component OnboardingCard inherits Rectangle {
                 width: 220px;
                 clicked => { root.learn-more(); }
             }
-            PrimaryButton {
-                text: "Start with Boot Entries  →";
-                width: 220px;
-                clicked => { root.start-with-boot-entries(); }
+            // Start CTA — arrow-right SVG accents the verb on the right
+            Rectangle {
+                width: 240px;
+                height: Tokens.button-height-lg;
+                border-radius: Tokens.radius-md;
+                background: cta-area.pressed
+                    ? @linear-gradient(90deg, Tokens.accent 0%, Tokens.accent-secondary 100%)
+                    : @linear-gradient(90deg, Tokens.accent-secondary 0%, Tokens.accent 100%);
+
+                accessible-role: button;
+                accessible-label: "Start with Boot Entries";
+
+                animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+                HorizontalLayout {
+                    spacing: Tokens.space-sm;
+                    padding-left: Tokens.space-md;
+                    padding-right: Tokens.space-md;
+                    alignment: center;
+                    Text {
+                        text: "Start with Boot Entries";
+                        color: Tokens.on-accent;
+                        font-size: Tokens.font-body-medium;
+                        font-weight: Tokens.weight-strong;
+                        vertical-alignment: center;
+                    }
+                    Image {
+                        source: @image-url("../../assets/icons/arrow-right.svg");
+                        width: 14px;
+                        height: 14px;
+                        colorize: Tokens.on-accent;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+                cta-area := TouchArea {
+                    clicked => { root.start-with-boot-entries(); }
+                }
             }
         }
 

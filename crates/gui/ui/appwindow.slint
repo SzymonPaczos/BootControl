@@ -29,6 +29,10 @@ export { GrubEntry, DiffLine, PreflightCheck, SnapshotRow, LogRow }
 export { Tokens }
 
 // ─── Toast notification (top-level overlay — kept inline) ───────────────────
+//
+// Granite restyle (HANDOFF.md §4): bg is `surface-container-high`, role
+// colour appears as a 4 px left strip — toast reads as a notification,
+// not a banner.
 
 component ToastNotification inherits Rectangle {
     in property <string> message;
@@ -36,32 +40,63 @@ component ToastNotification inherits Rectangle {
     in property <bool> is_visible: false;
     callback dismiss;
 
+    property <color> strip-color: root.toast_type == "error"
+        ? Tokens.error
+        : (root.toast_type == "success" ? Tokens.success : Tokens.accent-info);
+
     width: 420px;
     height: 52px;
     border-radius: Tokens.radius-lg;
-    background: root.toast_type == "error"
-        ? Tokens.error
-        : (root.toast_type == "success" ? Tokens.success : Tokens.accent-info);
+    background: Tokens.surface-container-high;
+    border-width: 1px;
+    border-color: Tokens.hairline;
     opacity: root.is_visible ? 1.0 : 0.0;
+    clip: true;
 
     animate opacity { duration: Tokens.motion-medium; }
 
+    // 4 px left role strip
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 4px;
+        height: parent.height;
+        background: root.strip-color;
+    }
+
     HorizontalLayout {
-        padding: 14px;
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-md;
+        padding-top: 14px;
+        padding-bottom: 14px;
         spacing: Tokens.space-md;
         Text {
             text: root.message;
-            color: Tokens.on-accent;
+            color: Tokens.on-surface;
             font-size: Tokens.font-label-large;
-            font-weight: Tokens.weight-strong;
+            font-weight: Tokens.weight-medium;
             vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
         }
-        GhostButton {
-            text: "✕";
+        Rectangle {
             width: 24px;
-            clicked => { root.dismiss(); }
+            height: 24px;
+            border-radius: Tokens.radius-sm;
+            background: close-touch.has-hover ? Tokens.surface-1 : transparent;
+            accessible-role: button;
+            accessible-label: "Dismiss notification";
+            Image {
+                source: @image-url("../assets/icons/close.svg");
+                width: 12px;
+                height: 12px;
+                colorize: Tokens.on-surface-faint;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+            close-touch := TouchArea {
+                clicked => { root.dismiss(); }
+            }
         }
     }
 }
@@ -203,14 +238,14 @@ export component AppWindow inherits Window {
                         alignment: end;
 
                         GhostButton {
-                            text: "↻ Refresh";
-                            width: 100px;
+                            text: "Refresh";
+                            width: 110px;
                             enabled: !root.show_loading;
                             clicked => { root.fetch_entries(); }
                         }
                         GhostButton {
-                            text: "⟳ Rebuild GRUB";
-                            width: 148px;
+                            text: "Rebuild GRUB";
+                            width: 158px;
                             enabled: !root.show_loading;
                             clicked => {
                                 root.confirmation_typed_text = "";

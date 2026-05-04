@@ -19,12 +19,23 @@ export component PrimaryButton inherits Rectangle {
             ? @linear-gradient(90deg, Tokens.accent 0%, Tokens.accent-secondary 100%)
             : @linear-gradient(90deg, Tokens.accent-secondary 0%, Tokens.accent 100%))
         : Tokens.surface-1;
+    clip: true;
 
     animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
 
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
+
+    // Granite top-edge highlight — subtle white gradient mimics light
+    // hitting the top of a 3-D button without a real shadow. HANDOFF.md §4.
+    if root.enabled : Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height / 2;
+        background: @linear-gradient(180deg, #ffffff14, #ffffff00);
+    }
 
     Text {
         text: root.text;

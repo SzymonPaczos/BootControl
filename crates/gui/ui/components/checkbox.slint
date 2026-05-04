@@ -28,13 +28,13 @@ export component CheckBox inherits Rectangle {
 
             animate background, border-color { duration: Tokens.motion-fast; }
 
-            if root.checked : Text {
-                text: "✓";
-                color: Tokens.on-accent;
-                font-size: 12px;
-                font-weight: Tokens.weight-strong;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+            if root.checked : Image {
+                source: @image-url("../../assets/icons/check.svg");
+                width: 14px;
+                height: 14px;
+                colorize: Tokens.on-accent;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
             }
         }
 

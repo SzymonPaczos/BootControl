@@ -21,6 +21,21 @@ export component LoadingBar inherits Rectangle {
 
     animate height { duration: Tokens.reduced-motion ? 0ms : 180ms; easing: ease-in-out; }
 
+    // Granite: a thin sapphire bar along the top edge marks active state.
+    // A true indeterminate sweep needs a Timer-driven property — deferred
+    // to a follow-up; Granite v1 ships the static accent line.
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: 2px;
+        background: @linear-gradient(90deg,
+            #ffffff00 0%,
+            Tokens.accent 30%,
+            Tokens.accent-secondary 70%,
+            #ffffff00 100%);
+    }
+
     HorizontalLayout {
         padding-left: Tokens.space-lg;
         padding-right: Tokens.space-lg;
@@ -28,15 +43,8 @@ export component LoadingBar inherits Rectangle {
         alignment: start;
 
         Text {
-            text: "⏳";
-            color: Tokens.accent-info;
-            font-size: 15px;
-            vertical-alignment: center;
-        }
-
-        Text {
             text: root.message;
-            color: Tokens.on-surface;
+            color: Tokens.on-surface-muted;
             font-size: Tokens.font-label-large;
             font-weight: Tokens.weight-medium;
             vertical-alignment: center;

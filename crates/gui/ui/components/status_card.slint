@@ -1,8 +1,10 @@
 // crates/gui/ui/components/status_card.slint
 //
-// Status indicator card. Surface-container background, semantic-coloured
-// border + value text based on `status` ("good"/"bad"/"info"/"neutral").
-// Used on Overview hero row and Secure Boot status row.
+// Status indicator card. Granite restyle (HANDOFF.md §4):
+//   - Border becomes the neutral `hairline` token (no longer state-coloured)
+//   - Status surfaces as an 8 px dot in the top-right corner with a
+//     12 × 12 transparent ring (Slint substitute for the box-shadow halo)
+//   - Value text colour still tracks status for emphasis
 
 import { Tokens } from "../tokens.slint";
 
@@ -10,6 +12,11 @@ export component StatusCard inherits Rectangle {
     in property <string> label;
     in property <string> value;
     in property <string> status: "neutral";
+
+    property <color> dot-color: root.status == "good" ? Tokens.success
+        : (root.status == "bad" ? Tokens.error
+        : (root.status == "info" ? Tokens.accent-info
+        : Tokens.on-surface-faint));
 
     accessible-role: text;
     accessible-label: root.label;
@@ -19,14 +26,11 @@ export component StatusCard inherits Rectangle {
         : (root.status == "info" ? " (info)" : "")));
 
     horizontal-stretch: 1;
-    height: 80px;
+    height: 84px;
     border-radius: Tokens.radius-lg;
     background: Tokens.surface-container;
     border-width: 1px;
-    border-color: root.status == "good" ? Tokens.success
-        : (root.status == "bad" ? Tokens.error
-        : (root.status == "info" ? Tokens.accent-info
-        : Tokens.surface-1));
+    border-color: Tokens.hairline;
 
     VerticalLayout {
         padding: Tokens.space-lg;
@@ -49,5 +53,26 @@ export component StatusCard inherits Rectangle {
             font-size: 15px;
             font-weight: Tokens.weight-strong;
         }
+    }
+
+    // Halo ring (12 × 12 transparent + colour-tinted at 24% alpha)
+    Rectangle {
+        x: parent.width - self.width - Tokens.space-md;
+        y: Tokens.space-md;
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        background: root.dot-color;
+        opacity: 0.22;
+    }
+
+    // Solid dot
+    Rectangle {
+        x: parent.width - self.width - Tokens.space-md - 2px;
+        y: Tokens.space-md + 2px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: root.dot-color;
     }
 }

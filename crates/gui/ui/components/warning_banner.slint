@@ -1,8 +1,9 @@
 // crates/gui/ui/components/warning_banner.slint
 //
 // Static warning banner used at the top of dangerous pages (Security Lab,
-// Strict Mode disclosure). NOT the same as the planned dynamic InfoBar
-// (PR 4) which is a runtime-state indicator.
+// Strict Mode disclosure). Granite restyle: surface-container ground +
+// 3 px left error stripe + colorized warning SVG (matches info_bar pattern).
+// HANDOFF.md §4 (info_bar) — warning_banner inherits the same treatment.
 
 import { Tokens } from "../tokens.slint";
 
@@ -14,9 +15,18 @@ export component WarningBanner inherits Rectangle {
     accessible-description: root.message;
 
     border-radius: Tokens.radius-md;
-    background: Tokens.surface-error-tint;
+    background: Tokens.surface-container;
     border-width: 1px;
-    border-color: Tokens.error;
+    border-color: Tokens.hairline;
+    clip: true;
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 3px;
+        height: parent.height;
+        background: Tokens.error;
+    }
 
     HorizontalLayout {
         padding-top: 14px;
@@ -26,17 +36,17 @@ export component WarningBanner inherits Rectangle {
         spacing: Tokens.space-md;
         alignment: start;
 
-        Text {
-            text: "⚠";
-            color: Tokens.error;
-            font-size: 17px;
-            font-weight: Tokens.weight-strong;
-            vertical-alignment: center;
+        Image {
+            source: @image-url("../../assets/icons/warning.svg");
+            width: 18px;
+            height: 18px;
+            colorize: Tokens.error;
+            y: 1px;
         }
 
         Text {
             text: root.message;
-            color: Tokens.error;
+            color: Tokens.on-surface;
             font-size: Tokens.font-label-large;
             font-weight: Tokens.weight-medium;
             vertical-alignment: center;
