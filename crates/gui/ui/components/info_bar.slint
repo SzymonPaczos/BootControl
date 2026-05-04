@@ -1,14 +1,17 @@
 // crates/gui/ui/components/info_bar.slint
 //
-// Persistent app/system state banner. Severity-coloured background + verb
-// action affordances. Persists until dismissed or page navigated-away
-// (docs/GUI_V2_SPEC_v2.md §2 Q8 verdict + §13).
+// Persistent app/system state banner. Granite restyle:
+//   - background is `surface-container` (no longer tinted by severity —
+//     too noisy at scale)
+//   - 3 px left accent stripe carries the severity colour
+//   - icon is a colorized SVG matching the stripe
+// docs/GUI_V2_SPEC_v2.md §2 Q8 verdict + §13; HANDOFF.md §4 (info_bar).
 //
 // Live-region announce: Slint 1.14 has no AT-SPI live regions
 // (docs/slint-a11y-findings.md Q3). The `announce-on-show` callback fires
 // when `severity != "none"` transitions in; the parent runs a focus-jiggle
 // pattern from Rust: briefly focus a hidden Text whose accessible-description
-// equals the message, then restore focus. PR 6 wires the Rust side.
+// equals the message, then restore focus.
 
 import { Tokens } from "../tokens.slint";
 import { GhostButton } from "ghost_button.slint";
@@ -20,12 +23,16 @@ export component InfoBar inherits Rectangle {
     callback dismiss();
     callback announce-on-show();
 
-    height: root.severity == "none" ? 0px : 48px;
-    border-radius: Tokens.radius-md;
-    background: root.severity == "warning" ? Tokens.warning
+    property <color> stripe-color: root.severity == "warning" ? Tokens.warning
         : (root.severity == "error" ? Tokens.error
         : (root.severity == "success" ? Tokens.success
-        : (root.severity == "info" ? Tokens.info : transparent)));
+        : (root.severity == "info" ? Tokens.info : Tokens.surface-2)));
+
+    height: root.severity == "none" ? 0px : 48px;
+    border-radius: Tokens.radius-md;
+    background: Tokens.surface-container;
+    border-width: 1px;
+    border-color: Tokens.hairline;
     clip: true;
 
     accessible-role: text;
@@ -34,26 +41,35 @@ export component InfoBar inherits Rectangle {
 
     animate height { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-medium; easing: ease-in-out; }
 
+    // 3 px left accent stripe (Granite signature for state banners)
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 3px;
+        height: parent.height;
+        background: root.stripe-color;
+    }
+
     HorizontalLayout {
         padding-left: Tokens.space-lg;
         padding-right: Tokens.space-lg;
         spacing: Tokens.space-md;
         alignment: stretch;
 
-        Text {
-            text: root.severity == "warning" ? "⚠"
-                : (root.severity == "error" ? "✕"
-                : (root.severity == "success" ? "✓"
-                : (root.severity == "info" ? "ℹ" : "")));
-            color: Tokens.on-accent;
-            font-size: 16px;
-            font-weight: Tokens.weight-strong;
-            vertical-alignment: center;
+        Image {
+            source: root.severity == "warning" ? @image-url("../../assets/icons/warning.svg")
+                : (root.severity == "error" ? @image-url("../../assets/icons/error.svg")
+                : (root.severity == "success" ? @image-url("../../assets/icons/check.svg")
+                : @image-url("../../assets/icons/info.svg")));
+            width: 16px;
+            height: 16px;
+            colorize: root.stripe-color;
+            y: (parent.height - self.height) / 2;
         }
 
         Text {
             text: root.message;
-            color: Tokens.on-accent;
+            color: Tokens.on-surface;
             font-size: Tokens.font-label-large;
             font-weight: Tokens.weight-medium;
             vertical-alignment: center;
@@ -63,8 +79,8 @@ export component InfoBar inherits Rectangle {
         }
 
         if root.dismissible : GhostButton {
-            text: "✕";
-            width: 32px;
+            text: "Dismiss";
+            width: 80px;
             clicked => { root.dismiss(); }
         }
     }

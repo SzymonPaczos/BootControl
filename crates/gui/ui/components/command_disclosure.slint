@@ -33,8 +33,17 @@ export component CommandDisclosure inherits Rectangle {
             HorizontalLayout {
                 spacing: Tokens.space-sm;
                 alignment: start;
+                Image {
+                    source: root.expanded
+                        ? @image-url("../../assets/icons/chevron-down.svg")
+                        : @image-url("../../assets/icons/chevron-right.svg");
+                    width: 12px;
+                    height: 12px;
+                    colorize: Tokens.on-surface-faint;
+                    y: (parent.height - self.height) / 2;
+                }
                 Text {
-                    text: root.expanded ? "▾ Command" : "▸ Command";
+                    text: "Command";
                     color: Tokens.on-surface-faint;
                     font-size: Tokens.font-meta;
                     font-weight: Tokens.weight-strong;

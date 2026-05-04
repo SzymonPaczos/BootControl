@@ -13,9 +13,28 @@ import { Tokens } from "../tokens.slint";
 export component Card inherits Rectangle {
     in property <string> title;
     in property <string> subtitle;
+    // raised: card_raised variant — adds a 1.5% white inner gradient on
+    // the top edge to read as elevated. Used for hero cards (Overview,
+    // Secure Boot main panel). HANDOFF.md §4.
+    in property <bool> raised: false;
 
     background: Tokens.surface-container;
     border-radius: Tokens.radius-card;
+    // Granite hairline — every card carries a 1 px border so cards no
+    // longer read as undifferentiated voids on the page. HANDOFF.md §4.
+    border-width: 1px;
+    border-color: Tokens.hairline;
+    clip: true;
+
+    // Optional top-edge highlight for raised variant (Slint has no
+    // box-shadow; we layer a gradient strip inside the rounded rect).
+    if root.raised : Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: 1px;
+        background: @linear-gradient(180deg, #ffffff15, #ffffff00);
+    }
 
     VerticalLayout {
         padding: Tokens.space-lg;

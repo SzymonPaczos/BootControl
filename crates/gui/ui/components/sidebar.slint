@@ -1,19 +1,28 @@
 // crates/gui/ui/components/sidebar.slint
 //
 // Left navigation rail. v2 spec §3 IA: 6 items + footer Settings.
-//   0 Overview      — at-a-glance status
-//   1 Boot Entries  — list of menu entries (currently flat key=value, evolves PR 7)
-//   2 Bootloader    — typed GRUB settings (placeholder in PR 6)
-//   3 Secure Boot   — state + MOK + Strict Mode disclosure
-//   4 Snapshots     — pre-write snapshot list, restore
-//   5 Logs          — journald audit viewer
-//   6 Settings      — footer item (preferences)
+// Granite restyle (HANDOFF.md §4):
+//   - Brand block: 32×32 rounded square with sapphire gradient + B avatar,
+//     wordmark "BootControl" + v0.1 chip
+//   - "SYSTEM" section label above the nav list
+//   - Each item gets a 16 px nav glyph (overview / list / cpu / shield /
+//     layers / scroll / settings)
+//   - Item height tightened to Tokens.sidebar-item-height (40 px Granite vs 48 v1)
+//
+// Mapping:
+//   0 Overview      — overview.svg
+//   1 Boot Entries  — list.svg
+//   2 Bootloader    — cpu.svg
+//   3 Secure Boot   — shield.svg
+//   4 Snapshots     — layers.svg
+//   5 Logs          — scroll.svg
+//   6 Settings      — settings.svg (footer)
 
 import { Tokens } from "../tokens.slint";
 
 component SidebarItem inherits Rectangle {
     in property <string> text;
-    in property <string> icon;
+    in property <image> glyph;
     in property <bool> active: false;
     callback clicked <=> touch.clicked;
 
@@ -34,15 +43,25 @@ component SidebarItem inherits Rectangle {
         spacing: Tokens.space-md;
         alignment: start;
 
+        // Active marker (4 px sapphire bar on left)
         Rectangle {
             width: 4px;
             height: 20px;
             background: root.active ? Tokens.accent-info : transparent;
             border-radius: 2px;
+            y: (parent.height - self.height) / 2;
+        }
+
+        Image {
+            source: root.glyph;
+            width: 16px;
+            height: 16px;
+            colorize: root.active ? Tokens.accent-info : Tokens.on-surface-dim;
+            y: (parent.height - self.height) / 2;
         }
 
         Text {
-            text: root.icon != "" ? (root.icon + " " + root.text) : root.text;
+            text: root.text;
             color: root.active ? Tokens.accent-info : Tokens.on-surface-dim;
             font-size: Tokens.font-body-medium;
             font-weight: root.active ? Tokens.weight-strong : Tokens.weight-label;
@@ -63,60 +82,104 @@ export component Sidebar inherits Rectangle {
         spacing: Tokens.space-sm;
         alignment: start;
 
-        Text {
-            text: "BootControl";
-            font-size: Tokens.font-title-large;
-            font-weight: Tokens.weight-display;
-            color: Tokens.on-surface;
+        // ── Brand block ──────────────────────────────────────────────────
+        HorizontalLayout {
+            spacing: Tokens.space-md;
+            alignment: start;
+
+            // Sapphire-gradient avatar with "B"
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: Tokens.radius-md;
+                background: @linear-gradient(135deg, Tokens.accent 0%, Tokens.accent-secondary 100%);
+                Text {
+                    text: "B";
+                    color: Tokens.on-accent;
+                    font-size: 18px;
+                    font-weight: Tokens.weight-display;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 0px;
+                Text {
+                    text: "BootControl";
+                    font-size: 15px;
+                    font-weight: Tokens.weight-strong;
+                    color: Tokens.on-surface;
+                }
+                Text {
+                    text: "v0.1";
+                    font-size: Tokens.font-meta;
+                    font-weight: Tokens.weight-label;
+                    color: Tokens.on-surface-faint;
+                }
+            }
         }
 
-        Rectangle { height: Tokens.space-lg; }
+        Rectangle { height: Tokens.space-xl; }
 
+        // ── SYSTEM section label ─────────────────────────────────────────
+        Text {
+            text: "SYSTEM";
+            color: Tokens.on-surface-faint;
+            font-size: Tokens.font-meta;
+            font-weight: Tokens.weight-strong;
+            // letter-spacing not exposed in Slint 1.14; rely on weight + size for caps emphasis
+        }
+
+        Rectangle { height: Tokens.space-xs; }
+
+        // ── Nav items ────────────────────────────────────────────────────
         SidebarItem {
             text: "Overview";
+            glyph: @image-url("../../assets/icons/overview.svg");
             active: root.active-tab == 0;
             clicked => { root.active-tab = 0; }
         }
         SidebarItem {
             text: "Boot Entries";
+            glyph: @image-url("../../assets/icons/list.svg");
             active: root.active-tab == 1;
             clicked => { root.active-tab = 1; }
         }
         SidebarItem {
             text: "Bootloader";
+            glyph: @image-url("../../assets/icons/cpu.svg");
             active: root.active-tab == 2;
             clicked => { root.active-tab = 2; }
         }
         SidebarItem {
             text: "Secure Boot";
+            glyph: @image-url("../../assets/icons/shield.svg");
             active: root.active-tab == 3;
             clicked => { root.active-tab = 3; }
         }
         SidebarItem {
             text: "Snapshots";
+            glyph: @image-url("../../assets/icons/layers.svg");
             active: root.active-tab == 4;
             clicked => { root.active-tab = 4; }
         }
         SidebarItem {
             text: "Logs";
+            glyph: @image-url("../../assets/icons/scroll.svg");
             active: root.active-tab == 5;
             clicked => { root.active-tab = 5; }
         }
 
         Rectangle { vertical-stretch: 1; }
 
-        // Footer Settings (still binds to active-tab)
+        // ── Footer Settings ──────────────────────────────────────────────
         SidebarItem {
             text: "Settings";
-            icon: "⚙";
+            glyph: @image-url("../../assets/icons/settings.svg");
             active: root.active-tab == 6;
             clicked => { root.active-tab = 6; }
-        }
-
-        Text {
-            text: "v1.0.0-alpha";
-            color: Tokens.surface-2;
-            font-size: Tokens.font-meta;
         }
     }
 }

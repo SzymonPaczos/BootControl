@@ -57,62 +57,98 @@ export component ConfirmationSheet inherits Rectangle {
         }
     }
 
-    // Sheet panel
+    // Sheet panel — Granite restyle (HANDOFF.md §4):
+    //   - Header: 36×36 rounded-square icon box with error-tinted bg +
+    //     warning glyph, then verb-label and restated target
+    //   - Body order: Preflight → Diff → Snapshot → Type-to-confirm → CLI →
+    //     recovery footer (per HANDOFF UX rationale: "putting preflight
+    //     above type-to-confirm reduces click-fatigue confirmation and
+    //     makes the danger reading-time-bound")
+    //   - Footer status text on the left, Cancel + danger verb on the right
+    //   - 640 px wide (was 480; HANDOFF wireframe §5)
     Rectangle {
-        width: 480px;
+        width: 640px;
         height: sheet-content.preferred-height;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
         background: Tokens.surface-container;
         border-radius: Tokens.radius-card;
         border-width: 1px;
-        border-color: Tokens.surface-1;
+        border-color: Tokens.hairline;
+        clip: true;
 
         sheet-content := VerticalLayout {
             padding: Tokens.space-xl;
             spacing: Tokens.space-md;
 
-            // Verb-labelled title
-            Text {
-                text: root.verb-label;
-                color: Tokens.on-surface;
-                font-size: Tokens.font-title-large;
-                font-weight: Tokens.weight-strong;
+            // ── Header — icon box + verb + target ────────────────────────
+            HorizontalLayout {
+                spacing: Tokens.space-md;
+                alignment: start;
+
+                Rectangle {
+                    width: 36px;
+                    height: 36px;
+                    border-radius: Tokens.radius-md;
+                    background: Tokens.surface-error-tint;
+                    border-width: 1px;
+                    border-color: Tokens.error;
+                    Image {
+                        source: @image-url("../../assets/icons/warning.svg");
+                        width: 18px;
+                        height: 18px;
+                        colorize: Tokens.error;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: root.verb-label;
+                        color: Tokens.on-surface;
+                        font-size: Tokens.font-title-large;
+                        font-weight: Tokens.weight-strong;
+                    }
+                    if root.restated-target != "" : Text {
+                        text: root.restated-target;
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-meta;
+                        wrap: word-wrap;
+                    }
+                }
             }
 
-            // Restated target
-            if root.restated-target != "" : Text {
-                text: root.restated-target;
-                color: Tokens.on-surface-muted;
-                font-size: Tokens.font-label-large;
-                wrap: word-wrap;
+            // Hairline divider
+            Rectangle {
+                height: 1px;
+                background: Tokens.hairline;
             }
 
-            // Diff preview (only when non-empty)
-            if root.diff.length > 0 : DiffPreview {
-                lines: root.diff;
-            }
+            // ── Body — Granite order: Preflight → Diff → Snapshot → Type → CLI ──
 
-            // Pre-flight checks (only when present)
+            // 1. Pre-flight checks (must reach all-pass before button enables)
             if root.preflight.length > 0 : PreflightCard {
                 checks: root.preflight;
             }
 
-            // Snapshot statement
+            // 2. Diff preview
+            if root.diff.length > 0 : DiffPreview {
+                lines: root.diff;
+            }
+
+            // 3. Snapshot statement
             if root.snapshot-id != "" : Text {
-                text: "A snapshot will be saved as " + root.snapshot-id + " before this runs.";
+                text: "Auto snapshot " + root.snapshot-id + " will be taken before this runs.";
                 color: Tokens.on-surface-faint;
                 font-size: Tokens.font-meta;
                 wrap: word-wrap;
             }
 
-            // CLI parity disclosure
-            if root.command-cli != "" : CommandDisclosure {
-                command: root.command-cli;
-                copy => { root.copy-command(); }
-            }
-
-            // Type-to-confirm input (when required)
+            // 4. Type-to-confirm input (when required)
             if root.required-confirm-text != "" : VerticalLayout {
                 spacing: Tokens.space-xs;
                 Text {
@@ -125,6 +161,12 @@ export component ConfirmationSheet inherits Rectangle {
                 }
             }
 
+            // 5. CLI parity disclosure (collapsed by default)
+            if root.command-cli != "" : CommandDisclosure {
+                command: root.command-cli;
+                copy => { root.copy-command(); }
+            }
+
             // Recovery footer
             Text {
                 text: root.recovery-note;
@@ -133,19 +175,33 @@ export component ConfirmationSheet inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            // Footer buttons
+            // Hairline divider above footer
+            Rectangle {
+                height: 1px;
+                background: Tokens.hairline;
+            }
+
+            // Footer — left: status text. right: Cancel + danger verb.
             HorizontalLayout {
-                spacing: Tokens.space-xl;  // 24 px gap between Cancel and Destructive (spec §6.3)
+                spacing: Tokens.space-md;
                 alignment: stretch;
+                Text {
+                    text: root.preflight-all-pass
+                        ? "All preflight checks passed."
+                        : "Preflight running…";
+                    color: root.preflight-all-pass ? Tokens.success : Tokens.on-surface-muted;
+                    font-size: Tokens.font-meta;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
                 GhostButton {
                     text: "Cancel";
                     width: 120px;
                     clicked => { root.cancel(); }
                 }
-                Rectangle { horizontal-stretch: 1; }
                 DangerButton {
                     text: root.verb-label;
-                    width: 200px;
+                    width: 220px;
                     enabled: root.preflight-all-pass
                         && (root.required-confirm-text == "" || root.typed-text == root.required-confirm-text);
                     clicked => { root.confirm(); }

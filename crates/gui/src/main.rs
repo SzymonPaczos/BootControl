@@ -3,6 +3,15 @@ slint::include_modules!();
 use bootcontrol_gui::view_model::ViewModel;
 use tokio::sync::mpsc;
 
+// PR Granite: bundled fonts. Files are searched at startup; if missing
+// the GUI falls back silently to the system font stack declared on
+// `AppWindow.default-font-family` in appwindow.slint. See
+// `crates/gui/assets/fonts/README.md` for installation instructions.
+const BUNDLED_FONTS: &[&str] = &[
+    "Inter-VariableFont.ttf",
+    "JetBrainsMono-Regular.ttf",
+];
+
 enum UiMessage {
     FetchEntries,
     SaveEntry(String, String),
@@ -15,6 +24,11 @@ enum UiMessage {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Register bundled fonts BEFORE constructing the AppWindow so they
+    // are picked up by the first paint. Failures are non-fatal (fallback
+    // to system stack — see appwindow.slint default-font-family).
+    register_bundled_fonts();
+
     let ui = AppWindow::new()?;
 
     let (tx, mut rx) = mpsc::channel::<UiMessage>(32);
@@ -246,6 +260,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         || kde_high_contrast_active()
     {
         apply_high_contrast(&ui);
+    }
+
+    // PR Granite: light-mode opt-in via env var. Settings UI button wiring
+    // lands in a follow-up; persistent storage in
+    // ~/.config/bootcontrol/settings.toml.
+    if std::env::var("BOOTCONTROL_THEME").map(|v| v == "light").unwrap_or(false) {
+        apply_light_palette(&ui);
     }
 
     // Initialize Backend (D-Bus on Linux, Mock on others or if BOOTCONTROL_DEMO=1)
@@ -497,6 +518,79 @@ fn populate_demo_data(ui: &AppWindow) {
     // Settings demo defaults (already have defaults from .slint, this is
     // explicit for clarity).
     ui.set_settings_strict_mode_allowed(false);
+}
+
+// ── PR Granite: bundled font registration ──────────────────────────────────
+
+fn register_bundled_fonts() {
+    // Slint 1.8 does not expose a stable runtime font-registration API;
+    // bundled font files therefore rely on the OS having them installed.
+    // The `default-font-family: "Inter, …"` declaration on AppWindow
+    // resolves through the system stack — drop the .ttf into:
+    //   - Linux:  ~/.local/share/fonts/  then run `fc-cache -f`
+    //   - macOS:  ~/Library/Fonts/
+    //   - Windows: install via Settings → Personalization → Fonts
+    //
+    // Source files are listed in `BUNDLED_FONTS` and instructions for
+    // downloading them live in `crates/gui/assets/fonts/README.md`.
+    // This function exists as a hook for the future: when Slint adds a
+    // public `slint::register_font_from_path()` (open issue at the time
+    // of writing) we wire it here without touching call-sites.
+    let _ = BUNDLED_FONTS;
+}
+
+// ── PR Granite: light palette swap ─────────────────────────────────────────
+//
+// Hex values mirror tokens.slint `LightPalette` global. The .slint side
+// declares them as `out property` (read-only from Rust); duplicating here
+// keeps the swap a single batch of `set_*` calls without a generated
+// getter dance. Drift risk is mitigated by re-running the design audit
+// (HANDOFF.md §6 light table) when either side changes.
+
+fn apply_light_palette(ui: &AppWindow) {
+    let t = ui.global::<Tokens>();
+    let c = |r: u8, g: u8, b: u8| slint::Color::from_rgb_u8(r, g, b);
+
+    t.set_high_contrast(false);
+
+    // Surfaces
+    t.set_surface(c(0xf6, 0xf6, 0xf8));
+    t.set_surface_container(c(0xec, 0xec, 0xef));
+    t.set_surface_container_high(c(0xe2, 0xe3, 0xe8));
+    t.set_surface_1(c(0xd6, 0xd8, 0xde));
+    t.set_surface_2(c(0xc9, 0xcc, 0xd3));
+    t.set_surface_3(c(0xb8, 0xbb, 0xc3));
+    t.set_surface_error_tint(c(0xf7, 0xe3, 0xdf));
+    t.set_surface_error_tint_strong(c(0xf1, 0xcd, 0xc6));
+
+    // Text
+    t.set_on_surface(c(0x16, 0x18, 0x21));
+    t.set_on_surface_muted(c(0x3d, 0x41, 0x50));
+    t.set_on_surface_dim(c(0x5a, 0x5e, 0x6c));
+    t.set_on_surface_faint(c(0x76, 0x79, 0x88));
+    t.set_on_surface_disabled(c(0x92, 0x95, 0xa0));
+
+    // Accent (darker sapphire on light to keep AA ratios)
+    t.set_accent(c(0x2c, 0x6d, 0xa6));
+    t.set_accent_secondary(c(0x4f, 0x8e, 0xc1));
+    t.set_accent_info(c(0x2c, 0x6d, 0xa6));
+    t.set_on_accent(c(0xff, 0xff, 0xff));
+
+    // Semantic
+    t.set_info(c(0x2c, 0x6d, 0xa6));
+    t.set_success(c(0x2f, 0x7d, 0x4f));
+    t.set_warning(c(0x8a, 0x5e, 0x1c));
+    t.set_warning_soft(c(0xa4, 0x7b, 0x2c));
+    t.set_error(c(0xb0, 0x3a, 0x2c));
+    t.set_on_error(c(0xff, 0xff, 0xff));
+
+    // Focus ring
+    t.set_focus_ring_outer(c(0xff, 0xff, 0xff));
+    t.set_focus_ring_inner(c(0x2c, 0x6d, 0xa6));
+
+    // Hairlines
+    t.set_hairline(c(0xd4, 0xd6, 0xdc));
+    t.set_hairline_strong(c(0xb9, 0xbc, 0xc4));
 }
 
 // ── PR 7b: best-effort desktop a11y hint detection ──────────────────────────
