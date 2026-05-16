@@ -20,6 +20,8 @@ enum UiMessage {
     EnrollMok,
     GenerateParanoia,
     MergeParanoia,
+    FetchSnapshots,
+    RestoreSnapshot(String),
 }
 
 #[tokio::main]
@@ -135,13 +137,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ui_handle = ui.as_weak();
         let tx = tx.clone();
         move || {
-            let verb = ui_handle
+            let (verb, snapshot_id) = ui_handle
                 .upgrade()
-                .map(|ui| ui.get_confirmation_verb().to_string())
+                .map(|ui| {
+                    (
+                        ui.get_confirmation_verb().to_string(),
+                        ui.get_confirmation_snapshot_id().to_string(),
+                    )
+                })
                 .unwrap_or_default();
             match verb.as_str() {
                 "Rewrite GRUB" => {
                     let _ = tx.blocking_send(UiMessage::RebuildGrub);
+                }
+                "Restore Snapshot" => {
+                    let _ = tx.blocking_send(UiMessage::RestoreSnapshot(snapshot_id));
                 }
                 other => {
                     eprintln!("[gui] confirmation_confirmed: unhandled verb {:?}", other);
@@ -183,9 +193,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    ui.on_restore_snapshot(|id: slint::SharedString| {
-        // PR 6 stub. PR 5b daemon `restore_snapshot(id)` D-Bus call wires here.
-        eprintln!("[gui] restore snapshot requested: {}", id);
+    ui.on_restore_snapshot({
+        let ui_handle = ui.as_weak();
+        move |id: slint::SharedString| {
+            // Restore is destructive — route through the confirmation sheet
+            // and require type-to-confirm before dispatching the daemon RPC.
+            // The `Restore Snapshot` branch of `on_confirmation_confirmed`
+            // reads back `confirmation_snapshot_id` set here.
+            let id_str = id.to_string();
+            let _ = ui_handle.upgrade_in_event_loop(move |ui| {
+                ui.set_confirmation_verb("Restore Snapshot".into());
+                ui.set_confirmation_target(
+                    format!("Will overwrite every file captured in snapshot {id_str}.").into(),
+                );
+                ui.set_confirmation_required_text("restore".into());
+                ui.set_confirmation_command_cli(
+                    format!("bootcontrol snapshot restore {id_str}").into(),
+                );
+                ui.set_confirmation_snapshot_id(id_str.into());
+                ui.set_confirmation_typed_text("".into());
+
+                // PR 6: real diff/preflight from the daemon land in the next
+                // commit. For now show an empty diff and a single passing
+                // preflight row so the sheet renders consistently.
+                ui.set_confirmation_diff(slint::ModelRc::new(slint::VecModel::<DiffLine>::from(
+                    Vec::<DiffLine>::new(),
+                )));
+                ui.set_confirmation_preflight_all_pass(true);
+                ui.set_confirmation_preflight(slint::ModelRc::new(slint::VecModel::<PreflightCheck>::from(
+                    Vec::<PreflightCheck>::new(),
+                )));
+
+                ui.set_show_confirmation(true);
+            });
+        }
     });
 
     ui.on_open_recovery_viewer({
@@ -282,8 +323,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         populate_demo_data(&ui);
     }
 
-    // Initial fetch
+    // Initial fetch — pull GRUB entries and the snapshot list together so
+    // both pages have live data on first paint.
     let _ = tx_clone.send(UiMessage::FetchEntries).await;
+    let _ = tx_clone.send(UiMessage::FetchSnapshots).await;
 
     // Spawn async backend task
     let ui_handle_async = ui.as_weak();
@@ -414,6 +457,70 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Err(e) => {
                             set_loading(&ui_handle_async, false, String::new());
                             show_toast(&ui_handle_async, format!("Merge failed: {}", bootcontrol_client::dbus_error_message(&e)), "error");
+                        }
+                    }
+                }
+                UiMessage::FetchSnapshots => {
+                    match view_model.list_snapshots().await {
+                        Ok(snaps) => {
+                            let rows: Vec<SnapshotRow> = snaps
+                                .into_iter()
+                                .map(|s| SnapshotRow {
+                                    id: s.id.into(),
+                                    op: s.op.into(),
+                                    ts: s.ts.into(),
+                                    audit_job_id: s.audit_job_id.into(),
+                                })
+                                .collect();
+                            let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
+                                let model = std::rc::Rc::new(slint::VecModel::from(rows));
+                                ui.set_snapshot_rows(model.into());
+                            });
+                        }
+                        Err(e) => {
+                            // Snapshot listing failures are non-fatal; surface
+                            // a toast and leave the existing rows intact.
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Failed to list snapshots: {}",
+                                    bootcontrol_client::dbus_error_message(&e),
+                                ),
+                                "error",
+                            );
+                        }
+                    }
+                }
+                UiMessage::RestoreSnapshot(id) => {
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        format!("Restoring snapshot {}...", id),
+                    );
+                    match view_model.restore_snapshot(&id).await {
+                        Ok(_) => {
+                            set_loading(&ui_handle_async, false, String::new());
+                            show_toast(
+                                &ui_handle_async,
+                                format!("Snapshot {} restored", id),
+                                "success",
+                            );
+                            // Refresh both views — restored files change
+                            // GRUB entries; the snapshot itself stays in
+                            // the list but the audit log now has a new row.
+                            let _ = tx_clone.send(UiMessage::FetchEntries).await;
+                            let _ = tx_clone.send(UiMessage::FetchSnapshots).await;
+                        }
+                        Err(e) => {
+                            set_loading(&ui_handle_async, false, String::new());
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Restore failed: {}",
+                                    bootcontrol_client::dbus_error_message(&e),
+                                ),
+                                "error",
+                            );
                         }
                     }
                 }
