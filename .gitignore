@@ -2,3 +2,5 @@
 **/*.rs.bk
 .env
 grub-customizer/
+.DS_Store
+**/.DS_Store
