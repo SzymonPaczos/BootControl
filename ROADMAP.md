@@ -3,7 +3,7 @@
 This document tracks the full development plan from initial scaffolding to a feature-complete release.
 Each version represents a stable, shippable milestone. Work within a version is ordered as Pull Requests.
 
-> **Current status:** Alpha — v0.1.0 in development. Phases 0–5 are complete. Phase 6 is not yet started. Phases 7–8 are not yet started.
+> **Current status:** Alpha — v0.1.0 in development. Phases 0–5 are complete (including Phase 3.5 GUI v2 redesign and the Granite visual pass). Phase 6 is not yet started. Phases 7–8 are not yet started.
 
 ---
 
@@ -71,20 +71,18 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 **Exit criteria:** A non-technical user can change their GRUB timeout or default OS using a point-and-click interface.
 
-### Phase 3.5 — GUI v2 Redesign (in progress)
+### Phase 3.5 — GUI v2 Redesign ✅ Complete
 
-GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with backend-aware views, snapshot-backed undo, full WCAG a11y, and Cockpit-style audit transparency. Authoritative spec: [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md). Supporting docs: [`docs/UX_BRIEF.md`](./docs/UX_BRIEF.md), [`docs/UX_MAPPING.md`](./docs/UX_MAPPING.md), `docs/red-team/`.
+GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with backend-aware views, snapshot-backed undo, full WCAG a11y, and Cockpit-style audit transparency. Authoritative spec: [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md). Supporting docs: [`docs/UX_BRIEF.md`](./docs/UX_BRIEF.md), [`docs/UX_MAPPING.md`](./docs/UX_MAPPING.md), `docs/red-team/`. Granite visual redesign (Phase C/D from the Claude Design handoff in [`docs/handoff/HANDOFF.md`](./docs/handoff/HANDOFF.md)) applied on top of PR 7b — Sapphire palette, 27 SVG icons, sidebar layout overhaul, bundled fonts.
 
 | PR | Commit | Deliverable | Status |
 |----|--------|------------|--------|
-| 0 | `chore(gui): slint a11y framework verification spike` | Verify 7 Slint a11y unknowns; results to `docs/slint-a11y-findings.md`; blocks PR 1 | ⏳ Pending |
-| 1 | `feat(gui): extract token system into tokens.slint` | New `crates/gui/ui/tokens.slint`; refactor `appwindow.slint` to consume; zero visual change | ⏳ Pending |
-| 2 | `feat(gui): extract reusable atoms (buttons, input, card, action-footer)` | Component decomposition step 1 | ⏳ Pending |
-| 3 | `feat(gui): introduce sidebar router; port existing 3 tabs into pages` | Sidebar + page router; existing UI lifts into 3 of 6 pages | ⏳ Pending |
-| 4 | `feat(gui): confirmation sheet, diff preview, preflight card; wire to GRUB rewrite` | First end-to-end destructive flow (rewrite-grub) | ⏳ Pending |
-| 5 | `feat(daemon): expose snapshot ops, secure boot state, entry CRUD via D-Bus` | Daemon-only PR — 7 new D-Bus methods + audit + snapshot module | ⏳ Pending |
-| 6 | `feat(gui): implement remaining pages and onboarding` | Overview / Snapshots / Logs / Settings + onboarding card | ⏳ Pending |
-| 7 | `chore(gui): wcag pass, high-contrast variant, reduced-motion` | A11y final pass | ⏳ Pending |
+| 0 | `ef0aec2` chore(gui): slint a11y framework verification spike | Verify 7 Slint a11y unknowns; results in `docs/slint-a11y-findings.md` | ✅ Done |
+| 1–4, 6, 7, 7b | `87799cc` feat(gui): GUI v2 redesign — token system, atom decomposition, page router, confirmation sheet, onboarding, WCAG | Mega-commit landing tokens, atoms, sidebar router, confirmation sheet, all 6 + Security Lab pages, onboarding card, WCAG AA pass, high-contrast variant | ✅ Done |
+| 5 + 5b | `185b897` feat(daemon): snapshot and audit modules with set_grub_value integration | Snapshot create / list / restore + audit `MESSAGE_ID` per op; integrated into `set_grub_value` (other write-paths follow up) | ✅ Done |
+| C/D | `5a2faf2` feat(gui): Granite visual redesign — Phase C/D from Claude Design handoff | Token swap, SVG icons, sidebar layout, bundled font registration | ✅ Done |
+| 5c | `aca2198` feat(daemon): expose ListSnapshots and RestoreSnapshot via D-Bus + `ef98a9b` feat(client): add snapshot ops to BootBackend trait + `e499782` feat(gui): wire snapshot page and restore confirmation flow | Final integration of the snapshot/audit work into the client trait and Snapshots page Restore flow | ✅ Done |
+| 6c | `533f7ec` feat(gui): clipboard, file picker, audit-log launcher | Real implementations of `copy_command`, `copy_log_row`, `save_logs_as`, `open_audit_log` (arboard + rfd + journalctl terminal-spawn) | ✅ Done |
 
 ---
 
