@@ -1,6 +1,7 @@
 slint::include_modules!();
 
 use bootcontrol_gui::view_model::ViewModel;
+use slint::Model;
 use tokio::sync::mpsc;
 
 // PR Granite: bundled fonts. Files are searched at startup; if missing
@@ -160,9 +161,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    ui.on_copy_command(|cmd: slint::SharedString| {
-        // PR 4: stderr-print until Slint clipboard integration lands.
-        eprintln!("[gui] copy command: {}", cmd);
+    ui.on_copy_command({
+        let ui_handle = ui.as_weak();
+        move |cmd: slint::SharedString| {
+            let text = cmd.to_string();
+            let toast = match copy_to_clipboard(&text) {
+                Ok(()) => ("Copied command to clipboard".to_string(), "success"),
+                Err(e) => (format!("Copy failed: {e}"), "error"),
+            };
+            show_toast(&ui_handle, toast.0, toast.1);
+        }
     });
 
     // ── PR 6 callback stubs ─────────────────────────────────────────────────
@@ -244,9 +252,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    ui.on_open_audit_log(|job_id: slint::SharedString| {
-        // PR 6 stub. PR 5b spawns `journalctl JOB_ID=…` reader.
-        eprintln!("[gui] open audit log for JOB_ID={}", job_id);
+    ui.on_open_audit_log({
+        let ui_handle = ui.as_weak();
+        move |job_id: slint::SharedString| {
+            let jid = job_id.to_string();
+            match spawn_journalctl_reader(&jid) {
+                Ok(terminal) => show_toast(
+                    &ui_handle,
+                    format!("Opened audit log for JOB_ID={jid} in {terminal}"),
+                    "success",
+                ),
+                Err(e) => show_toast(
+                    &ui_handle,
+                    format!("Cannot open audit log: {e}. Run: journalctl JOB_ID={jid}"),
+                    "error",
+                ),
+            }
+        }
     });
 
     ui.on_toggle_logs_filter({
@@ -265,12 +287,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    ui.on_copy_log_row(|job_id: slint::SharedString| {
-        eprintln!("[gui] copy job_id: {}", job_id);
+    ui.on_copy_log_row({
+        let ui_handle = ui.as_weak();
+        move |job_id: slint::SharedString| {
+            let text = job_id.to_string();
+            let toast = match copy_to_clipboard(&text) {
+                Ok(()) => (format!("Copied JOB_ID {text}"), "success"),
+                Err(e) => (format!("Copy failed: {e}"), "error"),
+            };
+            show_toast(&ui_handle, toast.0, toast.1);
+        }
     });
 
-    ui.on_save_logs_as(|| {
-        eprintln!("[gui] save logs as… (file picker — PR 7)");
+    ui.on_save_logs_as({
+        let ui_handle = ui.as_weak();
+        move || {
+            let rows: Vec<LogRow> = ui_handle
+                .upgrade()
+                .map(|ui| {
+                    let model = ui.get_log_rows();
+                    (0..model.row_count())
+                        .filter_map(|i| model.row_data(i))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let toast = match save_log_rows_as_jsonl(&rows) {
+                Ok(Some(path)) => (format!("Saved {} rows to {}", rows.len(), path), "success"),
+                Ok(None) => return, // user cancelled — silent
+                Err(e) => (format!("Save failed: {e}"), "error"),
+            };
+            show_toast(&ui_handle, toast.0, toast.1);
+        }
     });
 
     // Onboarding marker check at startup.
@@ -891,4 +938,116 @@ fn set_loading(ui: &slint::Weak<AppWindow>, active: bool, message: String) {
         u.set_show_loading(active);
         u.set_loading_message(message.into());
     });
+}
+
+// ── PR 6c: clipboard, file picker, audit-log launcher ──────────────────────
+
+/// Copy `text` to the system clipboard. Returns a human-readable error
+/// string on failure so the calling toast can surface a meaningful message.
+///
+/// `arboard::Clipboard::new()` is created per-call: on X11 the clipboard
+/// requires an open server connection, and re-creating cheaply per click is
+/// simpler than threading a long-lived handle through the closures.
+fn copy_to_clipboard(text: &str) -> Result<(), String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard.set_text(text).map_err(|e| e.to_string())
+}
+
+/// Spawn `journalctl JOB_ID=<job_id>` in the user's preferred terminal
+/// emulator. Returns the program name on success so the toast can confirm
+/// which terminal opened.
+///
+/// Probes a short list of common Linux terminals; on macOS or any host
+/// where none are present, returns an error and the caller falls back to
+/// instructing the user to run the command manually.
+fn spawn_journalctl_reader(job_id: &str) -> Result<&'static str, String> {
+    // -u filters to the daemon unit; --output=cat strips journald metadata
+    // so only the audit-event log lines remain. -n0 -f tails new events
+    // arriving after the user clicks, in case the operation is still in
+    // flight. The `--no-pager` ensures pagers don't eat exit-on-detach.
+    let journalctl_args = [
+        "journalctl",
+        "-u",
+        "bootcontrol-daemon.service",
+        &format!("JOB_ID={job_id}"),
+        "--output=cat",
+        "--no-pager",
+    ];
+
+    // Probe each candidate terminal in priority order. The flag form
+    // before `--` matches each terminal's contract for "run this command".
+    let candidates: &[(&str, &[&str])] = &[
+        ("x-terminal-emulator", &["-e"]),
+        ("gnome-terminal", &["--"]),
+        ("kgx", &["--"]),
+        ("konsole", &["-e"]),
+        ("xfce4-terminal", &["-x"]),
+        ("alacritty", &["-e"]),
+        ("kitty", &["--"]),
+        ("foot", &[]),
+        ("xterm", &["-e"]),
+    ];
+
+    for (prog, flag_args) in candidates {
+        if which::which(prog).is_err() {
+            continue;
+        }
+        let mut cmd = std::process::Command::new(prog);
+        cmd.args(*flag_args);
+        cmd.args(journalctl_args);
+        match cmd.spawn() {
+            Ok(_) => return Ok(prog),
+            Err(e) => return Err(format!("{prog} failed to start: {e}")),
+        }
+    }
+    Err("no supported terminal emulator found on PATH".to_string())
+}
+
+/// JSON-Lines serialisable mirror of the Slint `LogRow` struct.
+///
+/// Slint structs are not `serde::Serialize`, so we project into a local
+/// type before writing. Field names and order match the daemon's audit
+/// event schema in `docs/GUI_V2_SPEC_v2.md` §5 so an export round-trips
+/// cleanly into any downstream tool that already parses journald.
+#[derive(serde::Serialize)]
+struct ExportLogRow<'a> {
+    ts: &'a str,
+    operation: &'a str,
+    phase: &'a str,
+    job_id: &'a str,
+    exit_code: i32,
+    stderr_tail: &'a str,
+}
+
+/// Prompt the user for a save path and write `rows` as JSON Lines to it.
+/// Returns `Ok(None)` if the user cancels the picker; `Ok(Some(path))`
+/// on a successful write; `Err` if the picker errors or the write fails.
+fn save_log_rows_as_jsonl(rows: &[LogRow]) -> Result<Option<String>, String> {
+    let default_name = format!(
+        "bootcontrol-logs-{}.jsonl",
+        chrono_like_now().replace([' ', ':'], "-")
+    );
+    let path = rfd::FileDialog::new()
+        .add_filter("JSON Lines", &["jsonl"])
+        .add_filter("All files", &["*"])
+        .set_file_name(&default_name)
+        .save_file();
+    let Some(path) = path else { return Ok(None) };
+
+    let mut out = String::new();
+    for r in rows {
+        let projection = ExportLogRow {
+            ts: &r.ts,
+            operation: &r.operation,
+            phase: &r.phase,
+            job_id: &r.job_id,
+            exit_code: r.exit_code,
+            stderr_tail: &r.stderr_tail,
+        };
+        let line = serde_json::to_string(&projection).map_err(|e| e.to_string())?;
+        out.push_str(&line);
+        out.push('\n');
+    }
+    std::fs::write(&path, out).map_err(|e| e.to_string())?;
+    Ok(Some(path.display().to_string()))
 }
