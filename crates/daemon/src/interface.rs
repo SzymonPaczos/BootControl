@@ -38,7 +38,7 @@ use bootcontrol_core::secureboot::ParanoiaKeySet;
 
 use crate::{
     audit::{self, message_ids, AuditEvent, Phase},
-    dbus_error::{to_daemon_error, DaemonError},
+    dbus_error::{snapshot_to_daemon_error, to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
     polkit::authorize_with_polkit,
     sanitize, snapshot,
@@ -46,6 +46,26 @@ use crate::{
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
     systemd_boot_manager, uki_manager,
 };
+
+use serde::Serialize;
+
+/// Wire-format DTO for a single snapshot row, serialized as JSON for the
+/// `ListSnapshots` D-Bus method. Mirrors `snapshot::SnapshotInfo` minus the
+/// internal `manifest_path` field, which is a daemon-side filesystem detail.
+///
+/// The client (`crates/client/src/lib.rs`) declares a matching
+/// `SnapshotInfoDto` and deserializes identical JSON.
+#[derive(Debug, Clone, Serialize)]
+struct SnapshotInfoDto {
+    /// Filesystem-safe snapshot id (e.g. `2026-04-30T130211Z-set_grub_value`).
+    pub id: String,
+    /// Operation tag the snapshot captured (e.g. `"set_grub_value"`).
+    pub op: String,
+    /// RFC 3339 timestamp the snapshot was taken.
+    pub ts: String,
+    /// Audit JOB_ID linking this snapshot to its journald audit row.
+    pub audit_job_id: String,
+}
 
 #[cfg(feature = "experimental_paranoia")]
 use crate::secureboot::paranoia::{generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR};
@@ -1171,6 +1191,137 @@ impl GrubManager {
         authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
         uki_manager::remove_kernel_param(&self.kernel_cmdline_path, &param, &etag)
             .map_err(to_daemon_error)
+    }
+
+    // ── Snapshot methods ──────────────────────────────────────────────────────
+
+    /// List all snapshots under `/var/lib/bootcontrol/snapshots/`, newest first.
+    ///
+    /// **Read-only — no Polkit authorization required.** Returns a JSON array
+    /// of `{id, op, ts}` objects mirroring the on-disk `manifest.json`
+    /// summary fields. The full manifest stays on disk and is loaded only
+    /// when a snapshot is actually restored.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// ListSnapshots() -> s
+    /// ```
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.SnapshotCorrupt` — a manifest is malformed or
+    ///   declares an unsupported `schema_version`.
+    /// - `org.bootcontrol.Error.SnapshotFailed` — the snapshot directory is
+    ///   present but unreadable (I/O error).
+    async fn list_snapshots(&self) -> Result<String, DaemonError> {
+        info!(root = ?self.snapshot_root, "D-Bus: ListSnapshots");
+        let snaps = snapshot::list(&self.snapshot_root).map_err(snapshot_to_daemon_error)?;
+        let dtos: Vec<SnapshotInfoDto> = snaps
+            .into_iter()
+            .map(|s| SnapshotInfoDto {
+                id: s.id,
+                op: s.op,
+                ts: s.ts,
+                audit_job_id: s.audit_job_id,
+            })
+            .collect();
+        serde_json::to_string(&dtos).map_err(|e| {
+            DaemonError::SnapshotFailed(format!("serialization error: {e}"))
+        })
+    }
+
+    /// Restore a previously captured snapshot by id.
+    ///
+    /// Every file recorded in the snapshot's manifest is rewritten with the
+    /// captured bytes. The operation is idempotent against the snapshot
+    /// itself (running it twice yields the same on-disk state) but **does
+    /// not** rebuild downstream artefacts: after a successful restore of a
+    /// GRUB snapshot the caller should invoke `RebuildGrubConfig` to
+    /// regenerate `/boot/grub/grub.cfg`.
+    ///
+    /// ## Write-path
+    ///
+    /// 1. Polkit authorization (action `org.bootcontrol.restore-snapshot`,
+    ///    checked via the shared `authorize_with_polkit` helper).
+    /// 2. Audit `Started` event with `message_ids::RESTORE_SNAPSHOT`.
+    /// 3. `snapshot::restore` — overwrites each captured path with the
+    ///    bytes stored under `<snapshot_root>/<id>/`.
+    /// 4. Audit `Completed` event with the exit code and stderr tail.
+    ///
+    /// The same race window as `set_grub_value` applies: a concurrent
+    /// external mutation of `/etc/default/grub` between Polkit and the
+    /// `fs::write` inside `snapshot::restore` is not detected here.
+    /// Tightening this to per-target `flock` requires extending
+    /// `snapshot::restore` with a locked-write variant, deferred.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// RestoreSnapshot(s) -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// - `id` — Snapshot id as returned by `ListSnapshots`.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied` — caller not authorized.
+    /// - `org.bootcontrol.Error.SnapshotNotFound` — no snapshot with that id.
+    /// - `org.bootcontrol.Error.SnapshotCorrupt` — manifest is malformed.
+    /// - `org.bootcontrol.Error.SnapshotFailed` — I/O error during restore.
+    async fn restore_snapshot(
+        &self,
+        id: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(id = %id, root = ?self.snapshot_root, "D-Bus: RestoreSnapshot");
+
+        let caller_uid = resolve_uid(&header, connection, "RestoreSnapshot").await?;
+        authorize_with_polkit(caller_uid).await.map_err(|e| {
+            warn!(caller_uid = %caller_uid, id = %id, "Polkit denied for RestoreSnapshot");
+            to_daemon_error(e)
+        })?;
+
+        let job_id = new_job_id();
+        let target_paths = vec![self.snapshot_root.join(&id).display().to_string()];
+        audit::emit(&AuditEvent {
+            message_id: message_ids::RESTORE_SNAPSHOT,
+            operation: "restore_snapshot",
+            phase: Phase::Started,
+            target_paths: target_paths.clone(),
+            etag_before: None,
+            etag_after: None,
+            snapshot_id: Some(id.clone()),
+            exit_code: None,
+            caller_uid,
+            polkit_action: "org.bootcontrol.restore-snapshot",
+            job_id: job_id.clone(),
+            stderr_tail: String::new(),
+        });
+
+        let result = snapshot::restore(&self.snapshot_root, &id).map_err(snapshot_to_daemon_error);
+
+        let exit_code = if result.is_ok() { 0 } else { 1 };
+        let stderr_tail = result.as_ref().err().map(|e| e.to_string()).unwrap_or_default();
+        audit::emit(&AuditEvent {
+            message_id: message_ids::RESTORE_SNAPSHOT,
+            operation: "restore_snapshot",
+            phase: Phase::Completed,
+            target_paths,
+            etag_before: None,
+            etag_after: None,
+            snapshot_id: Some(id),
+            exit_code: Some(exit_code),
+            caller_uid,
+            polkit_action: "org.bootcontrol.restore-snapshot",
+            job_id,
+            stderr_tail,
+        });
+
+        result
     }
 }
 

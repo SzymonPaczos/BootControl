@@ -27,9 +27,14 @@
 //! | `NvramBackupFailed`     | `org.bootcontrol.Error.NvramBackupFailed`          |
 //! | `MokKeyNotFound`        | `org.bootcontrol.Error.MokKeyNotFound`             |
 //! | `SigningFailed`         | `org.bootcontrol.Error.SigningFailed`              |
+//! | `SnapshotNotFound`      | `org.bootcontrol.Error.SnapshotNotFound`           |
+//! | `SnapshotCorrupt`       | `org.bootcontrol.Error.SnapshotCorrupt`            |
+//! | `SnapshotFailed`        | `org.bootcontrol.Error.SnapshotFailed`             |
 
 use bootcontrol_core::error::BootControlError;
 use zbus::DBusError;
+
+use crate::snapshot::SnapshotError;
 
 /// Typ błędu D-Bus dla metod interfejsu `org.bootcontrol.Manager`.
 ///
@@ -88,8 +93,32 @@ pub enum DaemonError {
     /// Zapis zmiennej EFI NVRAM nie powiódł się.
     NvramWriteFailed(String),
 
+    /// Wskazany snapshot nie istnieje pod katalogiem snapshot root.
+    SnapshotNotFound(String),
+
+    /// Manifest snapshotu jest niespójny lub w wersji nowszej niż obsługiwana.
+    SnapshotCorrupt(String),
+
+    /// Operacja snapshotu (create / list / restore) nie powiodła się z innego powodu.
+    SnapshotFailed(String),
+
     /// Nieznany błąd — catch-all dla wariantów z `#[non_exhaustive]`.
     Failed(String),
+}
+
+/// Przekształć [`SnapshotError`] na [`DaemonError`] z poprawną nazwą D-Bus.
+///
+/// Wszystkie warianty `SnapshotError` mapują się na trzy publiczne nazwy
+/// D-Bus: `SnapshotNotFound`, `SnapshotCorrupt`, `SnapshotFailed`.
+/// GUI rozpoznaje błąd po nazwie wariantu, nie po treści wiadomości.
+pub fn snapshot_to_daemon_error(e: SnapshotError) -> DaemonError {
+    let msg = e.to_string();
+    match e {
+        SnapshotError::NotFound(_) => DaemonError::SnapshotNotFound(msg),
+        SnapshotError::SchemaUpgradeRequired(_) => DaemonError::SnapshotCorrupt(msg),
+        SnapshotError::Serde(_) => DaemonError::SnapshotCorrupt(msg),
+        SnapshotError::Io(_) => DaemonError::SnapshotFailed(msg),
+    }
 }
 
 /// Przekształć [`BootControlError`] na [`DaemonError`] z poprawną nazwą D-Bus.
@@ -267,6 +296,44 @@ mod tests {
         assert!(matches!(
             to_daemon_error(e),
             DaemonError::NvramWriteFailed(_)
+        ));
+    }
+
+    #[test]
+    fn snapshot_not_found_maps_to_correct_variant() {
+        let e = SnapshotError::NotFound("2026-04-30T130211Z-test_op".into());
+        assert!(matches!(
+            snapshot_to_daemon_error(e),
+            DaemonError::SnapshotNotFound(_)
+        ));
+    }
+
+    #[test]
+    fn snapshot_schema_upgrade_maps_to_corrupt() {
+        let e = SnapshotError::SchemaUpgradeRequired(42);
+        assert!(matches!(
+            snapshot_to_daemon_error(e),
+            DaemonError::SnapshotCorrupt(_)
+        ));
+    }
+
+    #[test]
+    fn snapshot_io_maps_to_failed() {
+        let e = SnapshotError::Io(std::io::Error::other("disk full"));
+        let mapped = snapshot_to_daemon_error(e);
+        assert!(matches!(mapped, DaemonError::SnapshotFailed(_)));
+    }
+
+    #[test]
+    fn snapshot_serde_maps_to_corrupt() {
+        // Force a serde_json error by parsing invalid JSON.
+        let bad: serde_json::Error = serde_json::from_str::<serde_json::Value>("not json")
+            .err()
+            .unwrap();
+        let e = SnapshotError::Serde(bad);
+        assert!(matches!(
+            snapshot_to_daemon_error(e),
+            DaemonError::SnapshotCorrupt(_)
         ));
     }
 
