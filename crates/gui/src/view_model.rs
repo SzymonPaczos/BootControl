@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use bootcontrol_client::{BootBackend, LoaderEntryDto};
+use bootcontrol_client::{BootBackend, LoaderEntryDto, SnapshotInfoDto};
 
 /// View model bridging the boot backend and the Slint UI layer.
 pub struct ViewModel {
@@ -118,5 +118,15 @@ impl ViewModel {
     /// Returns path to the merged `.auth` file.
     pub async fn merge_paranoia(&self) -> Result<String, zbus::Error> {
         self.backend.merge_paranoia_with_microsoft("").await
+    }
+
+    /// List all snapshots known to the daemon, newest first.
+    pub async fn list_snapshots(&self) -> Result<Vec<SnapshotInfoDto>, zbus::Error> {
+        self.backend.list_snapshots().await
+    }
+
+    /// Restore a snapshot by id. Overwrites all files captured in its manifest.
+    pub async fn restore_snapshot(&self, id: &str) -> Result<(), zbus::Error> {
+        self.backend.restore_snapshot(id).await
     }
 }
