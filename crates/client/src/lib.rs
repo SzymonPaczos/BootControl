@@ -31,6 +31,25 @@ pub struct LoaderEntryDto {
     pub is_default: bool,
 }
 
+/// A snapshot row as returned by `ListSnapshots`.
+///
+/// Mirrors the on-disk manifest summary fields. The full manifest stays
+/// in `/var/lib/bootcontrol/snapshots/<id>/manifest.json` and is read by
+/// the daemon only when a snapshot is actually restored.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SnapshotInfoDto {
+    /// Filesystem-safe snapshot id (e.g. `2026-04-30T130211Z-set_grub_value`).
+    pub id: String,
+    /// Operation tag the snapshot captured (e.g. `"set_grub_value"`).
+    pub op: String,
+    /// RFC 3339 timestamp the snapshot was taken.
+    pub ts: String,
+    /// Audit JOB_ID linking this snapshot to its journald audit row.
+    /// Empty for snapshots created before the field was introduced.
+    #[serde(default)]
+    pub audit_job_id: String,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // D-Bus proxy
 // ─────────────────────────────────────────────────────────────────────────────
@@ -102,6 +121,15 @@ pub trait Manager {
 
     /// Remove a kernel parameter from `/etc/kernel/cmdline`.
     async fn remove_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()>;
+
+    // ── Snapshots ─────────────────────────────────────────────────────────────
+
+    /// List all snapshots, newest first.
+    /// Returns a JSON array of `SnapshotInfoDto` objects.
+    async fn list_snapshots(&self) -> zbus::Result<String>;
+
+    /// Restore a snapshot by id. Overwrites all files captured in the manifest.
+    async fn restore_snapshot(&self, id: &str) -> zbus::Result<()>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,6 +194,14 @@ pub trait BootBackend: Send + Sync {
 
     /// Remove a kernel parameter.
     async fn remove_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()>;
+
+    // ── Snapshots ─────────────────────────────────────────────────────────────
+
+    /// List all snapshots, newest first.
+    async fn list_snapshots(&self) -> zbus::Result<Vec<SnapshotInfoDto>>;
+
+    /// Restore a snapshot by id.
+    async fn restore_snapshot(&self, id: &str) -> zbus::Result<()>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,6 +302,19 @@ impl BootBackend for DbusBackend {
     async fn remove_kernel_param(&self, param: &str, etag: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.remove_kernel_param(param, etag).await
+    }
+
+    async fn list_snapshots(&self) -> zbus::Result<Vec<SnapshotInfoDto>> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        let json = proxy.list_snapshots().await?;
+        serde_json::from_str(&json).map_err(|e| {
+            zbus::Error::Failure(format!("failed to deserialize snapshot list: {e}"))
+        })
+    }
+
+    async fn restore_snapshot(&self, id: &str) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.restore_snapshot(id).await
     }
 }
 
@@ -380,6 +429,33 @@ impl BootBackend for MockBackend {
     }
 
     async fn remove_kernel_param(&self, _param: &str, _etag: &str) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn list_snapshots(&self) -> zbus::Result<Vec<SnapshotInfoDto>> {
+        Ok(vec![
+            SnapshotInfoDto {
+                id: "2026-05-15T140312Z-set_grub_value".to_string(),
+                op: "set_grub_value".to_string(),
+                ts: "2026-05-15T14:03:12Z".to_string(),
+                audit_job_id: "1a2b3c4d-mock-set-grub-value-001".to_string(),
+            },
+            SnapshotInfoDto {
+                id: "2026-05-14T091805Z-set_grub_value".to_string(),
+                op: "set_grub_value".to_string(),
+                ts: "2026-05-14T09:18:05Z".to_string(),
+                audit_job_id: "1a2b3c4d-mock-set-grub-value-002".to_string(),
+            },
+            SnapshotInfoDto {
+                id: "2026-05-12T203044Z-rewrite_grub".to_string(),
+                op: "rewrite_grub".to_string(),
+                ts: "2026-05-12T20:30:44Z".to_string(),
+                audit_job_id: "1a2b3c4d-mock-rewrite-grub-001".to_string(),
+            },
+        ])
+    }
+
+    async fn restore_snapshot(&self, _id: &str) -> zbus::Result<()> {
         Ok(())
     }
 }
@@ -568,6 +644,69 @@ mod tests {
     async fn mock_backend_remove_kernel_param_succeeds() {
         let backend = MockBackend;
         assert!(backend.remove_kernel_param("quiet", "mock-etag").await.is_ok());
+    }
+
+    // ── MockBackend snapshot operations ───────────────────────────────────────
+
+    #[tokio::test]
+    async fn mock_backend_list_snapshots_returns_at_least_one_entry() {
+        let backend = MockBackend;
+        let snaps = backend
+            .list_snapshots()
+            .await
+            .expect("list_snapshots should succeed");
+        assert!(
+            !snaps.is_empty(),
+            "MockBackend::list_snapshots must return at least one row so Demo Mode shows data"
+        );
+    }
+
+    #[tokio::test]
+    async fn mock_backend_list_snapshots_dto_has_required_fields() {
+        let backend = MockBackend;
+        let snaps = backend
+            .list_snapshots()
+            .await
+            .expect("list_snapshots should succeed");
+        let first = &snaps[0];
+        assert!(!first.id.is_empty(), "id must not be empty");
+        assert!(!first.op.is_empty(), "op must not be empty");
+        assert!(!first.ts.is_empty(), "ts must not be empty");
+    }
+
+    #[tokio::test]
+    async fn mock_backend_restore_snapshot_succeeds_for_any_id() {
+        let backend = MockBackend;
+        assert!(backend.restore_snapshot("any-id").await.is_ok());
+    }
+
+    #[test]
+    fn snapshot_info_dto_roundtrips_through_json() {
+        // Daemon serializes Vec<SnapshotInfoDto>, client deserializes the same;
+        // pin the JSON shape so a future field rename can't silently drift.
+        let dto = SnapshotInfoDto {
+            id: "2026-05-15T140312Z-set_grub_value".to_string(),
+            op: "set_grub_value".to_string(),
+            ts: "2026-05-15T14:03:12Z".to_string(),
+            audit_job_id: "1a2b3c4d-job-id".to_string(),
+        };
+        let json = serde_json::to_string(&[dto.clone()]).unwrap();
+        assert!(json.contains("\"id\":"));
+        assert!(json.contains("\"op\":"));
+        assert!(json.contains("\"ts\":"));
+        assert!(json.contains("\"audit_job_id\":"));
+        let back: Vec<SnapshotInfoDto> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, vec![dto]);
+    }
+
+    #[test]
+    fn snapshot_info_dto_deserialises_without_audit_job_id() {
+        // Snapshots created before the audit-link field was introduced must
+        // still deserialise — the missing field defaults to empty.
+        let json = r#"[{"id":"old-snap","op":"set_grub_value","ts":"2026-04-01T00:00:00Z"}]"#;
+        let parsed: Vec<SnapshotInfoDto> = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].audit_job_id, "");
     }
 
     // ── dbus_error_message ────────────────────────────────────────────────────
