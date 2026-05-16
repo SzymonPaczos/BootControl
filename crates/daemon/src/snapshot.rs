@@ -146,6 +146,10 @@ pub struct SnapshotInfo {
     pub op: String,
     /// RFC 3339 timestamp of the snapshot.
     pub ts: String,
+    /// Audit JOB_ID that links this snapshot to its journald audit row.
+    /// Mirror of [`SnapshotManifest::audit_job_id`]. Empty string for
+    /// snapshots created before the audit-link field was introduced.
+    pub audit_job_id: String,
     /// Path to the manifest file.
     pub manifest_path: PathBuf,
 }
@@ -239,6 +243,7 @@ pub fn create(req: SnapshotRequest<'_>) -> Result<SnapshotInfo, SnapshotError> {
         id,
         op: req.op.to_string(),
         ts,
+        audit_job_id: req.audit_job_id.to_string(),
         manifest_path,
     })
 }
@@ -273,6 +278,7 @@ pub fn list(root: &Path) -> Result<Vec<SnapshotInfo>, SnapshotError> {
             id,
             op: manifest.op,
             ts: manifest.ts,
+            audit_job_id: manifest.audit_job_id,
             manifest_path,
         });
     }

@@ -74,4 +74,16 @@
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootcontrold</annotate>
   </action>
+
+  <action id="org.bootcontrol.restore-snapshot">
+    <description>Restore boot configuration from snapshot</description>
+    <message>BootControl needs to restore boot configuration files from a previously captured snapshot</message>
+    <icon_name>system-run</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootcontrold</annotate>
+  </action>
 </policyconfig>
