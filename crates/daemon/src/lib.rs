@@ -30,6 +30,7 @@ pub mod dbus_error;
 pub mod failsafe;
 pub mod grub_manager;
 pub mod grub_rebuild;
+pub mod immutable_distro;
 pub mod initramfs;
 pub mod interface;
 pub mod polkit;

@@ -40,6 +40,7 @@ use crate::{
     audit::{self, message_ids, AuditEvent, Phase},
     dbus_error::{snapshot_to_daemon_error, to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
+    immutable_distro::enforce_writable_distro,
     polkit::authorize_with_polkit,
     sanitize,
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
@@ -431,6 +432,14 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!(key = %key, "D-Bus: SetGrubValue");
 
+        // ── Step 0: Immutable-distro pre-flight (Phase 6 PR1) ────────────────
+        // Reject ostree / rpm-ostree hosts before asking the user to
+        // authenticate — the naive write would either fail on the read-only
+        // mount or be rolled back on the next rebase. See
+        // `immutable_distro::enforce_writable_distro` for the detection
+        // strategy.
+        enforce_writable_distro().map_err(to_daemon_error)?;
+
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
         // The D-Bus daemon tracks each connection's OS-level UID. We ask it
         // for the caller's unique bus name, then call
@@ -642,6 +651,9 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!("D-Bus: RebuildGrubConfig");
+
+        // ── Step 0: Immutable-distro pre-flight (Phase 6 PR1) ────────────────
+        enforce_writable_distro().map_err(to_daemon_error)?;
 
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
         let caller_uid: u32 = {
@@ -1127,6 +1139,8 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(id = %id, "D-Bus: SetLoaderDefault");
+        // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
+        enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "SetLoaderDefault").await?;
         authorize_with_polkit(caller_uid)
             .await
@@ -1201,6 +1215,8 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: AddKernelParam");
+        // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
+        enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
         authorize_with_polkit(caller_uid)
             .await
@@ -1237,6 +1253,8 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: RemoveKernelParam");
+        // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
+        enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
         authorize_with_polkit(caller_uid)
             .await
@@ -1329,6 +1347,11 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(id = %id, root = ?self.snapshot_root, "D-Bus: RestoreSnapshot");
+
+        // Step 0: Immutable-distro pre-flight (Phase 6 PR1). Restore writes to
+        // the same on-disk paths as a forward operation, so it inherits the
+        // same atomic-distro rejection.
+        enforce_writable_distro().map_err(to_daemon_error)?;
 
         let caller_uid = resolve_uid(&header, connection, "RestoreSnapshot").await?;
         authorize_with_polkit(caller_uid).await.map_err(|e| {
