@@ -93,8 +93,8 @@ pub fn run_grub_mkconfig(output_path: &Path) -> Result<(), BootControlError> {
 pub(crate) mod tests {
     use super::*;
     use std::io::Write;
-    use std::sync::Mutex;
-    use tempfile::{NamedTempFile, TempDir};
+    use std::sync::{Mutex, MutexGuard};
+    use tempfile::{NamedTempFile, TempDir, TempPath};
 
     // ── PATH serialization lock ───────────────────────────────────────────────
     //
@@ -103,20 +103,35 @@ pub(crate) mod tests {
     // run in parallel by default and PATH is a global resource, concurrent
     // manipulation would cause non-deterministic failures.
     //
-    // Usage pattern:
-    //   let _guard = PATH_LOCK.lock().expect("PATH lock poisoned");
-    //   std::env::set_var("PATH", ...);
-    //   ... test body ...
-    //   std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
-    //   // _guard dropped here → next test can proceed
+    // Acquire it via [`lock_path`] (below), which recovers from poisoning so
+    // that a panic in one test does not cascade-fail every other test that
+    // touches PATH.
     pub(crate) static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Acquire [`PATH_LOCK`], tolerating a previously-poisoned lock.
+    ///
+    /// `Mutex::lock` returns `Err(PoisonError)` if a thread previously panicked
+    /// while holding the lock. The PATH guard itself is just `()` — there is
+    /// no inner state to corrupt — so recovery via `into_inner` is safe and
+    /// prevents one flaky test from cascading into spurious failures across
+    /// the rest of the file.
+    pub(crate) fn lock_path() -> MutexGuard<'static, ()> {
+        PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     // ── Helper: create a temporary shell script ───────────────────────────────
 
-    /// Write a shell script to a NamedTempFile, set it executable, and return
-    /// both the file and the directory it lives in (keeping the TempDir alive
-    /// so the directory is not deleted while the file is in use).
-    fn make_script(body: &str) -> (NamedTempFile, TempDir) {
+    /// Write a shell script to a `NamedTempFile`, set it executable, then close
+    /// the write fd and return the resulting [`TempPath`] plus the owning
+    /// [`TempDir`] (kept alive so the directory is not deleted while the file
+    /// is in use).
+    ///
+    /// Closing the write fd before any caller execs the script is essential on
+    /// kernels that enforce `ETXTBSY`: spawning a binary whose file is still
+    /// open for writing yields `Text file busy` and panics the test. This
+    /// surfaces reliably on aarch64 / QEMU and was the root cause of the
+    /// poisoned-`PATH_LOCK` cascade observed under those configurations.
+    fn make_script(body: &str) -> (TempPath, TempDir) {
         let dir = TempDir::new().expect("tempdir");
         let mut script = NamedTempFile::new_in(dir.path()).expect("script tempfile");
         writeln!(script, "#!/bin/sh").expect("write shebang");
@@ -132,7 +147,10 @@ pub(crate) mod tests {
             .set_permissions(perms)
             .expect("set permissions");
 
-        (script, dir)
+        // Consume the NamedTempFile — this closes the write fd while keeping
+        // the file alive on disk via the returned TempPath. Without this step
+        // an open write fd would cause ETXTBSY on execve.
+        (script.into_temp_path(), dir)
     }
 
     // ── run_grub_mkconfig_fails_when_binary_not_on_path ───────────────────────
@@ -142,7 +160,7 @@ pub(crate) mod tests {
     /// `EspScanFailed`.
     #[test]
     fn run_grub_mkconfig_fails_when_binary_not_on_path() {
-        let _guard = PATH_LOCK.lock().expect("PATH lock poisoned");
+        let _guard = lock_path();
 
         // Point PATH at an empty temp directory so `which` finds nothing.
         let empty_dir = TempDir::new().expect("tempdir");
@@ -170,10 +188,10 @@ pub(crate) mod tests {
     /// reason string.
     #[test]
     fn run_grub_mkconfig_propagates_nonzero_exit() {
-        let _guard = PATH_LOCK.lock().expect("PATH lock poisoned");
+        let _guard = lock_path();
 
         let (script, _dir) = make_script("echo 'fatal: disk error' >&2\nexit 1");
-        let script_path = script.path().to_path_buf();
+        let script_path = script.to_path_buf();
 
         // The script file name is arbitrary (NamedTempFile uses a random
         // suffix), so we create a symlink named `grub-mkconfig` pointing to it.
@@ -211,32 +229,33 @@ pub(crate) mod tests {
         }
     }
 
-    // ── run_grub_mkconfig_succeeds_with_real_echo_binary ─────────────────────
+    // ── run_grub_mkconfig_succeeds_with_zero_exit_stub ───────────────────────
 
-    /// `/bin/echo` (or `/usr/bin/echo`) is available on every POSIX system and
-    /// exits 0. When we expose it as `grub-mkconfig` on PATH via a symlink,
-    /// the function must return `Ok(())`.
+    /// A stub script that simply `exit 0`s, exposed on PATH as `grub-mkconfig`,
+    /// must drive `run_grub_mkconfig` to `Ok(())`.
     ///
-    /// The test locates `echo` by searching a set of well-known fixed paths so
-    /// it is not confused by PATH manipulation in sibling tests.
+    /// Previously this test symlinked `/bin/echo` (or `/usr/bin/echo`) and
+    /// relied on it ignoring its argv[0]. That works under GNU coreutils but
+    /// not under uutils-coreutils (Ubuntu 26.04+), where the multi-call
+    /// `echo` binary dispatches on argv[0] and exits non-zero with
+    /// "unknown program 'grub-mkconfig'". A dedicated POSIX shell stub is
+    /// portable across both.
     #[test]
-    fn run_grub_mkconfig_succeeds_with_real_echo_binary() {
-        let _guard = PATH_LOCK.lock().expect("PATH lock poisoned");
+    fn run_grub_mkconfig_succeeds_with_zero_exit_stub() {
+        let _guard = lock_path();
 
-        // Locate `echo` at a well-known fixed path — do NOT use `which` here
-        // because sibling tests manipulate the process-wide PATH and `which`
-        // respects that.
-        let echo_bin = ["/bin/echo", "/usr/bin/echo"]
-            .iter()
-            .find(|p| std::path::Path::new(p).is_file())
-            .expect("echo must exist at /bin/echo or /usr/bin/echo on the test host");
+        let (script, _dir) = make_script("exit 0");
+        let script_path = script.to_path_buf();
+        let script_dir = script_path
+            .parent()
+            .expect("script parent")
+            .to_path_buf();
+        let link_path = script_dir.join("grub-mkconfig");
+        std::fs::hard_link(&script_path, &link_path).unwrap_or_else(|_| {
+            std::os::unix::fs::symlink(&script_path, &link_path).expect("symlink")
+        });
 
-        // Create a symlink named `grub-mkconfig` → real `echo` in a temp dir.
-        let link_dir = TempDir::new().expect("link tempdir");
-        let link_path = link_dir.path().join("grub-mkconfig");
-        std::os::unix::fs::symlink(echo_bin, &link_path).expect("symlink echo");
-
-        std::env::set_var("PATH", link_dir.path());
+        std::env::set_var("PATH", &script_dir);
 
         let output_dir = TempDir::new().expect("output tempdir");
         let output_path = output_dir.path().join("grub.cfg");
@@ -247,7 +266,7 @@ pub(crate) mod tests {
 
         assert!(
             result.is_ok(),
-            "echo exits 0 — run_grub_mkconfig must return Ok(()), got: {result:?}"
+            "stub exits 0 — run_grub_mkconfig must return Ok(()), got: {result:?}"
         );
     }
 }
