@@ -8,10 +8,7 @@ use tokio::sync::mpsc;
 // the GUI falls back silently to the system font stack declared on
 // `AppWindow.default-font-family` in appwindow.slint. See
 // `crates/gui/assets/fonts/README.md` for installation instructions.
-const BUNDLED_FONTS: &[&str] = &[
-    "Inter-VariableFont.ttf",
-    "JetBrainsMono-Regular.ttf",
-];
+const BUNDLED_FONTS: &[&str] = &["Inter-VariableFont.ttf", "JetBrainsMono-Regular.ttf"];
 
 enum UiMessage {
     FetchEntries,
@@ -228,9 +225,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Vec::<DiffLine>::new(),
                 )));
                 ui.set_confirmation_preflight_all_pass(true);
-                ui.set_confirmation_preflight(slint::ModelRc::new(slint::VecModel::<PreflightCheck>::from(
-                    Vec::<PreflightCheck>::new(),
-                )));
+                ui.set_confirmation_preflight(slint::ModelRc::new(
+                    slint::VecModel::<PreflightCheck>::from(Vec::<PreflightCheck>::new()),
+                ));
 
                 ui.set_show_confirmation(true);
             });
@@ -280,7 +277,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "only-mine" => ui.set_logs_only_mine(!ui.get_logs_only_mine()),
                 "24h" => {
                     let cur = ui.get_logs_time_window().to_string();
-                    ui.set_logs_time_window(if cur == "24h" { "all".into() } else { "24h".into() });
+                    ui.set_logs_time_window(if cur == "24h" {
+                        "all".into()
+                    } else {
+                        "24h".into()
+                    });
                 }
                 _ => {}
             });
@@ -339,12 +340,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // enable-animations / org.gnome.desktop.a11y high-contrast) and the
     // XDG portal SettingChanged watcher are wired in a future commit
     // (slint-a11y-findings.md Q5 — KDE follow-up).
-    if std::env::var("BOOTCONTROL_REDUCED_MOTION").map(|v| v == "1").unwrap_or(false)
+    if std::env::var("BOOTCONTROL_REDUCED_MOTION")
+        .map(|v| v == "1")
+        .unwrap_or(false)
         || gnome_animations_disabled()
     {
         ui.global::<Tokens>().set_reduced_motion(true);
     }
-    if std::env::var("BOOTCONTROL_HIGH_CONTRAST").map(|v| v == "1").unwrap_or(false)
+    if std::env::var("BOOTCONTROL_HIGH_CONTRAST")
+        .map(|v| v == "1")
+        .unwrap_or(false)
         || kde_high_contrast_active()
     {
         apply_high_contrast(&ui);
@@ -353,7 +358,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // PR Granite: light-mode opt-in via env var. Settings UI button wiring
     // lands in a follow-up; persistent storage in
     // ~/.config/bootcontrol/settings.toml.
-    if std::env::var("BOOTCONTROL_THEME").map(|v| v == "light").unwrap_or(false) {
+    if std::env::var("BOOTCONTROL_THEME")
+        .map(|v| v == "light")
+        .unwrap_or(false)
+    {
         apply_light_palette(&ui);
     }
 
@@ -380,34 +388,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             match msg {
-                UiMessage::FetchEntries => {
-                    match view_model.load().await {
-                        Ok(_) => {
-                            let mut entries: Vec<GrubEntry> = view_model
-                                .entries
-                                .iter()
-                                .map(|(k, v)| GrubEntry {
-                                    key: k.as_str().into(),
-                                    value: v.as_str().into(),
-                                    original_value: v.as_str().into(),
-                                    is_modified: false,
-                                })
-                                .collect();
-                            entries.sort_by(|a, b| a.key.cmp(&b.key));
+                UiMessage::FetchEntries => match view_model.load().await {
+                    Ok(_) => {
+                        let mut entries: Vec<GrubEntry> = view_model
+                            .entries
+                            .iter()
+                            .map(|(k, v)| GrubEntry {
+                                key: k.as_str().into(),
+                                value: v.as_str().into(),
+                                original_value: v.as_str().into(),
+                                is_modified: false,
+                            })
+                            .collect();
+                        entries.sort_by(|a, b| a.key.cmp(&b.key));
 
-                            let backend_name = view_model.active_backend.clone();
-                            let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
-                                let model = std::rc::Rc::new(slint::VecModel::from(entries));
-                                ui.set_entries(model.into());
-                                ui.set_active_backend(backend_name.into());
-                            });
-                        }
-                        Err(e) => {
-                            let err_msg = format!("Failed to read GRUB config: {:?}", e);
-                            show_toast(&ui_handle_async, err_msg, "error");
-                        }
+                        let backend_name = view_model.active_backend.clone();
+                        let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
+                            let model = std::rc::Rc::new(slint::VecModel::from(entries));
+                            ui.set_entries(model.into());
+                            ui.set_active_backend(backend_name.into());
+                        });
                     }
-                }
+                    Err(e) => {
+                        let err_msg = format!("Failed to read GRUB config: {:?}", e);
+                        show_toast(&ui_handle_async, err_msg, "error");
+                    }
+                },
                 UiMessage::SaveEntry(key, value) => {
                     set_loading(&ui_handle_async, true, format!("Saving '{}'...", key));
                     match view_model.commit_edit(&key, &value).await {
@@ -435,20 +441,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 UiMessage::RebuildGrub => {
-                    set_loading(&ui_handle_async, true, "Rebuilding GRUB config...".to_string());
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Rebuilding GRUB config...".to_string(),
+                    );
                     match view_model.rebuild_grub().await {
                         Ok(_) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, "GRUB config rebuilt successfully".to_string(), "success");
+                            show_toast(
+                                &ui_handle_async,
+                                "GRUB config rebuilt successfully".to_string(),
+                                "success",
+                            );
                         }
                         Err(e) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, format!("Rebuild failed: {}", bootcontrol_client::dbus_error_message(&e)), "error");
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Rebuild failed: {}",
+                                    bootcontrol_client::dbus_error_message(&e)
+                                ),
+                                "error",
+                            );
                         }
                     }
                 }
                 UiMessage::BackupNvram => {
-                    set_loading(&ui_handle_async, true, "Backing up EFI variables...".to_string());
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Backing up EFI variables...".to_string(),
+                    );
                     match view_model.backup_nvram().await {
                         Ok(json_paths) => {
                             set_loading(&ui_handle_async, false, String::new());
@@ -456,54 +481,110 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 + json_paths.matches(".auth").count()
                                 + json_paths.matches(".bin").count();
                             let msg = if count > 0 {
-                                format!("Backup complete: {} file(s) saved to /var/lib/bootcontrol/certs/", count)
+                                format!(
+                                    "Backup complete: {} file(s) saved to /var/lib/bootcontrol/certs/",
+                                    count
+                                )
                             } else {
-                                "Backup complete. Files saved to /var/lib/bootcontrol/certs/".to_string()
+                                "Backup complete. Files saved to /var/lib/bootcontrol/certs/"
+                                    .to_string()
                             };
                             show_toast(&ui_handle_async, msg, "success");
                         }
                         Err(e) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, format!("Backup failed: {}", bootcontrol_client::dbus_error_message(&e)), "error");
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Backup failed: {}",
+                                    bootcontrol_client::dbus_error_message(&e)
+                                ),
+                                "error",
+                            );
                         }
                     }
                 }
                 UiMessage::EnrollMok => {
-                    set_loading(&ui_handle_async, true, "Signing UKI and enrolling MOK key...".to_string());
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Signing UKI and enrolling MOK key...".to_string(),
+                    );
                     match view_model.enroll_mok().await {
                         Ok(_) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, "MOK enrolled. Reboot to complete enrollment.".to_string(), "success");
+                            show_toast(
+                                &ui_handle_async,
+                                "MOK enrolled. Reboot to complete enrollment.".to_string(),
+                                "success",
+                            );
                         }
                         Err(e) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, format!("MOK enrollment failed: {}", bootcontrol_client::dbus_error_message(&e)), "error");
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "MOK enrollment failed: {}",
+                                    bootcontrol_client::dbus_error_message(&e)
+                                ),
+                                "error",
+                            );
                         }
                     }
                 }
                 UiMessage::GenerateParanoia => {
-                    set_loading(&ui_handle_async, true, "Generating custom PK/KEK/db keys...".to_string());
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Generating custom PK/KEK/db keys...".to_string(),
+                    );
                     match view_model.generate_paranoia().await {
                         Ok(_json_paths) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, "Keys generated at /var/lib/bootcontrol/paranoia-keys/".to_string(), "success");
+                            show_toast(
+                                &ui_handle_async,
+                                "Keys generated at /var/lib/bootcontrol/paranoia-keys/".to_string(),
+                                "success",
+                            );
                         }
                         Err(e) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, format!("Key generation failed: {}", bootcontrol_client::dbus_error_message(&e)), "error");
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Key generation failed: {}",
+                                    bootcontrol_client::dbus_error_message(&e)
+                                ),
+                                "error",
+                            );
                         }
                     }
                 }
                 UiMessage::MergeParanoia => {
-                    set_loading(&ui_handle_async, true, "Merging Microsoft signatures...".to_string());
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Merging Microsoft signatures...".to_string(),
+                    );
                     match view_model.merge_paranoia().await {
                         Ok(auth_path) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, format!("Microsoft db merged: {}", auth_path), "success");
+                            show_toast(
+                                &ui_handle_async,
+                                format!("Microsoft db merged: {}", auth_path),
+                                "success",
+                            );
                         }
                         Err(e) => {
                             set_loading(&ui_handle_async, false, String::new());
-                            show_toast(&ui_handle_async, format!("Merge failed: {}", bootcontrol_client::dbus_error_message(&e)), "error");
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Merge failed: {}",
+                                    bootcontrol_client::dbus_error_message(&e)
+                                ),
+                                "error",
+                            );
                         }
                     }
                 }
@@ -775,17 +856,17 @@ fn kde_high_contrast_active() -> bool {
         Some(h) => h,
         None => return false,
     };
-    let path = std::path::PathBuf::from(home).join(".config").join("kdeglobals");
+    let path = std::path::PathBuf::from(home)
+        .join(".config")
+        .join("kdeglobals");
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(_) => return false,
     };
-    content
-        .lines()
-        .any(|l| {
-            let lc = l.to_lowercase();
-            lc.starts_with("colorscheme=") && lc.contains("high") && lc.contains("contrast")
-        })
+    content.lines().any(|l| {
+        let lc = l.to_lowercase();
+        lc.starts_with("colorscheme=") && lc.contains("high") && lc.contains("contrast")
+    })
 }
 
 // ── PR 7: high-contrast palette swap ────────────────────────────────────────
@@ -846,8 +927,7 @@ fn onboarding_marker_path() -> Option<std::path::PathBuf> {
 
 const ONBOARDING_MARKDOWN: &str = include_str!("../assets/onboarding/bootloader.md");
 
-const RECOVERY_FALLBACK: &str =
-    "Recovery instructions are not available yet — they are written by the daemon on the first snapshot.\n\nIf your computer fails to boot, restore from a Linux live USB:\n\n1. Mount your root filesystem.\n2. cd /var/lib/bootcontrol/snapshots/<latest-id>/\n3. Read manifest.json for the captured file paths.\n4. Copy each file back to its original location.\n5. Reinstall the bootloader (grub-install, bootctl install, or efibootmgr).";
+const RECOVERY_FALLBACK: &str = "Recovery instructions are not available yet — they are written by the daemon on the first snapshot.\n\nIf your computer fails to boot, restore from a Linux live USB:\n\n1. Mount your root filesystem.\n2. cd /var/lib/bootcontrol/snapshots/<latest-id>/\n3. Read manifest.json for the captured file paths.\n4. Copy each file back to its original location.\n5. Reinstall the bootloader (grub-install, bootctl install, or efibootmgr).";
 
 // ── Confirmation Sheet stubs (PR 4 — replaced by daemon data in PR 5) ──────
 

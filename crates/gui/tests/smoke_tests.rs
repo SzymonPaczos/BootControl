@@ -10,9 +10,9 @@
 //! BOOTCONTROL_BUS=session cargo test -p bootcontrol-gui --test smoke_tests -- --ignored
 //! ```
 
-use std::sync::Arc;
 use bootcontrol_client::{BootBackend, DbusBackend};
 use bootcontrol_gui::view_model::ViewModel;
+use std::sync::Arc;
 
 mod common;
 

@@ -11,10 +11,10 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
-use std::fs;
-use std::path::PathBuf;
 use crate::helpers::*;
 use anyhow::{Context, Result};
+use std::fs;
+use std::path::PathBuf;
 
 /// Test the Paranoia Mode keyset generation and signature merging.
 ///
@@ -38,7 +38,8 @@ pub async fn test_paranoia_keyset_generation() -> Result<()> {
         "org.bootcontrol.Manager",
         "/org/bootcontrol/Manager",
         "org.bootcontrol.Manager",
-    ).await?;
+    )
+    .await?;
 
     let output_dir = handle.failsafe_dir.path().join("keys");
     fs::create_dir_all(&output_dir)?;
@@ -57,7 +58,10 @@ pub async fn test_paranoia_keyset_generation() -> Result<()> {
     // Note: This requires cert-to-efi-sig-list and sign-efi-sig-list.
     // If they are missing, the daemon returns an error which we should handle gracefully in tests.
     let merge_result: Result<String, zbus::Error> = manager_proxy
-        .call("merge_paranoia_with_microsoft", &(output_dir.to_str().unwrap()))
+        .call(
+            "merge_paranoia_with_microsoft",
+            &(output_dir.to_str().unwrap()),
+        )
         .await;
 
     match merge_result {

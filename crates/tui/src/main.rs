@@ -28,7 +28,7 @@ use std::io;
 use std::sync::Arc;
 
 use app::{App, GrubEntry, Mode};
-use bootcontrol_client::{BootBackend, resolve_backend, dbus_error_message};
+use bootcontrol_client::{BootBackend, dbus_error_message, resolve_backend};
 use crossterm::{
     event::{EventStream, KeyCode, KeyEvent, KeyModifiers},
     execute,
@@ -169,14 +169,22 @@ async fn handle_browse_key(key: KeyEvent, app: &mut App, backend: &dyn BootBacke
 
 async fn handle_editing_key(key: KeyEvent, app: &mut App, backend: &dyn BootBackend) {
     match key {
-        KeyEvent { code: KeyCode::Enter, .. } => {
+        KeyEvent {
+            code: KeyCode::Enter,
+            ..
+        } => {
             commit_edit(app, backend).await;
         }
-        KeyEvent { code: KeyCode::Esc, .. } => {
+        KeyEvent {
+            code: KeyCode::Esc, ..
+        } => {
             app.cancel_edit();
             app.status_msg = "Edit cancelled.".into();
         }
-        KeyEvent { code: KeyCode::Backspace, .. } => {
+        KeyEvent {
+            code: KeyCode::Backspace,
+            ..
+        } => {
             app.pop_char();
         }
         KeyEvent {
@@ -205,7 +213,10 @@ fn handle_error_key(key: KeyEvent, app: &mut App) {
 
 /// Load the initial app state from the backend, branching on active backend type.
 async fn load_app(backend: &dyn BootBackend) -> Result<App, zbus::Error> {
-    let backend_name = backend.get_active_backend().await.unwrap_or_else(|_| "grub".to_string());
+    let backend_name = backend
+        .get_active_backend()
+        .await
+        .unwrap_or_else(|_| "grub".to_string());
 
     if backend_name.contains("systemd-boot") {
         load_systemd_boot(backend, backend_name).await
@@ -226,7 +237,10 @@ async fn load_grub(backend: &dyn BootBackend, backend_name: String) -> Result<Ap
     Ok(App::new_with_backend(entries, etag, backend_name))
 }
 
-async fn load_systemd_boot(backend: &dyn BootBackend, backend_name: String) -> Result<App, zbus::Error> {
+async fn load_systemd_boot(
+    backend: &dyn BootBackend,
+    backend_name: String,
+) -> Result<App, zbus::Error> {
     let entries_dto = backend.list_loader_entries().await?;
     let etag = backend.get_loader_conf_etag().await.unwrap_or_default();
     let entries: Vec<GrubEntry> = entries_dto
@@ -243,7 +257,10 @@ async fn load_uki(backend: &dyn BootBackend, backend_name: String) -> Result<App
     let (params, etag) = backend.read_kernel_cmdline().await?;
     let entries: Vec<GrubEntry> = params
         .into_iter()
-        .map(|p| GrubEntry { key: p, value: String::new() })
+        .map(|p| GrubEntry {
+            key: p,
+            value: String::new(),
+        })
         .collect();
     Ok(App::new_with_backend(entries, etag, backend_name))
 }
@@ -276,7 +293,10 @@ async fn reload_config(app: &mut App, backend: &dyn BootBackend) {
             Ok((params, etag)) => {
                 let entries: Vec<GrubEntry> = params
                     .into_iter()
-                    .map(|p| GrubEntry { key: p, value: String::new() })
+                    .map(|p| GrubEntry {
+                        key: p,
+                        value: String::new(),
+                    })
                     .collect();
                 app.apply_grub_entries(entries, etag);
                 app.status_msg = "Kernel cmdline reloaded.".into();

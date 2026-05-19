@@ -103,7 +103,11 @@ impl App {
     }
 
     /// Construct a new [`App`] with an explicit backend name.
-    pub fn new_with_backend(mut entries: Vec<GrubEntry>, etag: String, backend_name: String) -> Self {
+    pub fn new_with_backend(
+        mut entries: Vec<GrubEntry>,
+        etag: String,
+        backend_name: String,
+    ) -> Self {
         entries.sort_by(|a, b| a.key.cmp(&b.key));
         Self {
             entries,
