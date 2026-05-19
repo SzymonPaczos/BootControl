@@ -68,6 +68,13 @@ pub struct DaemonHandle {
     pub grub_file: NamedTempFile,
     /// Temp directory for the failsafe GRUB snippet.
     pub failsafe_dir: TempDir,
+    /// Temp directory the daemon writes snapshots into.
+    /// Kept alive so the daemon's working dir does not disappear mid-test.
+    pub snapshot_dir: TempDir,
+    /// Temp directory holding the fake `grub-mkconfig` stub on the daemon's
+    /// PATH. Held by the handle so the stub stays on disk for the daemon's
+    /// lifetime — it is exec'd each time `SetGrubValue` succeeds.
+    pub grub_mkconfig_stub_dir: TempDir,
 }
 
 impl Drop for DaemonHandle {
@@ -102,6 +109,37 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
     let failsafe_dir = TempDir::new().context("failed to create failsafe temp dir")?;
     let failsafe_path = failsafe_dir.path().join("failsafe.cfg");
 
+    // ── Step 2b: Create a temp dir for the daemon's snapshot root ─────────────
+    // The production default `/var/lib/bootcontrol/snapshots/` is unwritable
+    // from the unprivileged user the session-bus daemon runs as.
+    let snapshot_dir = TempDir::new().context("failed to create snapshot temp dir")?;
+
+    // ── Step 2c: Stub `grub-mkconfig` on PATH for the daemon ──────────────────
+    // The daemon shells out to `grub-mkconfig` after a successful write to
+    // refresh `/boot/grub/grub.cfg`. The real tool requires root and the
+    // EFI/grub partitions to be mounted; in an E2E session-bus run we just
+    // need it to exit 0. Write a trivial POSIX stub and prepend its dir to
+    // the daemon's PATH.
+    let stub_dir = TempDir::new().context("failed to create grub-mkconfig stub dir")?;
+    let stub_path = stub_dir.path().join("grub-mkconfig");
+    {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        let mut f =
+            std::fs::File::create(&stub_path).context("failed to create grub-mkconfig stub")?;
+        f.write_all(b"#!/bin/sh\nexit 0\n")
+            .context("failed to write grub-mkconfig stub")?;
+        f.sync_all().context("failed to sync grub-mkconfig stub")?;
+        drop(f);
+        std::fs::set_permissions(&stub_path, std::fs::Permissions::from_mode(0o755))
+            .context("failed to chmod grub-mkconfig stub")?;
+    }
+    let stubbed_path = format!(
+        "{}:{}",
+        stub_dir.path().display(),
+        std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_string())
+    );
+
     // ── Step 3: Locate (and build if stale) the polkit-mock binary ───────────
     let binary_path = build_daemon_binary().context("failed to build bootcontrold")?;
 
@@ -110,6 +148,8 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
         .env("BOOTCONTROL_BUS", "session")
         .env("BOOTCONTROL_GRUB_PATH", &grub_path)
         .env("BOOTCONTROL_FAILSAFE_PATH", &failsafe_path)
+        .env("BOOTCONTROL_SNAPSHOT_ROOT", snapshot_dir.path())
+        .env("PATH", &stubbed_path)
         // Silence daemon logs unless RUST_LOG is explicitly set by the caller.
         .env_remove("RUST_LOG")
         .stdout(Stdio::null())
@@ -132,6 +172,8 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
         conn,
         grub_file,
         failsafe_dir,
+        snapshot_dir,
+        grub_mkconfig_stub_dir: stub_dir,
     })
 }
 
@@ -328,18 +370,30 @@ fn write_temp_grub(content: &str) -> anyhow::Result<NamedTempFile> {
 ///
 /// Returns an error if `cargo build` exits with a non-zero status.
 fn build_daemon_binary() -> anyhow::Result<PathBuf> {
-    // Resolve the workspace root: the manifest dir of this test binary is the
-    // workspace root because the [[test]] section is declared there.
-    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // `CARGO_MANIFEST_DIR` resolves to *this* test crate (`tests/e2e/`), not
+    // the workspace root. Walk up two levels (`tests/e2e/` → `tests/` →
+    // workspace root) so the spawned `cargo build` runs in the workspace
+    // and target/ ends up alongside the other crates.
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .map(PathBuf::from)
+        .context("CARGO_MANIFEST_DIR has no two-level parent")?;
 
-    let mut features = vec!["bootcontrold/polkit-mock".to_string()];
+    // `-p bootcontrold` disambiguates which package owns the feature flag.
+    // Without it, cargo interprets `--features bootcontrold/polkit-mock` as
+    // belonging to the current package (this test crate), which does not
+    // expose that feature and rejects the build.
+    let mut features = vec!["polkit-mock".to_string()];
     if cfg!(feature = "experimental_paranoia") {
-        features.push("bootcontrold/experimental_paranoia".to_string());
+        features.push("experimental_paranoia".to_string());
     }
 
     let status = Command::new(env!("CARGO"))
         .args([
             "build",
+            "-p",
+            "bootcontrold",
             "--bin",
             "bootcontrold",
             "--features",
@@ -351,8 +405,9 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
 
     if !status.success() {
         bail!(
-            "cargo build --bin bootcontrold --features bootcontrold/polkit-mock failed \
+            "cargo build -p bootcontrold --bin bootcontrold --features {} failed \
              with exit code {:?}",
+            features.join(","),
             status.code()
         );
     }

@@ -45,7 +45,7 @@ pub async fn test_paranoia_keyset_generation() -> Result<()> {
     fs::create_dir_all(&output_dir)?;
 
     let json_paths: String = manager_proxy
-        .call("generate_paranoia_keyset", &(output_dir.to_str().unwrap()))
+        .call("GenerateParanoiaKeyset", &(output_dir.to_str().unwrap()))
         .await
         .context("D-Bus GenerateParanoiaKeyset failed")?;
 
@@ -59,7 +59,7 @@ pub async fn test_paranoia_keyset_generation() -> Result<()> {
     // If they are missing, the daemon returns an error which we should handle gracefully in tests.
     let merge_result: Result<String, zbus::Error> = manager_proxy
         .call(
-            "merge_paranoia_with_microsoft",
+            "MergeParanoiaWithMicrosoft",
             &(output_dir.to_str().unwrap()),
         )
         .await;

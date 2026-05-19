@@ -18,6 +18,7 @@
 //! | `BOOTCONTROL_BUS` | anything else / unset | Bind to the system bus (production). |
 //! | `BOOTCONTROL_GRUB_PATH` | any path | Override the GRUB config path (E2E tests). |
 //! | `BOOTCONTROL_FAILSAFE_PATH` | any path | Override the failsafe snippet path (E2E tests). |
+//! | `BOOTCONTROL_SNAPSHOT_ROOT` | any path | Override the snapshot root dir (E2E tests). |
 //! | `RUST_LOG` | `trace`, `debug`, `info`, `warn`, `error` | Log verbosity filter. |
 
 use std::path::PathBuf;
@@ -74,6 +75,18 @@ fn resolve_failsafe_path() -> PathBuf {
     }
 }
 
+/// Resolve the snapshot root from `BOOTCONTROL_SNAPSHOT_ROOT` env var.
+///
+/// Returns `None` to mean "use the GrubManager default"
+/// (`/var/lib/bootcontrol/snapshots`). E2E tests inject a tempdir here
+/// because they run the daemon as an unprivileged user.
+fn resolve_snapshot_root() -> Option<PathBuf> {
+    std::env::var("BOOTCONTROL_SNAPSHOT_ROOT")
+        .ok()
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 1. Initialise structured logging ────────────────────────────────────
@@ -97,7 +110,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backend = build_backend(detected);
 
     // ── 3. Build D-Bus connection ────────────────────────────────────────────
-    let manager = GrubManager::with_failsafe_path(grub_path, failsafe_path, backend);
+    let mut manager = GrubManager::with_failsafe_path(grub_path, failsafe_path, backend);
+    if let Some(snap) = resolve_snapshot_root() {
+        manager = manager.with_snapshot_root(snap);
+    }
 
     let _conn = dbus_connection_builder()
         // ── 3. Register the interface object ────────────────────────────────
