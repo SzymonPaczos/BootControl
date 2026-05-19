@@ -57,7 +57,7 @@ pub trait MokSigner {
     ///
     /// * `cert`   - Path to the MOK certificate (`.crt`) to enroll.
     /// * `output` - Path where the enrollment request will be written.
-    ///              (Reserved for future use; current implementations may ignore it.)
+    ///   (Reserved for future use; current implementations may ignore it.)
     ///
     /// # Errors
     ///
