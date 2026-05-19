@@ -82,6 +82,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let binary_path = fs::canonicalize("target/debug/bootcontrold")?;
     let grub_file = tempfile::NamedTempFile::new()?;
     let failsafe_dir = tempfile::TempDir::new()?;
+    let snapshot_dir = tempfile::TempDir::new()?;
 
     let process = Command::new(&binary_path)
         .env("BOOTCONTROL_BUS", "session")
@@ -90,6 +91,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
             "BOOTCONTROL_FAILSAFE_PATH",
             failsafe_dir.path().join("failsafe.cfg"),
         )
+        .env("BOOTCONTROL_SNAPSHOT_ROOT", snapshot_dir.path())
         .env("BOOTCONTROL_MOK_KEY", &mok_key)
         .env("BOOTCONTROL_MOK_CERT", &mok_crt)
         .stdout(std::process::Stdio::null())
@@ -100,11 +102,14 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let conn = zbus::Connection::session().await?;
     // Wait for it to come back online.
     // (A more robust helper would be better here, but I'll reuse the logic).
+    let stub_dir = tempfile::TempDir::new()?;
     let handle = DaemonHandle {
         process,
         conn,
         grub_file,
         failsafe_dir,
+        snapshot_dir,
+        grub_mkconfig_stub_dir: stub_dir,
     };
 
     // ── Step 4: Sign the dummy EFI binary via D-Bus ─────────────────────────
