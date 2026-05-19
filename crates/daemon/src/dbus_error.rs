@@ -30,6 +30,7 @@
 //! | `SnapshotNotFound`      | `org.bootcontrol.Error.SnapshotNotFound`           |
 //! | `SnapshotCorrupt`       | `org.bootcontrol.Error.SnapshotCorrupt`            |
 //! | `SnapshotFailed`        | `org.bootcontrol.Error.SnapshotFailed`             |
+//! | `ImmutableDistroDetected` | `org.bootcontrol.Error.ImmutableDistroDetected`  |
 
 use bootcontrol_core::error::BootControlError;
 use zbus::DBusError;
@@ -92,6 +93,11 @@ pub enum DaemonError {
 
     /// Zapis zmiennej EFI NVRAM nie powiódł się.
     NvramWriteFailed(String),
+
+    /// Host jest atomic / immutable distro (ostree, rpm-ostree). Naive zapis
+    /// do `/etc/default/grub` lub ESP zostałby odrzucony lub odwrócony przy
+    /// najbliższym rebase.
+    ImmutableDistroDetected(String),
 
     /// Wskazany snapshot nie istnieje pod katalogiem snapshot root.
     SnapshotNotFound(String),
@@ -160,6 +166,9 @@ pub fn to_daemon_error(e: BootControlError) -> DaemonError {
         BootControlError::SigningFailed { .. } => DaemonError::SigningFailed(msg),
         BootControlError::KeyGenerationFailed { .. } => DaemonError::KeyGenerationFailed(msg),
         BootControlError::NvramWriteFailed { .. } => DaemonError::NvramWriteFailed(msg),
+        BootControlError::ImmutableDistroDetected { .. } => {
+            DaemonError::ImmutableDistroDetected(msg)
+        }
         // #[non_exhaustive] — przyszłe warianty mapują na Failed
         _ => DaemonError::Failed(msg),
     }
