@@ -121,9 +121,7 @@ mod tests {
     fn detect_driver_returns_none_when_no_tool_on_path() {
         // Acquire the workspace-wide PATH lock to prevent concurrent modification.
         let original_path = std::env::var("PATH").unwrap_or_default();
-        let _guard = crate::grub_rebuild::tests::PATH_LOCK
-            .lock()
-            .expect("PATH lock poisoned");
+        let _guard = crate::grub_rebuild::tests::lock_path();
 
         // Point PATH at a temp dir that contains none of the expected binaries.
         let empty_dir = tempfile::tempdir().expect("tempdir");
@@ -147,9 +145,7 @@ mod tests {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
 
-        let _guard = crate::grub_rebuild::tests::PATH_LOCK
-            .lock()
-            .expect("PATH lock poisoned");
+        let _guard = crate::grub_rebuild::tests::lock_path();
         let original_path = std::env::var("PATH").unwrap_or_default();
 
         let bin_dir = tempfile::tempdir().expect("tempdir");
@@ -180,9 +176,7 @@ mod tests {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
 
-        let _guard = crate::grub_rebuild::tests::PATH_LOCK
-            .lock()
-            .expect("PATH lock poisoned");
+        let _guard = crate::grub_rebuild::tests::lock_path();
         let original_path = std::env::var("PATH").unwrap_or_default();
 
         let bin_dir = tempfile::tempdir().expect("tempdir");
