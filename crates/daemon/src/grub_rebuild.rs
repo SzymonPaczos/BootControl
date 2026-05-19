@@ -246,10 +246,7 @@ pub(crate) mod tests {
 
         let (script, _dir) = make_script("exit 0");
         let script_path = script.to_path_buf();
-        let script_dir = script_path
-            .parent()
-            .expect("script parent")
-            .to_path_buf();
+        let script_dir = script_path.parent().expect("script parent").to_path_buf();
         let link_path = script_dir.join("grub-mkconfig");
         std::fs::hard_link(&script_path, &link_path).unwrap_or_else(|_| {
             std::os::unix::fs::symlink(&script_path, &link_path).expect("symlink")

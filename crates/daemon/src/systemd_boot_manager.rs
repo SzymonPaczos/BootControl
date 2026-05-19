@@ -127,11 +127,10 @@ pub fn read_all_entries(
 /// Read the `default` key from `loader.conf`, returning an empty string if
 /// the file does not exist or has no `default` entry.
 pub fn read_loader_conf_default(loader_conf_path: &Path) -> Result<String, BootControlError> {
-    let content = fs::read_to_string(loader_conf_path).map_err(|e| {
-        BootControlError::EspScanFailed {
+    let content =
+        fs::read_to_string(loader_conf_path).map_err(|e| BootControlError::EspScanFailed {
             reason: format!("cannot read loader.conf: {e}"),
-        }
-    })?;
+        })?;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -150,26 +149,20 @@ pub fn read_loader_conf_default(loader_conf_path: &Path) -> Result<String, BootC
 
 /// Compute the ETag of `loader.conf`.
 pub fn fetch_loader_conf_etag(loader_conf_path: &Path) -> Result<String, BootControlError> {
-    let content = fs::read_to_string(loader_conf_path).map_err(|e| {
-        BootControlError::EspScanFailed {
+    let content =
+        fs::read_to_string(loader_conf_path).map_err(|e| BootControlError::EspScanFailed {
             reason: format!("cannot read loader.conf for ETag: {e}"),
-        }
-    })?;
+        })?;
     Ok(compute_etag_str(&content))
 }
 
 /// Read a single loader entry file by ID.
 ///
 /// Returns `(entry, file_etag)`.
-pub fn read_entry(
-    entries_dir: &Path,
-    id: &str,
-) -> Result<(LoaderEntry, String), BootControlError> {
+pub fn read_entry(entries_dir: &Path, id: &str) -> Result<(LoaderEntry, String), BootControlError> {
     let path = entry_path(entries_dir, id);
-    let content = fs::read_to_string(&path).map_err(|e| {
-        BootControlError::EspScanFailed {
-            reason: format!("cannot read entry '{id}': {e}"),
-        }
+    let content = fs::read_to_string(&path).map_err(|e| BootControlError::EspScanFailed {
+        reason: format!("cannot read entry '{id}': {e}"),
     })?;
     let etag = compute_etag_str(&content);
     let entry = parse_loader_entry(&content)?;
@@ -209,11 +202,10 @@ pub fn set_loader_default(
     validate_entry_id(id)?;
 
     let new_content = if loader_conf_path.exists() {
-        let content = fs::read_to_string(loader_conf_path).map_err(|e| {
-            BootControlError::EspScanFailed {
+        let content =
+            fs::read_to_string(loader_conf_path).map_err(|e| BootControlError::EspScanFailed {
                 reason: format!("cannot read loader.conf: {e}"),
-            }
-        })?;
+            })?;
         update_or_append_key(&content, "default", id)
     } else {
         format!("default {id}\n")
@@ -347,9 +339,10 @@ fn write_atomically(tmp_path: &Path, target: &Path, content: &str) -> Result<(),
         .map_err(|e| BootControlError::EspScanFailed {
             reason: format!("write tmp file failed: {e}"),
         })?;
-    tmp.sync_all().map_err(|e| BootControlError::EspScanFailed {
-        reason: format!("fsync failed: {e}"),
-    })?;
+    tmp.sync_all()
+        .map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("fsync failed: {e}"),
+        })?;
     drop(tmp);
     fs::rename(tmp_path, target).map_err(|e| BootControlError::EspScanFailed {
         reason: format!("atomic rename failed: {e}"),
@@ -478,7 +471,10 @@ options root=/dev/sda1 rw
         fs::write(&loader_conf, LOADER_CONF).unwrap();
 
         let result = set_loader_default(&loader_conf, "fallback", "stale-etag-xyz");
-        assert!(matches!(result, Err(BootControlError::StateMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::StateMismatch { .. })
+        ));
     }
 
     // ── write_loader_entry ────────────────────────────────────────────────────
@@ -500,7 +496,10 @@ options root=/dev/sda1 rw
         let dir = TempDir::new().unwrap();
         let entry = parse_loader_entry(ARCH_ENTRY).unwrap();
         let result = write_loader_entry(dir.path(), "../evil", &entry, "");
-        assert!(matches!(result, Err(BootControlError::MalformedValue { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::MalformedValue { .. })
+        ));
     }
 
     // ── update_or_append_key ─────────────────────────────────────────────────

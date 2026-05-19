@@ -82,7 +82,11 @@ fn main() -> Result<(), slint::PlatformError> {
     app.on_key_event(|text: slint::SharedString, shift, ctrl, alt, meta| {
         eprintln!(
             "[KEY] text={:?} shift={} ctrl={} alt={} meta={}",
-            text.as_str(), shift, ctrl, alt, meta
+            text.as_str(),
+            shift,
+            ctrl,
+            alt,
+            meta
         );
     });
     app.run()

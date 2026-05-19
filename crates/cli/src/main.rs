@@ -16,8 +16,8 @@
 
 #![deny(warnings)]
 
+use bootcontrol_client::{dbus_error_message, resolve_backend};
 use clap::{Parser, Subcommand};
-use bootcontrol_client::{resolve_backend, dbus_error_message};
 use tracing::error;
 
 pub mod rescue;
@@ -200,17 +200,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let backend = resolve_backend().await;
             match action {
                 BootAction::List => {
-                    let entries = backend.list_loader_entries().await
+                    let entries = backend
+                        .list_loader_entries()
+                        .await
                         .map_err(|e| format!("{}", dbus_error_message(&e)))?;
 
                     println!("Loader Entries ({} total):", entries.len());
                     for e in &entries {
                         let default_marker = if e.is_default { " [default]" } else { "" };
-                        println!(
-                            "  {}{}",
-                            e.id,
-                            default_marker,
-                        );
+                        println!("  {}{}", e.id, default_marker,);
                         if let Some(title) = &e.title {
                             println!("    title:   {title}");
                         }
@@ -227,7 +225,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 BootAction::SetDefault { id, etag } => {
-                    backend.set_loader_default(&id, &etag).await
+                    backend
+                        .set_loader_default(&id, &etag)
+                        .await
                         .map_err(|e| format!("{}", dbus_error_message(&e)))?;
                     println!("Default entry set to: {id}");
                 }
@@ -238,7 +238,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let backend = resolve_backend().await;
             match action {
                 CmdlineAction::Get => {
-                    let (params, etag) = backend.read_kernel_cmdline().await
+                    let (params, etag) = backend
+                        .read_kernel_cmdline()
+                        .await
                         .map_err(|e| format!("{}", dbus_error_message(&e)))?;
                     println!("ETag: {etag}");
                     println!("\nKernel Parameters ({} total):", params.len());
@@ -247,12 +249,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 CmdlineAction::Add { param, etag } => {
-                    backend.add_kernel_param(&param, &etag).await
+                    backend
+                        .add_kernel_param(&param, &etag)
+                        .await
                         .map_err(|e| format!("{}", dbus_error_message(&e)))?;
                     println!("Added parameter: {param}");
                 }
                 CmdlineAction::Remove { param, etag } => {
-                    backend.remove_kernel_param(&param, &etag).await
+                    backend
+                        .remove_kernel_param(&param, &etag)
+                        .await
                         .map_err(|e| format!("{}", dbus_error_message(&e)))?;
                     println!("Removed parameter: {param}");
                 }
