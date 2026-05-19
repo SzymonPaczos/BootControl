@@ -31,7 +31,11 @@ pub fn generate_custom_keyset(
 ) -> Result<ParanoiaKeySet, BootControlError> {
     // Step 1: Create output directory
     std::fs::create_dir_all(output_dir).map_err(|e| BootControlError::KeyGenerationFailed {
-        reason: format!("Failed to create output directory {}: {}", output_dir.display(), e),
+        reason: format!(
+            "Failed to create output directory {}: {}",
+            output_dir.display(),
+            e
+        ),
     })?;
 
     // Step 2: Resolve openssl binary
@@ -81,12 +85,30 @@ pub fn generate_custom_keyset(
     }
 
     Ok(ParanoiaKeySet {
-        pk_cert: output_dir.join("PK.crt").canonicalize().unwrap_or_else(|_| output_dir.join("PK.crt")),
-        kek_cert: output_dir.join("KEK.crt").canonicalize().unwrap_or_else(|_| output_dir.join("KEK.crt")),
-        db_cert: output_dir.join("db.crt").canonicalize().unwrap_or_else(|_| output_dir.join("db.crt")),
-        pk_key: output_dir.join("PK.key").canonicalize().unwrap_or_else(|_| output_dir.join("PK.key")),
-        kek_key: output_dir.join("KEK.key").canonicalize().unwrap_or_else(|_| output_dir.join("KEK.key")),
-        db_key: output_dir.join("db.key").canonicalize().unwrap_or_else(|_| output_dir.join("db.key")),
+        pk_cert: output_dir
+            .join("PK.crt")
+            .canonicalize()
+            .unwrap_or_else(|_| output_dir.join("PK.crt")),
+        kek_cert: output_dir
+            .join("KEK.crt")
+            .canonicalize()
+            .unwrap_or_else(|_| output_dir.join("KEK.crt")),
+        db_cert: output_dir
+            .join("db.crt")
+            .canonicalize()
+            .unwrap_or_else(|_| output_dir.join("db.crt")),
+        pk_key: output_dir
+            .join("PK.key")
+            .canonicalize()
+            .unwrap_or_else(|_| output_dir.join("PK.key")),
+        kek_key: output_dir
+            .join("KEK.key")
+            .canonicalize()
+            .unwrap_or_else(|_| output_dir.join("KEK.key")),
+        db_key: output_dir
+            .join("db.key")
+            .canonicalize()
+            .unwrap_or_else(|_| output_dir.join("db.key")),
     })
 }
 
@@ -112,7 +134,11 @@ pub fn merge_with_microsoft_signatures(
 ) -> Result<PathBuf, BootControlError> {
     // Step 1: Create output directory
     std::fs::create_dir_all(output_dir).map_err(|e| BootControlError::KeyGenerationFailed {
-        reason: format!("Failed to create output directory {}: {}", output_dir.display(), e),
+        reason: format!(
+            "Failed to create output directory {}: {}",
+            output_dir.display(),
+            e
+        ),
     })?;
 
     // Step 2: Resolve tools
@@ -180,7 +206,13 @@ mod tests {
 
     static PATH_LOCK: Mutex<()> = Mutex::new(());
 
-    fn write_fake_binary(dir: &Path, name: &str, exit_code: i32, stdout: &str, stderr: &str) -> PathBuf {
+    fn write_fake_binary(
+        dir: &Path,
+        name: &str,
+        exit_code: i32,
+        stdout: &str,
+        stderr: &str,
+    ) -> PathBuf {
         let path = dir.join(name);
         #[cfg(unix)]
         {
@@ -260,7 +292,8 @@ mod tests {
             db_key: PathBuf::from("db.key"),
         };
 
-        let result = merge_with_microsoft_signatures(&keyset, temp.path(), Some(bin_dir.path())).unwrap();
+        let result =
+            merge_with_microsoft_signatures(&keyset, temp.path(), Some(bin_dir.path())).unwrap();
 
         assert_eq!(result, temp.path().join("db-merged.auth"));
         assert!(result.exists());

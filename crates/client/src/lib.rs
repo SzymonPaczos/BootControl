@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use zbus::{Connection, proxy};
+use std::collections::HashMap;
+use zbus::{proxy, Connection};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared DTO types
@@ -265,9 +265,8 @@ impl BootBackend for DbusBackend {
     async fn list_loader_entries(&self) -> zbus::Result<Vec<LoaderEntryDto>> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         let json = proxy.list_loader_entries().await?;
-        serde_json::from_str(&json).map_err(|e| {
-            zbus::Error::Failure(format!("failed to deserialize loader entries: {e}"))
-        })
+        serde_json::from_str(&json)
+            .map_err(|e| zbus::Error::Failure(format!("failed to deserialize loader entries: {e}")))
     }
 
     async fn read_loader_entry(&self, id: &str) -> zbus::Result<(LoaderEntryDto, String)> {
@@ -307,9 +306,8 @@ impl BootBackend for DbusBackend {
     async fn list_snapshots(&self) -> zbus::Result<Vec<SnapshotInfoDto>> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         let json = proxy.list_snapshots().await?;
-        serde_json::from_str(&json).map_err(|e| {
-            zbus::Error::Failure(format!("failed to deserialize snapshot list: {e}"))
-        })
+        serde_json::from_str(&json)
+            .map_err(|e| zbus::Error::Failure(format!("failed to deserialize snapshot list: {e}")))
     }
 
     async fn restore_snapshot(&self, id: &str) -> zbus::Result<()> {
@@ -332,7 +330,10 @@ impl BootBackend for MockBackend {
         mock.insert("GRUB_TIMEOUT".to_string(), "5".to_string());
         mock.insert("GRUB_DEFAULT".to_string(), "0".to_string());
         mock.insert("GRUB_DISTRIBUTOR".to_string(), "MockOS".to_string());
-        mock.insert("GRUB_CMDLINE_LINUX_DEFAULT".to_string(), "quiet splash".to_string());
+        mock.insert(
+            "GRUB_CMDLINE_LINUX_DEFAULT".to_string(),
+            "quiet splash".to_string(),
+        );
         mock.insert("GRUB_DISABLE_OS_PROBER".to_string(), "false".to_string());
         Ok((mock, "mock-etag-12345".to_string()))
     }
@@ -514,7 +515,10 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_read_config_returns_expected_entries() {
         let backend = MockBackend;
-        let (map, _etag) = backend.read_config().await.expect("read_config should succeed");
+        let (map, _etag) = backend
+            .read_config()
+            .await
+            .expect("read_config should succeed");
         assert_eq!(map.get("GRUB_TIMEOUT").map(String::as_str), Some("5"));
         assert_eq!(map.get("GRUB_DEFAULT").map(String::as_str), Some("0"));
         assert_eq!(
@@ -526,7 +530,10 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_read_config_etag_is_non_empty() {
         let backend = MockBackend;
-        let (_map, etag) = backend.read_config().await.expect("read_config should succeed");
+        let (_map, etag) = backend
+            .read_config()
+            .await
+            .expect("read_config should succeed");
         assert!(!etag.is_empty(), "ETag must not be empty");
     }
 
@@ -535,8 +542,13 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_set_value_always_succeeds() {
         let backend = MockBackend;
-        let result = backend.set_value("GRUB_TIMEOUT", "10", "mock-etag-12345").await;
-        assert!(result.is_ok(), "MockBackend::set_value must always return Ok");
+        let result = backend
+            .set_value("GRUB_TIMEOUT", "10", "mock-etag-12345")
+            .await;
+        assert!(
+            result.is_ok(),
+            "MockBackend::set_value must always return Ok"
+        );
     }
 
     // ── MockBackend::get_active_backend ───────────────────────────────────────
@@ -544,7 +556,10 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_active_backend_contains_grub() {
         let backend = MockBackend;
-        let name = backend.get_active_backend().await.expect("get_active_backend should succeed");
+        let name = backend
+            .get_active_backend()
+            .await
+            .expect("get_active_backend should succeed");
         assert!(
             name.contains("grub"),
             "active backend name should contain 'grub', got: {name}"
@@ -564,9 +579,15 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_backup_nvram_returns_json_array_string() {
         let backend = MockBackend;
-        let json = backend.backup_nvram("").await.expect("backup_nvram should succeed");
+        let json = backend
+            .backup_nvram("")
+            .await
+            .expect("backup_nvram should succeed");
         let trimmed = json.trim();
-        assert!(trimmed.starts_with('['), "must be a JSON array, got: {json}");
+        assert!(
+            trimmed.starts_with('['),
+            "must be a JSON array, got: {json}"
+        );
         assert!(trimmed.ends_with(']'), "must be a JSON array, got: {json}");
         assert!(!json.is_empty(), "JSON string must not be empty");
     }
@@ -576,7 +597,10 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_sign_and_enroll_uki_succeeds() {
         let backend = MockBackend;
-        assert!(backend.sign_and_enroll_uki("/boot/efi/EFI/linux.efi").await.is_ok());
+        assert!(backend
+            .sign_and_enroll_uki("/boot/efi/EFI/linux.efi")
+            .await
+            .is_ok());
     }
 
     // ── MockBackend::generate_paranoia_keyset ─────────────────────────────────
@@ -589,10 +613,16 @@ mod tests {
             .await
             .expect("generate_paranoia_keyset should succeed");
         let trimmed = json.trim();
-        assert!(trimmed.starts_with('['), "must be a JSON array, got: {json}");
+        assert!(
+            trimmed.starts_with('['),
+            "must be a JSON array, got: {json}"
+        );
         assert!(trimmed.ends_with(']'), "must be a JSON array, got: {json}");
         assert!(json.contains("PK"), "keyset JSON must mention PK key file");
-        assert!(json.contains("KEK"), "keyset JSON must mention KEK key file");
+        assert!(
+            json.contains("KEK"),
+            "keyset JSON must mention KEK key file"
+        );
     }
 
     // ── MockBackend::merge_paranoia_with_microsoft ────────────────────────────
@@ -615,10 +645,15 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_list_loader_entries_returns_two_entries() {
         let backend = MockBackend;
-        let entries = backend.list_loader_entries().await.expect("list_loader_entries should succeed");
+        let entries = backend
+            .list_loader_entries()
+            .await
+            .expect("list_loader_entries should succeed");
         assert_eq!(entries.len(), 2);
         assert!(entries.iter().any(|e| e.id == "arch" && e.is_default));
-        assert!(entries.iter().any(|e| e.id == "arch-fallback" && !e.is_default));
+        assert!(entries
+            .iter()
+            .any(|e| e.id == "arch-fallback" && !e.is_default));
     }
 
     // ── MockBackend::read_kernel_cmdline ──────────────────────────────────────
@@ -626,7 +661,10 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_read_kernel_cmdline_returns_params_and_etag() {
         let backend = MockBackend;
-        let (params, etag) = backend.read_kernel_cmdline().await.expect("read_kernel_cmdline should succeed");
+        let (params, etag) = backend
+            .read_kernel_cmdline()
+            .await
+            .expect("read_kernel_cmdline should succeed");
         assert!(!params.is_empty(), "params must not be empty");
         assert!(!etag.is_empty(), "etag must not be empty");
         assert!(params.contains(&"quiet".to_string()));
@@ -637,13 +675,19 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_add_kernel_param_succeeds() {
         let backend = MockBackend;
-        assert!(backend.add_kernel_param("loglevel=3", "mock-etag").await.is_ok());
+        assert!(backend
+            .add_kernel_param("loglevel=3", "mock-etag")
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
     async fn mock_backend_remove_kernel_param_succeeds() {
         let backend = MockBackend;
-        assert!(backend.remove_kernel_param("quiet", "mock-etag").await.is_ok());
+        assert!(backend
+            .remove_kernel_param("quiet", "mock-etag")
+            .await
+            .is_ok());
     }
 
     // ── MockBackend snapshot operations ───────────────────────────────────────

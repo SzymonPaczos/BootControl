@@ -44,10 +44,8 @@ pub fn read_kernel_cmdline(path: &Path) -> Result<(Vec<String>, String), BootCon
 
 /// Return only the ETag of the current on-disk cmdline file.
 pub fn fetch_cmdline_etag(path: &Path) -> Result<String, BootControlError> {
-    let content = fs::read_to_string(path).map_err(|e| {
-        BootControlError::EspScanFailed {
-            reason: format!("cannot read kernel cmdline for ETag: {e}"),
-        }
+    let content = fs::read_to_string(path).map_err(|e| BootControlError::EspScanFailed {
+        reason: format!("cannot read kernel cmdline for ETag: {e}"),
     })?;
     Ok(compute_etag_str(&content))
 }
@@ -234,7 +232,10 @@ mod tests {
     fn add_param_rejects_stale_etag() {
         let f = write_temp(CMDLINE);
         let result = add_kernel_param(f.path(), "loglevel=3", "stale-etag");
-        assert!(matches!(result, Err(BootControlError::StateMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::StateMismatch { .. })
+        ));
     }
 
     #[test]
@@ -264,6 +265,9 @@ mod tests {
     fn remove_param_rejects_stale_etag() {
         let f = write_temp(CMDLINE);
         let result = remove_kernel_param(f.path(), "quiet", "stale-etag");
-        assert!(matches!(result, Err(BootControlError::StateMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(BootControlError::StateMismatch { .. })
+        ));
     }
 }

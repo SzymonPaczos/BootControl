@@ -192,11 +192,20 @@ pub fn locate_ovmf() -> Option<OvmfPaths> {
     // 2. Try common Linux distribution paths
     let candidates = [
         // Ubuntu / Debian
-        ("/usr/share/OVMF/OVMF_CODE.fd", "/usr/share/OVMF/OVMF_VARS.fd"),
+        (
+            "/usr/share/OVMF/OVMF_CODE.fd",
+            "/usr/share/OVMF/OVMF_VARS.fd",
+        ),
         // Fedora / RHEL
-        ("/usr/share/edk2/ovmf/OVMF_CODE.fd", "/usr/share/edk2/ovmf/OVMF_VARS.fd"),
+        (
+            "/usr/share/edk2/ovmf/OVMF_CODE.fd",
+            "/usr/share/edk2/ovmf/OVMF_VARS.fd",
+        ),
         // Arch Linux
-        ("/usr/share/ovmf/x64/OVMF_CODE.fd", "/usr/share/ovmf/x64/OVMF_VARS.fd"),
+        (
+            "/usr/share/ovmf/x64/OVMF_CODE.fd",
+            "/usr/share/ovmf/x64/OVMF_VARS.fd",
+        ),
     ];
 
     for (c, v) in candidates {
@@ -220,7 +229,8 @@ pub fn locate_ovmf() -> Option<OvmfPaths> {
 pub fn create_uefi_disk(image_path: &Path, efi_binary: &Path) -> anyhow::Result<()> {
     // 1. Create a 64MB empty file to serve as the disk volume.
     let f = std::fs::File::create(image_path).context("failed to create disk image file")?;
-    f.set_len(64 * 1024 * 1024).context("failed to resize disk image")?;
+    f.set_len(64 * 1024 * 1024)
+        .context("failed to resize disk image")?;
     drop(f);
 
     // 2. Format as FAT32 using mformat.

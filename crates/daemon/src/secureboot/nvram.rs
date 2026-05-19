@@ -52,9 +52,10 @@ impl NvramBackup {
     /// ```
     pub fn verify(&self) -> Result<(), BootControlError> {
         for path in &self.files {
-            let meta = std::fs::metadata(path).map_err(|e| BootControlError::NvramBackupFailed {
-                reason: format!("backup file '{}' is not accessible: {e}", path.display()),
-            })?;
+            let meta =
+                std::fs::metadata(path).map_err(|e| BootControlError::NvramBackupFailed {
+                    reason: format!("backup file '{}' is not accessible: {e}", path.display()),
+                })?;
             if meta.len() == 0 {
                 return Err(BootControlError::NvramBackupFailed {
                     reason: format!("backup file '{}' is empty", path.display()),
@@ -193,20 +194,17 @@ mod tests {
     fn make_mock_efivars() -> TempDir {
         let dir = TempDir::new().expect("tempdir");
         fs::write(
-            dir.path()
-                .join("db-d719b2cb-3d3a-4596-a3bc-dad00e67656f"),
+            dir.path().join("db-d719b2cb-3d3a-4596-a3bc-dad00e67656f"),
             b"\x00\x00\x00\x07some_db_data",
         )
         .expect("write db");
         fs::write(
-            dir.path()
-                .join("KEK-8be4df61-93ca-11d2-aa0d-00e098032b8c"),
+            dir.path().join("KEK-8be4df61-93ca-11d2-aa0d-00e098032b8c"),
             b"\x00\x00\x00\x07some_kek_data",
         )
         .expect("write kek");
         fs::write(
-            dir.path()
-                .join("PK-8be4df61-93ca-11d2-aa0d-00e098032b8c"),
+            dir.path().join("PK-8be4df61-93ca-11d2-aa0d-00e098032b8c"),
             b"\x00\x00\x00\x07some_pk_data",
         )
         .expect("write pk");
@@ -220,8 +218,8 @@ mod tests {
         let efivars = make_mock_efivars();
         let target = TempDir::new().expect("target tempdir");
 
-        let backup = backup_efi_variables(efivars.path(), target.path())
-            .expect("backup should succeed");
+        let backup =
+            backup_efi_variables(efivars.path(), target.path()).expect("backup should succeed");
 
         assert_eq!(backup.files.len(), 3, "expected exactly 3 backed-up files");
 
@@ -241,9 +239,7 @@ mod tests {
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert!(
-            !backed_up_names
-                .iter()
-                .any(|n| n.starts_with("Boot0001")),
+            !backed_up_names.iter().any(|n| n.starts_with("Boot0001")),
             "Boot0001 must not be backed up"
         );
     }
@@ -326,7 +322,10 @@ mod tests {
         fs::remove_file(&file_path).expect("remove");
 
         assert!(
-            matches!(backup.verify(), Err(BootControlError::NvramBackupFailed { .. })),
+            matches!(
+                backup.verify(),
+                Err(BootControlError::NvramBackupFailed { .. })
+            ),
             "expected NvramBackupFailed after file deletion"
         );
     }
@@ -338,13 +337,17 @@ mod tests {
         let target = TempDir::new().expect("target tempdir");
 
         let before = SystemTime::now();
-        let backup = backup_efi_variables(efivars.path(), target.path())
-            .expect("backup should succeed");
+        let backup =
+            backup_efi_variables(efivars.path(), target.path()).expect("backup should succeed");
         let after = SystemTime::now();
 
         // All reported paths must exist on disk.
         for path in &backup.files {
-            assert!(path.exists(), "backup path does not exist: {}", path.display());
+            assert!(
+                path.exists(),
+                "backup path does not exist: {}",
+                path.display()
+            );
             // Each file must have content (non-empty).
             let meta = fs::metadata(path).expect("metadata");
             assert!(meta.len() > 0, "backup file is empty: {}", path.display());
