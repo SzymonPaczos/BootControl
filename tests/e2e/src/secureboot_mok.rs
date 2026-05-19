@@ -12,7 +12,6 @@
 #![deny(missing_docs)]
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 use crate::helpers::*;
@@ -63,7 +62,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
 
     // ── Step 3: Spawn daemon with MOK overrides ─────────────────────────────
     // We point the daemon at our freshly generated keys via environment variables.
-    let mut handle = spawn_daemon(MINIMAL_GRUB).await?;
+    let handle = spawn_daemon(MINIMAL_GRUB).await?;
     
     // Note: spawn_daemon doesn't currently allow setting extra env vars.
     // However, since we are in the same process, we can set them globally 
@@ -76,7 +75,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let grub_file = tempfile::NamedTempFile::new()?;
     let failsafe_dir = tempfile::TempDir::new()?;
 
-    let mut process = Command::new(&binary_path)
+    let process = Command::new(&binary_path)
         .env("BOOTCONTROL_BUS", "session")
         .env("BOOTCONTROL_GRUB_PATH", grub_file.path())
         .env("BOOTCONTROL_FAILSAFE_PATH", failsafe_dir.path().join("failsafe.cfg"))
@@ -101,7 +100,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let signed_efi = handle.failsafe_dir.path().join("bootx64.efi");
     fs::copy("tests/fixtures/dummy.efi", &signed_efi).context("failed to copy fixture")?;
 
-    let proxy = zbus::fdo::DBusProxy::new(&handle.conn).await?;
+    let _proxy = zbus::fdo::DBusProxy::new(&handle.conn).await?;
     // Wait for name again just in case
     sleep(Duration::from_millis(500)).await;
 
@@ -113,7 +112,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     ).await?;
 
     manager_proxy
-        .call::<&str, (), ()>("SignAndEnrollUki", &signed_efi.to_str().unwrap())
+        .call::<&str, &str, ()>("SignAndEnrollUki", &signed_efi.to_str().unwrap())
         .await
         .context("D-Bus SignAndEnrollUki failed")?;
 
