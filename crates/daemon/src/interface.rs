@@ -466,7 +466,7 @@ impl GrubManager {
             polkit_action: "org.bootcontrol.write-bootloader",
             caller_uid,
             etag_before: &etag,
-            files: &[self.grub_path.clone()],
+            files: std::slice::from_ref(&self.grub_path),
             audit_job_id: &job_id,
         })
         .map_err(|e| {
@@ -889,7 +889,7 @@ impl GrubManager {
         })?;
 
         // ── Step 5: Serialize paths as JSON array ───────────────────────────
-        let paths = vec![
+        let paths = [
             keyset.pk_cert,
             keyset.pk_key,
             keyset.kek_cert,

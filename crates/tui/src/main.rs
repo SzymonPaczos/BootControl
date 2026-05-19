@@ -413,12 +413,12 @@ async fn commit_uki_edit(app: &mut App, backend: &dyn BootBackend) {
     match backend.add_kernel_param(&new_param, &etag).await {
         Ok(()) => {
             // If we replaced an existing param, also remove the old one.
-            if let Some(old) = old_param {
-                if old != new_param {
-                    // Reload ETag after add, then remove old.
-                    if let Ok((_, new_etag)) = backend.read_kernel_cmdline().await {
-                        let _ = backend.remove_kernel_param(&old, &new_etag).await;
-                    }
+            if let Some(old) = old_param
+                && old != new_param
+            {
+                // Reload ETag after add, then remove old.
+                if let Ok((_, new_etag)) = backend.read_kernel_cmdline().await {
+                    let _ = backend.remove_kernel_param(&old, &new_etag).await;
                 }
             }
             app.cancel_edit();

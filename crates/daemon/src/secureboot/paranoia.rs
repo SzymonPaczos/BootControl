@@ -38,19 +38,16 @@ pub fn generate_custom_keyset(
         ),
     })?;
 
-    // Step 2: Resolve openssl binary
-    let openssl_bin = if let Some(p) = openssl_override {
-        if p.exists() {
-            p.to_path_buf()
-        } else {
-            which::which("openssl").map_err(|_| BootControlError::ToolNotFound {
-                tool: "openssl".to_string(),
-            })?
-        }
-    } else {
-        which::which("openssl").map_err(|_| BootControlError::ToolNotFound {
+    // Step 2: Resolve openssl binary. When an override is supplied (test
+    // fixtures), honour it unconditionally — falling back to the system
+    // `openssl` would silently bypass the test fixture if `exists()` flickers
+    // due to filesystem-visibility lag (observed on aarch64 / virtiofs under
+    // parallel tests).
+    let openssl_bin = match openssl_override {
+        Some(p) => p.to_path_buf(),
+        None => which::which("openssl").map_err(|_| BootControlError::ToolNotFound {
             tool: "openssl".to_string(),
-        })?
+        })?,
     };
 
     let names = ["PK", "KEK", "db"];
@@ -121,7 +118,7 @@ pub fn generate_custom_keyset(
 /// * `keyset`        - The custom key set to use for signing.
 /// * `output_dir`    - Directory where merged signatures will be saved.
 /// * `tool_override` - Optional path to a directory containing `cert-to-efi-sig-list`
-///                     and `sign-efi-sig-list`.
+///   and `sign-efi-sig-list`.
 ///
 /// # Errors
 ///
@@ -141,13 +138,13 @@ pub fn merge_with_microsoft_signatures(
         ),
     })?;
 
-    // Step 2: Resolve tools
+    // Step 2: Resolve tools. When `tool_override` is supplied (test fixtures),
+    // honour the override directory unconditionally. A flickering `exists()`
+    // under parallel test execution on aarch64 / virtiofs would otherwise
+    // silently fall back to the real system tool and bypass the fixture.
     let resolve_tool = |name: &str| -> Result<PathBuf, BootControlError> {
         if let Some(p) = tool_override {
-            let tool_path = p.join(name);
-            if tool_path.exists() {
-                return Ok(tool_path);
-            }
+            return Ok(p.join(name));
         }
         which::which(name).map_err(|_| BootControlError::ToolNotFound {
             tool: name.to_string(),
@@ -201,10 +198,19 @@ pub fn merge_with_microsoft_signatures(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use tempfile::TempDir;
 
-    static PATH_LOCK: Mutex<()> = Mutex::new(());
+    /// Re-use the workspace-wide PATH guard from `grub_rebuild::tests`.
+    ///
+    /// These tests do not modify PATH themselves, but they exec a fake
+    /// binary that depends on `touch` resolving via PATH. Concurrent tests
+    /// in other modules (notably `grub_rebuild`) reset PATH to a narrow
+    /// directory containing only their stub binary. Without serializing
+    /// against the same lock, the script would run with no usable PATH,
+    /// `touch` would not be found, and the assertion checking the touched
+    /// file would fail silently — see PR #5 follow-up for the full
+    /// analysis.
+    use crate::grub_rebuild::tests::lock_path;
 
     fn write_fake_binary(
         dir: &Path,
@@ -216,15 +222,29 @@ mod tests {
         let path = dir.join(name);
         #[cfg(unix)]
         {
+            use std::io::Write;
             use std::os::unix::fs::PermissionsExt;
-            std::fs::write(
-                &path,
-                format!(
-                    "#!/bin/sh\nif [ \"$1\" = \"req\" ]; then\n  for arg in \"$@\"; do\n    case $arg in\n      *.key) touch \"$arg\" ;;\n      *.crt) touch \"$arg\" ;;\n    esac\n  done\nfi\nif [ \"$1\" != \"req\" ] && [ \"$#\" -gt 0 ]; then\n  touch \"${{@: -1}}\"\nfi\necho '{}'\necho '{}' >&2\nexit {}",
-                    stdout, stderr, exit_code
-                ),
-            )
-            .unwrap();
+            // The stub creates output files via shell-builtin `: > path`
+            // redirection rather than `touch`. Builtin redirection has no
+            // PATH dependency and cannot fail because the binary is missing.
+            // (`touch` is /usr/bin/touch on every distro we target, but
+            // a sibling test that narrows PATH to a stub-only directory and
+            // happens to run on a different `PATH_LOCK` would silently break
+            // `touch` lookup in this stub and let the test return success
+            // without ever creating the expected file.)
+            //
+            // Use explicit File+write+sync_all+chmod rather than `std::fs::write`
+            // so the contents are visibly on disk before the subsequent
+            // `execve()` runs (matters on aarch64 / virtiofs under parallel
+            // tests).
+            let body = format!(
+                "#!/bin/sh\nif [ \"$1\" = \"req\" ]; then\n  for arg in \"$@\"; do\n    case $arg in\n      *.key) : > \"$arg\" ;;\n      *.crt) : > \"$arg\" ;;\n    esac\n  done\nfi\nif [ \"$1\" != \"req\" ] && [ \"$#\" -gt 0 ]; then\n  for last in \"$@\"; do :; done\n  : > \"$last\"\nfi\necho '{}'\necho '{}' >&2\nexit {}",
+                stdout, stderr, exit_code
+            );
+            let mut f = std::fs::File::create(&path).unwrap();
+            f.write_all(body.as_bytes()).unwrap();
+            f.sync_all().unwrap();
+            drop(f);
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         path
@@ -232,7 +252,7 @@ mod tests {
 
     #[test]
     fn generate_keyset_creates_expected_files() {
-        let _lock = PATH_LOCK.lock().unwrap();
+        let _lock = lock_path();
         let temp = TempDir::new().unwrap();
         let bin_dir = TempDir::new().unwrap();
         let openssl = write_fake_binary(bin_dir.path(), "openssl", 0, "", "");
@@ -249,7 +269,7 @@ mod tests {
 
     #[test]
     fn generate_keyset_propagates_openssl_error() {
-        let _lock = PATH_LOCK.lock().unwrap();
+        let _lock = lock_path();
         let temp = TempDir::new().unwrap();
         let bin_dir = TempDir::new().unwrap();
         let openssl = write_fake_binary(bin_dir.path(), "openssl", 1, "", "some error");
@@ -264,7 +284,7 @@ mod tests {
 
     #[test]
     fn generate_keyset_creates_output_dir_if_missing() {
-        let _lock = PATH_LOCK.lock().unwrap();
+        let _lock = lock_path();
         let temp_parent = TempDir::new().unwrap();
         let output_dir = temp_parent.path().join("missing/dir");
         let bin_dir = TempDir::new().unwrap();
@@ -277,7 +297,7 @@ mod tests {
 
     #[test]
     fn merge_returns_path_to_auth_file() {
-        let _lock = PATH_LOCK.lock().unwrap();
+        let _lock = lock_path();
         let temp = TempDir::new().unwrap();
         let bin_dir = TempDir::new().unwrap();
         write_fake_binary(bin_dir.path(), "cert-to-efi-sig-list", 0, "", "");
@@ -301,7 +321,7 @@ mod tests {
 
     #[test]
     fn merge_propagates_tool_error() {
-        let _lock = PATH_LOCK.lock().unwrap();
+        let _lock = lock_path();
         let temp = TempDir::new().unwrap();
         let bin_dir = TempDir::new().unwrap();
         write_fake_binary(bin_dir.path(), "cert-to-efi-sig-list", 1, "", "fail cert");
