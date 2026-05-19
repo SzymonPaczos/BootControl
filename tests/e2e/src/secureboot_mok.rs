@@ -48,11 +48,19 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     // Generate a temporary MOK for this test run.
     let status = Command::new("openssl")
         .args([
-            "req", "-newkey", "rsa:2048", "-nodes", "-keyout",
+            "req",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
             &mok_key.to_string_lossy(),
-            "-x509", "-days", "1", "-out",
+            "-x509",
+            "-days",
+            "1",
+            "-out",
             &mok_crt.to_string_lossy(),
-            "-subj", "/CN=BootControl Test MOK/",
+            "-subj",
+            "/CN=BootControl Test MOK/",
         ])
         .status()
         .context("failed to generate test MOK")?;
@@ -63,9 +71,9 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     // ── Step 3: Spawn daemon with MOK overrides ─────────────────────────────
     // We point the daemon at our freshly generated keys via environment variables.
     let handle = spawn_daemon(MINIMAL_GRUB).await?;
-    
+
     // Note: spawn_daemon doesn't currently allow setting extra env vars.
-    // However, since we are in the same process, we can set them globally 
+    // However, since we are in the same process, we can set them globally
     // OR we should have modified spawn_daemon.
     // Given the daemon is a subprocess, we need to pass these env vars to it.
     // I will restart the daemon with the correct environment.
@@ -78,7 +86,10 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let process = Command::new(&binary_path)
         .env("BOOTCONTROL_BUS", "session")
         .env("BOOTCONTROL_GRUB_PATH", grub_file.path())
-        .env("BOOTCONTROL_FAILSAFE_PATH", failsafe_dir.path().join("failsafe.cfg"))
+        .env(
+            "BOOTCONTROL_FAILSAFE_PATH",
+            failsafe_dir.path().join("failsafe.cfg"),
+        )
         .env("BOOTCONTROL_MOK_KEY", &mok_key)
         .env("BOOTCONTROL_MOK_CERT", &mok_crt)
         .stdout(std::process::Stdio::null())
@@ -109,7 +120,8 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
         "org.bootcontrol.Manager",
         "/org/bootcontrol/Manager",
         "org.bootcontrol.Manager",
-    ).await?;
+    )
+    .await?;
 
     manager_proxy
         .call::<&str, &str, ()>("SignAndEnrollUki", &signed_efi.to_str().unwrap())
@@ -132,11 +144,19 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let mut qemu = Command::new("qemu-system-x86_64")
         .args([
             "-nographic",
-            "-serial", "mon:stdio",
-            "-drive", &format!("if=pflash,format=raw,unit=0,file={},readonly=on", ovmf.code.display()),
-            "-drive", &format!("if=pflash,format=raw,unit=1,file={}", temp_vars.display()),
-            "-drive", &format!("format=raw,file={}", disk_img.display()),
-            "-net", "none",
+            "-serial",
+            "mon:stdio",
+            "-drive",
+            &format!(
+                "if=pflash,format=raw,unit=0,file={},readonly=on",
+                ovmf.code.display()
+            ),
+            "-drive",
+            &format!("if=pflash,format=raw,unit=1,file={}", temp_vars.display()),
+            "-drive",
+            &format!("format=raw,file={}", disk_img.display()),
+            "-net",
+            "none",
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -151,7 +171,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
 
     // Gracefully kill QEMU.
     let _ = qemu.kill();
-    
+
     // ── Step 7: Cleanup ─────────────────────────────────────────────────────
     shutdown_daemon(handle).await?;
 

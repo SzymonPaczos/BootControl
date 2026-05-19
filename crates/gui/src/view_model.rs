@@ -1,6 +1,6 @@
+use bootcontrol_client::{BootBackend, LoaderEntryDto, SnapshotInfoDto};
 use std::collections::HashMap;
 use std::sync::Arc;
-use bootcontrol_client::{BootBackend, LoaderEntryDto, SnapshotInfoDto};
 
 /// View model bridging the boot backend and the Slint UI layer.
 pub struct ViewModel {
@@ -38,16 +38,22 @@ impl ViewModel {
     /// - `"systemd-boot"` → `list_loader_entries()` + `get_loader_conf_etag()`
     /// - `"uki"` → `read_kernel_cmdline()`
     pub async fn load(&mut self) -> Result<(), zbus::Error> {
-        self.active_backend = self.backend
+        self.active_backend = self
+            .backend
             .get_active_backend()
             .await
             .unwrap_or_else(|_| "grub".to_string());
 
         if self.active_backend.contains("systemd-boot") {
             self.loader_entries = self.backend.list_loader_entries().await?;
-            self.etag = self.backend.get_loader_conf_etag().await.unwrap_or_default();
+            self.etag = self
+                .backend
+                .get_loader_conf_etag()
+                .await
+                .unwrap_or_default();
             // Mirror entries as key-value pairs so existing GUI code works without changes.
-            self.entries = self.loader_entries
+            self.entries = self
+                .loader_entries
                 .iter()
                 .map(|e| (e.id.clone(), e.title.clone().unwrap_or_default()))
                 .collect();

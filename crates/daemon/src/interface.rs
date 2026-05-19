@@ -32,19 +32,19 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
 #[cfg(feature = "experimental_paranoia")]
 use bootcontrol_core::secureboot::ParanoiaKeySet;
+use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
 
 use crate::{
     audit::{self, message_ids, AuditEvent, Phase},
     dbus_error::{snapshot_to_daemon_error, to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
     polkit::authorize_with_polkit,
-    sanitize, snapshot,
-    secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
+    sanitize,
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
-    systemd_boot_manager, uki_manager,
+    secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
+    snapshot, systemd_boot_manager, uki_manager,
 };
 
 use serde::Serialize;
@@ -68,7 +68,9 @@ struct SnapshotInfoDto {
 }
 
 #[cfg(feature = "experimental_paranoia")]
-use crate::secureboot::paranoia::{generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR};
+use crate::secureboot::paranoia::{
+    generate_custom_keyset, merge_with_microsoft_signatures, DEFAULT_KEYSET_DIR,
+};
 use tracing::{info, warn};
 use zbus::interface;
 
@@ -500,7 +502,11 @@ impl GrubManager {
 
         // ── Step 10: Audit Completed ────────────────────────────────────────
         let exit_code = if result.is_ok() { 0 } else { 1 };
-        let stderr_tail = result.as_ref().err().map(|e| e.to_string()).unwrap_or_default();
+        let stderr_tail = result
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
         audit::emit(&AuditEvent {
             message_id: message_ids::SET_GRUB_VALUE,
             operation: "set_grub_value",
@@ -1005,9 +1011,8 @@ impl GrubManager {
             &self.loader_conf_path,
         )
         .map_err(to_daemon_error)?;
-        serde_json::to_string(&records).map_err(|e| {
-            DaemonError::EspScanFailed(format!("serialization error: {e}"))
-        })
+        serde_json::to_string(&records)
+            .map_err(|e| DaemonError::EspScanFailed(format!("serialization error: {e}")))
     }
 
     /// Read a single systemd-boot loader entry by ID.
@@ -1029,9 +1034,8 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.EspScanFailed` — entry not found or unreadable.
     async fn read_loader_entry(&self, id: String) -> Result<(String, String), DaemonError> {
         info!(id = %id, "D-Bus: ReadLoaderEntry");
-        let (entry, etag) =
-            systemd_boot_manager::read_entry(&self.loader_entries_dir, &id)
-                .map_err(to_daemon_error)?;
+        let (entry, etag) = systemd_boot_manager::read_entry(&self.loader_entries_dir, &id)
+            .map_err(to_daemon_error)?;
         let record = systemd_boot_manager::EntryRecord {
             id: id.clone(),
             title: entry.title,
@@ -1046,9 +1050,8 @@ impl GrubManager {
                 def.trim() == id || def.trim() == format!("{id}.conf")
             },
         };
-        let json = serde_json::to_string(&record).map_err(|e| {
-            DaemonError::EspScanFailed(format!("serialization error: {e}"))
-        })?;
+        let json = serde_json::to_string(&record)
+            .map_err(|e| DaemonError::EspScanFailed(format!("serialization error: {e}")))?;
         Ok((json, etag))
     }
 
@@ -1082,7 +1085,9 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!(id = %id, "D-Bus: SetLoaderDefault");
         let caller_uid = resolve_uid(&header, connection, "SetLoaderDefault").await?;
-        authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
         systemd_boot_manager::set_loader_default(&self.loader_conf_path, &id, &etag)
             .map_err(to_daemon_error)
     }
@@ -1154,7 +1159,9 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: AddKernelParam");
         let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
-        authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
         uki_manager::add_kernel_param(&self.kernel_cmdline_path, &param, &etag)
             .map_err(to_daemon_error)
     }
@@ -1188,7 +1195,9 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: RemoveKernelParam");
         let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
-        authorize_with_polkit(caller_uid).await.map_err(to_daemon_error)?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
         uki_manager::remove_kernel_param(&self.kernel_cmdline_path, &param, &etag)
             .map_err(to_daemon_error)
     }
@@ -1226,9 +1235,8 @@ impl GrubManager {
                 audit_job_id: s.audit_job_id,
             })
             .collect();
-        serde_json::to_string(&dtos).map_err(|e| {
-            DaemonError::SnapshotFailed(format!("serialization error: {e}"))
-        })
+        serde_json::to_string(&dtos)
+            .map_err(|e| DaemonError::SnapshotFailed(format!("serialization error: {e}")))
     }
 
     /// Restore a previously captured snapshot by id.
@@ -1305,7 +1313,11 @@ impl GrubManager {
         let result = snapshot::restore(&self.snapshot_root, &id).map_err(snapshot_to_daemon_error);
 
         let exit_code = if result.is_ok() { 0 } else { 1 };
-        let stderr_tail = result.as_ref().err().map(|e| e.to_string()).unwrap_or_default();
+        let stderr_tail = result
+            .as_ref()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
         audit::emit(&AuditEvent {
             message_id: message_ids::RESTORE_SNAPSHOT,
             operation: "restore_snapshot",
@@ -1337,10 +1349,13 @@ async fn resolve_uid(
     connection: &zbus::Connection,
     method_name: &str,
 ) -> Result<u32, DaemonError> {
-    let sender = header.sender().ok_or_else(|| {
-        warn!(method = method_name, "D-Bus message has no sender field");
-        DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
-    })?.clone();
+    let sender = header
+        .sender()
+        .ok_or_else(|| {
+            warn!(method = method_name, "D-Bus message has no sender field");
+            DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+        })?
+        .clone();
 
     let dbus_proxy = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
         warn!(method = method_name, error = %e, "Failed to create DBus proxy");

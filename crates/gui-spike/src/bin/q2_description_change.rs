@@ -63,6 +63,8 @@ fn main() -> Result<(), slint::PlatformError> {
     eprintln!("  2. Tab to the description field — Orca reads first description");
     eprintln!("  3. Click 'Change description'");
     eprintln!("  4. Does Orca re-announce, or stay silent?");
-    eprintln!("  5. accerciser → Events → check for 'object:property-change:accessible-description'");
+    eprintln!(
+        "  5. accerciser → Events → check for 'object:property-change:accessible-description'"
+    );
     AppWindow::new()?.run()
 }

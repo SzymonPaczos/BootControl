@@ -401,7 +401,9 @@ mod tests {
             ),
             (
                 "ToolNotFound",
-                to_daemon_error(BootControlError::ToolNotFound { tool: "sbsign".into() }),
+                to_daemon_error(BootControlError::ToolNotFound {
+                    tool: "sbsign".into(),
+                }),
             ),
             (
                 "NvramBackupFailed",

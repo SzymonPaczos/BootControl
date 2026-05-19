@@ -70,7 +70,11 @@ impl std::fmt::Display for SnapshotError {
             SnapshotError::Serde(e) => write!(f, "snapshot manifest parse error: {}", e),
             SnapshotError::NotFound(id) => write!(f, "snapshot not found: {}", id),
             SnapshotError::SchemaUpgradeRequired(v) => {
-                write!(f, "snapshot schema_version {} not supported by this daemon", v)
+                write!(
+                    f,
+                    "snapshot schema_version {} not supported by this daemon",
+                    v
+                )
             }
         }
     }
@@ -271,7 +275,9 @@ pub fn list(root: &Path) -> Result<Vec<SnapshotInfo>, SnapshotError> {
         let bytes = fs::read(&manifest_path)?;
         let manifest: SnapshotManifest = serde_json::from_slice(&bytes)?;
         if manifest.schema_version > SCHEMA_VERSION {
-            return Err(SnapshotError::SchemaUpgradeRequired(manifest.schema_version));
+            return Err(SnapshotError::SchemaUpgradeRequired(
+                manifest.schema_version,
+            ));
         }
         let id = entry.file_name().to_string_lossy().into_owned();
         out.push(SnapshotInfo {
@@ -304,7 +310,9 @@ pub fn restore(root: &Path, id: &str) -> Result<(), SnapshotError> {
     let bytes = fs::read(&manifest_path)?;
     let manifest: SnapshotManifest = serde_json::from_slice(&bytes)?;
     if manifest.schema_version > SCHEMA_VERSION {
-        return Err(SnapshotError::SchemaUpgradeRequired(manifest.schema_version));
+        return Err(SnapshotError::SchemaUpgradeRequired(
+            manifest.schema_version,
+        ));
     }
     for f in &manifest.files {
         let captured = snap_dir.join(flatten_path(Path::new(&f.path)));
@@ -354,7 +362,9 @@ pub fn reap(root: &Path, keep_count: usize, keep_days: u64) -> Result<usize, Sna
 fn flatten_path(p: &Path) -> String {
     // /etc/default/grub → etc__default__grub (round-trippable enough for
     // restore via the manifest's stored absolute path).
-    p.to_string_lossy().trim_start_matches('/').replace('/', "__")
+    p.to_string_lossy()
+        .trim_start_matches('/')
+        .replace('/', "__")
 }
 
 #[cfg(unix)]
@@ -381,11 +391,7 @@ mod tests {
         p
     }
 
-    fn req<'a>(
-        root: &'a Path,
-        op: &'a str,
-        files: &'a [PathBuf],
-    ) -> SnapshotRequest<'a> {
+    fn req<'a>(root: &'a Path, op: &'a str, files: &'a [PathBuf]) -> SnapshotRequest<'a> {
         SnapshotRequest {
             root,
             op,
