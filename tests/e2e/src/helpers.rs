@@ -61,7 +61,7 @@ GRUB_DISTRIBUTOR=\"TestDistro\"
 /// preventing zombie processes after panicking tests.
 pub struct DaemonHandle {
     /// The running `bootcontrold` child process.
-    process: Child,
+    pub(crate) process: Child,
     /// Open zbus session-bus connection (acts as the test-side D-Bus client).
     pub conn: Connection,
     /// Temp file used as `/etc/default/grub`. Kept alive while daemon is live.

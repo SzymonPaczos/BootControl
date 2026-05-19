@@ -12,10 +12,9 @@
 #![deny(missing_docs)]
 
 use std::fs;
-use std::process::Command;
+use std::path::PathBuf;
 use crate::helpers::*;
 use anyhow::{Context, Result};
-use tokio::time::{sleep, Duration};
 
 /// Test the Paranoia Mode keyset generation and signature merging.
 ///
