@@ -407,7 +407,12 @@ mod tests {
     fn create_writes_manifest_and_captured_files() {
         let dir = TempDir::new().unwrap();
         let target = make_target(dir.path(), "grub", "GRUB_TIMEOUT=5\n");
-        let info = create(req(dir.path(), "rewrite_grub", &[target.clone()])).unwrap();
+        let info = create(req(
+            dir.path(),
+            "rewrite_grub",
+            std::slice::from_ref(&target),
+        ))
+        .unwrap();
 
         assert!(info.id.contains("rewrite_grub"));
         let manifest_bytes = fs::read(&info.manifest_path).unwrap();
@@ -440,7 +445,7 @@ mod tests {
     fn restore_overwrites_target_with_captured_bytes() {
         let dir = TempDir::new().unwrap();
         let target = make_target(dir.path(), "grub", "v1\n");
-        let info = create(req(dir.path(), "test_op", &[target.clone()])).unwrap();
+        let info = create(req(dir.path(), "test_op", std::slice::from_ref(&target))).unwrap();
 
         // Modify the target after snapshot.
         fs::write(&target, "v2\n").unwrap();
@@ -466,7 +471,7 @@ mod tests {
         let target = make_target(dir.path(), "grub", "x\n");
         for i in 0..3 {
             let op = format!("op{}", i);
-            let _ = create(req(dir.path(), &op, &[target.clone()])).unwrap();
+            let _ = create(req(dir.path(), &op, std::slice::from_ref(&target))).unwrap();
             std::thread::sleep(std::time::Duration::from_millis(1100));
         }
         // Recent snapshots; keep_count=10 means nothing reaped.

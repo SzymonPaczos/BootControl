@@ -203,7 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let entries = backend
                         .list_loader_entries()
                         .await
-                        .map_err(|e| format!("{}", dbus_error_message(&e)))?;
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
 
                     println!("Loader Entries ({} total):", entries.len());
                     for e in &entries {
@@ -228,7 +228,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     backend
                         .set_loader_default(&id, &etag)
                         .await
-                        .map_err(|e| format!("{}", dbus_error_message(&e)))?;
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Default entry set to: {id}");
                 }
             }
@@ -241,7 +241,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let (params, etag) = backend
                         .read_kernel_cmdline()
                         .await
-                        .map_err(|e| format!("{}", dbus_error_message(&e)))?;
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("ETag: {etag}");
                     println!("\nKernel Parameters ({} total):", params.len());
                     for p in &params {
@@ -252,14 +252,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     backend
                         .add_kernel_param(&param, &etag)
                         .await
-                        .map_err(|e| format!("{}", dbus_error_message(&e)))?;
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Added parameter: {param}");
                 }
                 CmdlineAction::Remove { param, etag } => {
                     backend
                         .remove_kernel_param(&param, &etag)
                         .await
-                        .map_err(|e| format!("{}", dbus_error_message(&e)))?;
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Removed parameter: {param}");
                 }
             }

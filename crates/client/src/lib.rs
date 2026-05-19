@@ -734,7 +734,7 @@ mod tests {
             ts: "2026-05-15T14:03:12Z".to_string(),
             audit_job_id: "1a2b3c4d-job-id".to_string(),
         };
-        let json = serde_json::to_string(&[dto.clone()]).unwrap();
+        let json = serde_json::to_string(std::slice::from_ref(&dto)).unwrap();
         assert!(json.contains("\"id\":"));
         assert!(json.contains("\"op\":"));
         assert!(json.contains("\"ts\":"));
