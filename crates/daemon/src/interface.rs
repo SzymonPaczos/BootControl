@@ -308,6 +308,49 @@ impl GrubManager {
     pub fn grub_path(&self) -> &Path {
         &self.grub_path
     }
+
+    /// Override the snapshot root directory.
+    ///
+    /// Used by the daemon entry-point to honour `BOOTCONTROL_SNAPSHOT_ROOT`
+    /// and by E2E tests that run as an unprivileged user (no permission to
+    /// write `/var/lib/bootcontrol/snapshots/`). Returns `self` for builder-
+    /// style chaining.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` — Directory where snapshot subdirectories will be created.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::PathBuf;
+    /// use bootcontrold::interface::GrubManager;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
+    ///
+    /// let m = GrubManager::new(PathBuf::from("/etc/default/grub"), Box::new(GrubBackend))
+    ///     .with_snapshot_root(PathBuf::from("/tmp/snapshots"));
+    /// assert_eq!(m.snapshot_root(), std::path::Path::new("/tmp/snapshots"));
+    /// ```
+    pub fn with_snapshot_root(mut self, root: PathBuf) -> Self {
+        self.snapshot_root = root;
+        self
+    }
+
+    /// Return the snapshot root directory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::{Path, PathBuf};
+    /// use bootcontrold::interface::GrubManager;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
+    ///
+    /// let m = GrubManager::new(PathBuf::from("/etc/default/grub"), Box::new(GrubBackend));
+    /// assert_eq!(m.snapshot_root(), Path::new("/var/lib/bootcontrol/snapshots"));
+    /// ```
+    pub fn snapshot_root(&self) -> &Path {
+        &self.snapshot_root
+    }
 }
 
 #[interface(name = "org.bootcontrol.Manager")]
