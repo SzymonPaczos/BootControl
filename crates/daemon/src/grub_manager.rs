@@ -426,9 +426,7 @@ mod tests {
 
         // Acquire the global PATH lock FIRST so no concurrent test can observe
         // the changed PATH between set_var and the actual command execution.
-        let guard = crate::grub_rebuild::tests::PATH_LOCK
-            .lock()
-            .expect("PATH lock poisoned");
+        let guard = crate::grub_rebuild::tests::lock_path();
 
         let dir = TempDir::new().expect("fake grub-mkconfig tempdir");
         let script_path = dir.path().join("grub-mkconfig");
