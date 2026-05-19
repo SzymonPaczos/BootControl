@@ -17,6 +17,7 @@
 //! | `EspScanFailed`                 | `org.bootcontrol.Error.EspScanFailed`               |
 //! | `SecurityPolicyViolation`       | `org.bootcontrol.Error.SecurityPolicyViolation`     |
 //! | `ConcurrentModification`        | `org.bootcontrol.Error.ConcurrentModification`      |
+//! | `ImmutableDistroDetected`       | `org.bootcontrol.Error.ImmutableDistroDetected`     |
 
 use std::fmt;
 
@@ -168,6 +169,21 @@ pub enum BootControlError {
         /// Human-readable description of the failure.
         reason: String,
     },
+
+    /// The host is an ostree-managed immutable distro (Fedora Silverblue /
+    /// Kinoite, Endless OS, etc.). Naive writes to `/etc/default/grub` or
+    /// the ESP either fail on a read-only mount or get rolled back on the
+    /// next ostree rebase — the user must go through `rpm-ostree kargs`
+    /// (handled by [`crate::initramfs`] in a follow-up Phase 6 PR).
+    ///
+    /// **D-Bus name:** `org.bootcontrol.Error.ImmutableDistroDetected`
+    ImmutableDistroDetected {
+        /// Short distro tag — e.g. `"ostree"`, `"rpm-ostree"`. Used by the
+        /// frontend to pick a localised "this is what you should do
+        /// instead" message; do not parse the human-readable `Display`
+        /// string.
+        distro: String,
+    },
 }
 
 impl fmt::Display for BootControlError {
@@ -226,6 +242,13 @@ impl fmt::Display for BootControlError {
             BootControlError::NvramWriteFailed { reason } => {
                 write!(f, "EFI NVRAM write failed: {reason}")
             }
+            BootControlError::ImmutableDistroDetected { distro } => write!(
+                f,
+                "Host is an immutable / atomic distro ({distro}). BootControl will not \
+                 modify the bootloader directly — use `rpm-ostree kargs` (Fedora atomic \
+                 variants) or your distro's documented kernel-cmdline tool. The naive write \
+                 would either fail on a read-only mount or be discarded on the next rebase."
+            ),
         }
     }
 }
