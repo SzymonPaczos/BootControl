@@ -6,6 +6,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "bootcontrol"
+path = "src/main.rs"
+
 [dependencies]
 bootcontrol-core = { workspace = true }
 bootcontrol-client = { workspace = true }
