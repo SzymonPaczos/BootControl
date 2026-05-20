@@ -163,6 +163,95 @@ pub trait UefiVarReader: Send + Sync {
     fn list_global_names(&self) -> Result<Vec<String>, BootControlError>;
 }
 
+/// Abstract interface for writing EFI variables.
+///
+/// Kept as a separate trait from [`UefiVarReader`] so a read-only backend
+/// (e.g. running BootControl as a non-privileged user, or on a host where
+/// efivarfs is mounted `ro`) can implement just `UefiVarReader` and surface
+/// a clear "writes unsupported on this backend" error at the wiring layer.
+pub trait UefiVarWriter: Send + Sync {
+    /// Write the raw payload of a variable in the global EFI namespace.
+    ///
+    /// `attrs` is the EFI attribute bitfield — for a one-shot `BootNext`
+    /// override the canonical value is
+    /// `non_volatile | bootservice_access | runtime_access` (`0x07`).
+    ///
+    /// Implementations must make the write atomic (single `write(2)` on
+    /// efivarfs; `SetFirmwareEnvironmentVariableEx` on Windows). They must
+    /// not split the write across multiple syscalls because firmware may
+    /// observe a half-written variable.
+    ///
+    /// # Errors
+    ///
+    /// - [`BootControlError::EspScanFailed`] — I/O error, immutable-bit
+    ///   set on Linux without `chattr -i`, or Windows
+    ///   `SetFirmwareEnvironmentVariable` returning failure.
+    fn write_global(
+        &self,
+        name: &str,
+        payload: &[u8],
+        attrs: EfiAttributes,
+    ) -> Result<(), BootControlError>;
+
+    /// Delete a variable from the global EFI namespace.
+    ///
+    /// On Linux this is `rm <root>/<name>-{guid}` after un-immutabling the
+    /// file. On Windows it is `SetFirmwareEnvironmentVariableEx(name, guid,
+    /// nullptr, 0)`.
+    ///
+    /// # Errors
+    ///
+    /// - [`BootControlError::EspScanFailed`] — variable not found is **not**
+    ///   an error; only real I/O failures propagate. Treating missing as a
+    ///   no-op keeps `unset_boot_next` idempotent.
+    fn delete_global(&self, name: &str) -> Result<(), BootControlError>;
+}
+
+/// Set `BootNext` to a specific entry index, after validating the index
+/// appears in the current `BootOrder`.
+///
+/// This is a one-shot override consumed by the firmware on next boot: after
+/// reboot the variable is cleared by UEFI itself. Writing a `BootNext` that
+/// does not match any active `Boot####` is silently ignored by most
+/// firmware (the user gets the normal `BootOrder` boot), so we sanity-check
+/// the index against the current order to surface obvious typos before the
+/// reboot.
+///
+/// # Errors
+///
+/// - [`BootControlError::KeyNotFound`] — `index` is not in `BootOrder`.
+///   Pass `enforce_order=false` to skip this check (useful when the caller
+///   already validated against `list_boot_entries`).
+/// - [`BootControlError::EspScanFailed`] — backend I/O failure.
+pub fn set_boot_next(
+    reader: &dyn UefiVarReader,
+    writer: &dyn UefiVarWriter,
+    index: u16,
+    enforce_order: bool,
+) -> Result<(), BootControlError> {
+    if enforce_order {
+        let order_payload = reader.read_global("BootOrder")?;
+        let order = parse_boot_order(&order_payload)?;
+        if !order.contains(&index) {
+            return Err(BootControlError::KeyNotFound {
+                key: format!("Boot{index:04X}"),
+            });
+        }
+    }
+    let attrs = EfiAttributes::from_u32(0x07); // NV | BS | RT
+    writer.write_global("BootNext", &encode_single_u16_var(index), attrs)
+}
+
+/// Clear `BootNext` so the next boot falls back to the normal `BootOrder`.
+/// Idempotent — succeeds even if the variable is already absent.
+///
+/// # Errors
+///
+/// - [`BootControlError::EspScanFailed`] — backend I/O failure.
+pub fn clear_boot_next(writer: &dyn UefiVarWriter) -> Result<(), BootControlError> {
+    writer.delete_global("BootNext")
+}
+
 /// Parse the `BootOrder` variable payload into a vector of entry indices.
 ///
 /// `BootOrder` is a packed `u16` little-endian array. The result preserves
@@ -347,6 +436,57 @@ pub fn encode_single_u16_var(index: u16) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// In-memory writer used by the `set_boot_next` / `clear_boot_next`
+    /// tests below. Holds the most recent (name, payload, attrs) call so
+    /// the test can assert on the exact wire bytes. Uses `Mutex` (not
+    /// `RefCell`) because `UefiVarWriter: Send + Sync`.
+    struct MockWriter {
+        last_write: Mutex<Option<(String, Vec<u8>, EfiAttributes)>>,
+        last_delete: Mutex<Option<String>>,
+    }
+    impl MockWriter {
+        fn new() -> Self {
+            Self {
+                last_write: Mutex::new(None),
+                last_delete: Mutex::new(None),
+            }
+        }
+    }
+    impl UefiVarWriter for MockWriter {
+        fn write_global(
+            &self,
+            name: &str,
+            payload: &[u8],
+            attrs: EfiAttributes,
+        ) -> Result<(), BootControlError> {
+            *self.last_write.lock().unwrap() = Some((name.to_string(), payload.to_vec(), attrs));
+            Ok(())
+        }
+        fn delete_global(&self, name: &str) -> Result<(), BootControlError> {
+            *self.last_delete.lock().unwrap() = Some(name.to_string());
+            Ok(())
+        }
+    }
+
+    struct MockReader {
+        boot_order: Vec<u16>,
+    }
+    impl UefiVarReader for MockReader {
+        fn read_global(&self, name: &str) -> Result<Vec<u8>, BootControlError> {
+            if name == "BootOrder" {
+                Ok(encode_boot_order(&self.boot_order))
+            } else {
+                Err(BootControlError::EspScanFailed {
+                    reason: format!("MockReader has no {name}"),
+                })
+            }
+        }
+        fn list_global_names(&self) -> Result<Vec<String>, BootControlError> {
+            Ok(vec!["BootOrder".to_string()])
+        }
+    }
 
     #[test]
     fn attributes_round_trip() {
@@ -458,6 +598,54 @@ mod tests {
             result,
             Err(BootControlError::MalformedValue { .. })
         ));
+    }
+
+    #[test]
+    fn set_boot_next_writes_index_with_canonical_attrs() {
+        let reader = MockReader {
+            boot_order: vec![0, 1, 2],
+        };
+        let writer = MockWriter::new();
+        set_boot_next(&reader, &writer, 1, true).unwrap();
+
+        let (name, payload, attrs) = writer.last_write.lock().unwrap().clone().unwrap();
+        assert_eq!(name, "BootNext");
+        assert_eq!(payload, vec![0x01, 0x00]);
+        // NV | BS | RT
+        assert!(attrs.non_volatile);
+        assert!(attrs.bootservice_access);
+        assert!(attrs.runtime_access);
+        assert!(!attrs.append_write);
+    }
+
+    #[test]
+    fn set_boot_next_rejects_unknown_index_when_enforced() {
+        let reader = MockReader {
+            boot_order: vec![0, 1, 2],
+        };
+        let writer = MockWriter::new();
+        let result = set_boot_next(&reader, &writer, 7, true);
+        assert!(matches!(result, Err(BootControlError::KeyNotFound { .. })));
+        // No write should have happened.
+        assert!(writer.last_write.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn set_boot_next_skips_enforcement_when_disabled() {
+        let reader = MockReader { boot_order: vec![] };
+        let writer = MockWriter::new();
+        set_boot_next(&reader, &writer, 99, false).unwrap();
+        assert!(writer.last_write.lock().unwrap().is_some());
+    }
+
+    #[test]
+    fn clear_boot_next_calls_delete() {
+        let writer = MockWriter::new();
+        clear_boot_next(&writer).unwrap();
+        assert_eq!(
+            writer.last_delete.lock().unwrap().as_deref(),
+            Some("BootNext")
+        );
     }
 
     #[test]

@@ -23,11 +23,11 @@
 #![deny(warnings)]
 #![deny(missing_docs)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bootcontrol_core::{
     error::BootControlError,
-    uefi_vars::{UefiVarReader, EFI_GLOBAL_VARIABLE_GUID},
+    uefi_vars::{EfiAttributes, UefiVarReader, UefiVarWriter, EFI_GLOBAL_VARIABLE_GUID},
 };
 
 /// Production efivarfs mount point.
@@ -68,6 +68,99 @@ impl EfivarFsReader {
             }
         }
         PathBuf::from(EFIVARS_DIR)
+    }
+}
+
+/// Best-effort unset the kernel-`immutable` flag (`FS_IMMUTABLE_FL`) on the
+/// supplied efivarfs file so subsequent writes succeed without the user
+/// running `chattr -i` themselves.
+///
+/// Implementation detail: efivarfs flags the variable file as immutable by
+/// default to protect against accidental clobbering. We open the file
+/// read-write, query the current flag set, and clear the immutable bit.
+/// Any I/O error is swallowed because the caller's `write` will surface a
+/// more specific error if the flag really mattered.
+fn try_clear_immutable(path: &Path) {
+    use std::os::fd::AsRawFd;
+
+    let Ok(file) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+    else {
+        return;
+    };
+    let fd = file.as_raw_fd();
+    // `FS_IOC_GETFLAGS` = _IOR('f', 1, long) — but `nix` exposes it as a
+    // helper. We use it via the raw ioctl numbers to avoid pulling in a new
+    // dep just for this. Numbers from <linux/fs.h>:
+    //   FS_IOC_GETFLAGS = 0x80086601
+    //   FS_IOC_SETFLAGS = 0x40086602
+    //   FS_IMMUTABLE_FL = 0x00000010
+    const FS_IOC_GETFLAGS: libc::c_ulong = 0x8008_6601;
+    const FS_IOC_SETFLAGS: libc::c_ulong = 0x4008_6602;
+    const FS_IMMUTABLE_FL: libc::c_long = 0x0000_0010;
+
+    let mut flags: libc::c_long = 0;
+    // SAFETY: ioctl with a u32-sized out-arg; fd is owned by `file` so it
+    // outlives this call.
+    let ret = unsafe { libc::ioctl(fd, FS_IOC_GETFLAGS, &mut flags as *mut _) };
+    if ret != 0 {
+        return;
+    }
+    if flags & FS_IMMUTABLE_FL == 0 {
+        return;
+    }
+    flags &= !FS_IMMUTABLE_FL;
+    // SAFETY: same as above; ioctl is the canonical way to flip these.
+    let _ = unsafe { libc::ioctl(fd, FS_IOC_SETFLAGS, &flags as *const _) };
+}
+
+impl UefiVarWriter for EfivarFsReader {
+    fn write_global(
+        &self,
+        name: &str,
+        payload: &[u8],
+        attrs: EfiAttributes,
+    ) -> Result<(), BootControlError> {
+        let path = self
+            .root()
+            .join(format!("{name}-{EFI_GLOBAL_VARIABLE_GUID}"));
+
+        // efivarfs marks existing variables as immutable; clear that bit
+        // before attempting to overwrite. New variables don't have the bit
+        // set yet so `try_clear_immutable` is a no-op for them.
+        if path.exists() {
+            try_clear_immutable(&path);
+        }
+
+        // The wire format is `attrs (u32 LE) || payload`. efivarfs treats
+        // the entire write atomically — a single `write(2)` syscall replaces
+        // the variable. We therefore build the buffer in one allocation and
+        // use `std::fs::write` (which calls `write(2)` once for buffers
+        // small enough for the kernel's atomic guarantee — all EFI vars are
+        // well under 64 KiB).
+        let mut buffer = Vec::with_capacity(4 + payload.len());
+        buffer.extend_from_slice(&attrs.to_u32().to_le_bytes());
+        buffer.extend_from_slice(payload);
+
+        std::fs::write(&path, &buffer).map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("write {}: {e}", path.display()),
+        })
+    }
+
+    fn delete_global(&self, name: &str) -> Result<(), BootControlError> {
+        let path = self
+            .root()
+            .join(format!("{name}-{EFI_GLOBAL_VARIABLE_GUID}"));
+        if !path.exists() {
+            // Idempotent — already absent is a successful delete.
+            return Ok(());
+        }
+        try_clear_immutable(&path);
+        std::fs::remove_file(&path).map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("remove {}: {e}", path.display()),
+        })
     }
 }
 
@@ -263,6 +356,81 @@ mod tests {
         assert!(entries[0].active);
         assert!(entries[1].active);
         assert!(!entries[2].active);
+    }
+
+    #[test]
+    fn write_global_round_trips_through_read_global() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let backend = EfivarFsReader::with_root(dir.path().to_path_buf());
+
+        backend
+            .write_global("BootNext", &[0x07, 0x00], EfiAttributes::from_u32(0x07))
+            .unwrap();
+
+        let payload = backend.read_global("BootNext").unwrap();
+        assert_eq!(payload, vec![0x07, 0x00]);
+    }
+
+    #[test]
+    fn write_global_overwrites_existing_value() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let backend = EfivarFsReader::with_root(dir.path().to_path_buf());
+
+        backend
+            .write_global("BootNext", &[0x01, 0x00], EfiAttributes::from_u32(0x07))
+            .unwrap();
+        backend
+            .write_global("BootNext", &[0x05, 0x00], EfiAttributes::from_u32(0x07))
+            .unwrap();
+
+        let payload = backend.read_global("BootNext").unwrap();
+        assert_eq!(payload, vec![0x05, 0x00]);
+    }
+
+    #[test]
+    fn delete_global_removes_variable() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let backend = EfivarFsReader::with_root(dir.path().to_path_buf());
+
+        backend
+            .write_global("BootNext", &[0x01, 0x00], EfiAttributes::from_u32(0x07))
+            .unwrap();
+        backend.delete_global("BootNext").unwrap();
+
+        // Read should now fail with EspScanFailed (no such file).
+        let result = backend.read_global("BootNext");
+        assert!(matches!(
+            result,
+            Err(BootControlError::EspScanFailed { .. })
+        ));
+    }
+
+    #[test]
+    fn delete_global_is_idempotent_when_absent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let backend = EfivarFsReader::with_root(dir.path().to_path_buf());
+        backend.delete_global("NeverExisted").unwrap();
+    }
+
+    #[test]
+    fn set_boot_next_end_to_end_through_backend() {
+        use bootcontrol_core::uefi_vars::{encode_boot_order, set_boot_next};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let backend = EfivarFsReader::with_root(dir.path().to_path_buf());
+        // Seed a BootOrder so set_boot_next's enforcement check passes.
+        backend
+            .write_global(
+                "BootOrder",
+                &encode_boot_order(&[0, 1, 2]),
+                EfiAttributes::from_u32(0x07),
+            )
+            .unwrap();
+
+        set_boot_next(&backend, &backend, 1, true).unwrap();
+
+        let payload = backend.read_global("BootNext").unwrap();
+        assert_eq!(payload, vec![0x01, 0x00]);
     }
 
     #[test]
