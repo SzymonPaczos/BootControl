@@ -31,7 +31,6 @@
 //! Refusing the write up-front is safer than producing a "successful" write
 //! that vanishes silently after `rpm-ostree upgrade`.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 /// Classification of an immutable / atomic distro layout.

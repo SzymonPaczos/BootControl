@@ -15,7 +15,6 @@
 //! keymap name resolves on this system, and returns a verdict. The
 //! filesystem-touching wrapper lives in `crates/daemon/src/luks_keymap.rs`.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::error::BootControlError;

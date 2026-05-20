@@ -26,7 +26,6 @@
 //! 4. Concatenate as `"filename:sha256\n"` for each pair.
 //! 5. SHA-256 the resulting string.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::{

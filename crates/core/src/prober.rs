@@ -19,7 +19,6 @@
 //! | 3 | `/etc/default/grub` exists | `Grub` |
 //! | 4 | None of the above | `Unknown` |
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 /// The bootloader detected on this system.

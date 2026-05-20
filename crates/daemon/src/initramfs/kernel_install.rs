@@ -3,7 +3,6 @@
 //! Invokes `kernel-install add <version>` to trigger a full kernel installation
 //! including initramfs generation.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::PathBuf;

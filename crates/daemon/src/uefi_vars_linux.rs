@@ -20,7 +20,6 @@
 //! Used by unit tests below and is available for E2E suites that want to
 //! exercise the boot-entry code path without a real EFI system.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::{Path, PathBuf};

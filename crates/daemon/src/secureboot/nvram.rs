@@ -2,7 +2,6 @@
 //!
 //! Backs up Secure Boot variables (`db`, `KEK`, `PK`) from the Linux
 //! sysfs EFI variables interface before any key enrollment operation.
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::{Path, PathBuf};

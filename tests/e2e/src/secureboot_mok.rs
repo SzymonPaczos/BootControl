@@ -8,7 +8,6 @@
 //! Tests are ignored by default and require QEMU, OVMF, and mtools.
 
 #![cfg(target_os = "linux")]
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::fs;

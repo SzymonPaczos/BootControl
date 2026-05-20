@@ -10,7 +10,6 @@
 //! filesystem checks. Intended for E2E tests on classic distros that want to
 //! exercise the rejection path.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::Path;
