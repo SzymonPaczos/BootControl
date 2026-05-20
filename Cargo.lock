@@ -806,6 +806,7 @@ version = "0.1.0"
 dependencies = [
  "bootcontrol-core",
  "chrono",
+ "libc",
  "nix 0.29.0",
  "serde",
  "serde_json",
