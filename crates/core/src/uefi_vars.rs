@@ -252,6 +252,100 @@ pub fn clear_boot_next(writer: &dyn UefiVarWriter) -> Result<(), BootControlErro
     writer.delete_global("BootNext")
 }
 
+/// Replace `BootOrder` with `new_order`, preserving the set of entries.
+///
+/// `new_order` must be a permutation of the **current** `BootOrder` — same
+/// set of indices, no duplicates, possibly reordered. Adding or removing
+/// entries is not supported through this helper because both operations
+/// require firmware-aware sanity checks (the entry to add must exist as a
+/// `Boot####`; removing the last fallback entry can brick a host). Those
+/// arrive as separate operations.
+///
+/// # Errors
+///
+/// - [`BootControlError::MalformedValue`] — `new_order` has duplicates or
+///   does not match the current set of indices.
+/// - [`BootControlError::EspScanFailed`] — backend I/O failure.
+///
+/// # Examples
+///
+/// ```
+/// // See `set_boot_order` tests in this module for end-to-end usage with
+/// // the mock reader/writer.
+/// ```
+pub fn set_boot_order(
+    reader: &dyn UefiVarReader,
+    writer: &dyn UefiVarWriter,
+    new_order: &[u16],
+) -> Result<(), BootControlError> {
+    let current_payload = reader.read_global("BootOrder")?;
+    let current = parse_boot_order(&current_payload)?;
+
+    // Reject duplicates upfront.
+    let mut seen = std::collections::HashSet::new();
+    for &idx in new_order {
+        if !seen.insert(idx) {
+            return Err(BootControlError::MalformedValue {
+                key: "BootOrder".to_string(),
+                reason: format!("duplicate index Boot{idx:04X} in new order"),
+            });
+        }
+    }
+
+    // Same set check — sort both copies and compare.
+    let mut current_sorted = current.clone();
+    current_sorted.sort_unstable();
+    let mut new_sorted = new_order.to_vec();
+    new_sorted.sort_unstable();
+    if current_sorted != new_sorted {
+        return Err(BootControlError::MalformedValue {
+            key: "BootOrder".to_string(),
+            reason: format!(
+                "new order {new_order:?} is not a permutation of current {current:?} \
+                 (add/remove is a separate operation)"
+            ),
+        });
+    }
+
+    let attrs = EfiAttributes::from_u32(0x07);
+    writer.write_global("BootOrder", &encode_boot_order(new_order), attrs)
+}
+
+/// Move the `Boot####` at `from_index` to `to_position` in the current
+/// `BootOrder`. Both arguments are zero-based positions in the order list
+/// (not entry indices). Out-of-range positions are clamped to the valid
+/// range.
+///
+/// Returns the new order so the caller can echo it back into the UI without
+/// a second read.
+///
+/// # Errors
+///
+/// - [`BootControlError::EspScanFailed`] — backend I/O failure.
+/// - [`BootControlError::KeyNotFound`] — `from_position` is past the end of
+///   the current order (i.e. fewer entries than the caller assumed).
+pub fn move_boot_order_entry(
+    reader: &dyn UefiVarReader,
+    writer: &dyn UefiVarWriter,
+    from_position: usize,
+    to_position: usize,
+) -> Result<Vec<u16>, BootControlError> {
+    let current_payload = reader.read_global("BootOrder")?;
+    let mut order = parse_boot_order(&current_payload)?;
+
+    if from_position >= order.len() {
+        return Err(BootControlError::KeyNotFound {
+            key: format!("BootOrder[{from_position}]"),
+        });
+    }
+    let to = to_position.min(order.len().saturating_sub(1));
+    let entry = order.remove(from_position);
+    order.insert(to, entry);
+
+    set_boot_order(reader, writer, &order)?;
+    Ok(order)
+}
+
 /// Parse the `BootOrder` variable payload into a vector of entry indices.
 ///
 /// `BootOrder` is a packed `u16` little-endian array. The result preserves
@@ -636,6 +730,107 @@ mod tests {
         let writer = MockWriter::new();
         set_boot_next(&reader, &writer, 99, false).unwrap();
         assert!(writer.last_write.lock().unwrap().is_some());
+    }
+
+    /// Read-write mock: holds variables in a Mutex-guarded HashMap.
+    /// Used for `set_boot_order` / `move_boot_order_entry` which need the
+    /// reader to see writes applied earlier in the same test.
+    struct StatefulMock {
+        vars: Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    }
+    impl StatefulMock {
+        fn with_boot_order(order: &[u16]) -> Self {
+            let mut vars = std::collections::HashMap::new();
+            vars.insert("BootOrder".to_string(), encode_boot_order(order));
+            Self {
+                vars: Mutex::new(vars),
+            }
+        }
+    }
+    impl UefiVarReader for StatefulMock {
+        fn read_global(&self, name: &str) -> Result<Vec<u8>, BootControlError> {
+            self.vars.lock().unwrap().get(name).cloned().ok_or_else(|| {
+                BootControlError::EspScanFailed {
+                    reason: format!("no such variable: {name}"),
+                }
+            })
+        }
+        fn list_global_names(&self) -> Result<Vec<String>, BootControlError> {
+            Ok(self.vars.lock().unwrap().keys().cloned().collect())
+        }
+    }
+    impl UefiVarWriter for StatefulMock {
+        fn write_global(
+            &self,
+            name: &str,
+            payload: &[u8],
+            _attrs: EfiAttributes,
+        ) -> Result<(), BootControlError> {
+            self.vars
+                .lock()
+                .unwrap()
+                .insert(name.to_string(), payload.to_vec());
+            Ok(())
+        }
+        fn delete_global(&self, name: &str) -> Result<(), BootControlError> {
+            self.vars.lock().unwrap().remove(name);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn set_boot_order_writes_permutation() {
+        let mock = StatefulMock::with_boot_order(&[0, 1, 2]);
+        set_boot_order(&mock, &mock, &[2, 0, 1]).unwrap();
+        let payload = mock.read_global("BootOrder").unwrap();
+        assert_eq!(parse_boot_order(&payload).unwrap(), vec![2u16, 0, 1]);
+    }
+
+    #[test]
+    fn set_boot_order_rejects_duplicate_index() {
+        let mock = StatefulMock::with_boot_order(&[0, 1, 2]);
+        let result = set_boot_order(&mock, &mock, &[0, 0, 1]);
+        match result {
+            Err(BootControlError::MalformedValue { reason, .. }) => {
+                assert!(reason.contains("duplicate"));
+            }
+            other => panic!("expected MalformedValue, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_boot_order_rejects_changed_set() {
+        let mock = StatefulMock::with_boot_order(&[0, 1, 2]);
+        let result = set_boot_order(&mock, &mock, &[0, 1, 3]);
+        match result {
+            Err(BootControlError::MalformedValue { reason, .. }) => {
+                assert!(reason.contains("permutation"));
+            }
+            other => panic!("expected MalformedValue, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn move_boot_order_entry_swaps_positions() {
+        let mock = StatefulMock::with_boot_order(&[5, 0, 3, 2]);
+        // Move index at position 0 (Boot0005) to position 2.
+        let new_order = move_boot_order_entry(&mock, &mock, 0, 2).unwrap();
+        assert_eq!(new_order, vec![0, 3, 5, 2]);
+    }
+
+    #[test]
+    fn move_boot_order_entry_clamps_to_position() {
+        let mock = StatefulMock::with_boot_order(&[5, 0, 3]);
+        // Caller asks to move to position 99 — clamp to last (2).
+        let new_order = move_boot_order_entry(&mock, &mock, 0, 99).unwrap();
+        assert_eq!(new_order, vec![0, 3, 5]);
+    }
+
+    #[test]
+    fn move_boot_order_entry_rejects_out_of_range_from() {
+        let mock = StatefulMock::with_boot_order(&[5, 0]);
+        let result = move_boot_order_entry(&mock, &mock, 5, 0);
+        assert!(matches!(result, Err(BootControlError::KeyNotFound { .. })));
     }
 
     #[test]

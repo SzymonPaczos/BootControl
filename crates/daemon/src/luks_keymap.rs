@@ -130,6 +130,11 @@ fn walk_for_file(dir: &Path, needle: &str, needle_gz: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// Re-use the workspace-wide env-var serialization lock so the
+    /// `BOOTCONTROL_VCONSOLE_PATH` / `BOOTCONTROL_KBD_KEYMAP_DIRS` overrides
+    /// don't race against each other when tests run in parallel.
+    use crate::grub_rebuild::tests::lock_path;
+
     /// Create a fake kbd dir with one `.map.gz` shard under
     /// `<root>/i386/qwerty/<name>.map.gz`.
     fn write_keymap_fixture(root: &Path, name: &str) {
@@ -154,6 +159,7 @@ mod tests {
         let vconsole = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(vconsole.path(), "KEYMAP=pl\nFONT=lat2-16\n").unwrap();
 
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_VCONSOLE_PATH", vconsole.path());
         std::env::set_var("BOOTCONTROL_KBD_KEYMAP_DIRS", kbd_dir.path());
         let result = validate_keymap_for_initramfs();
@@ -171,6 +177,7 @@ mod tests {
         let vconsole = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(vconsole.path(), "KEYMAP=not-a-real-layout\n").unwrap();
 
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_VCONSOLE_PATH", vconsole.path());
         std::env::set_var("BOOTCONTROL_KBD_KEYMAP_DIRS", kbd_dir.path());
         let result = validate_keymap_for_initramfs();
@@ -189,6 +196,7 @@ mod tests {
         let vconsole = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(vconsole.path(), "FONT=lat2-16\nLOCALE=pl_PL\n").unwrap();
 
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_VCONSOLE_PATH", vconsole.path());
         std::env::set_var("BOOTCONTROL_KBD_KEYMAP_DIRS", kbd_dir.path());
         let result = validate_keymap_for_initramfs();
@@ -209,6 +217,7 @@ mod tests {
         let vconsole = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(vconsole.path(), "KEYMAP=$(cat /etc/shadow)\n").unwrap();
 
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_VCONSOLE_PATH", vconsole.path());
         std::env::set_var("BOOTCONTROL_KBD_KEYMAP_DIRS", kbd_dir.path());
         let result = validate_keymap_for_initramfs();
