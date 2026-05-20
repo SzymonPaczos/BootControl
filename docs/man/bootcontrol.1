@@ -1,0 +1,265 @@
+.\" bootcontrol(1) man page
+.\" To preview: man -l docs/man/bootcontrol.1
+.\" Install to /usr/share/man/man1/bootcontrol.1 via the .deb / .rpm rules.
+.TH BOOTCONTROL 1 "2026-05-20" "BootControl 0.1.0" "User Commands"
+
+.SH NAME
+bootcontrol \- safe GRUB / systemd-boot / UKI configuration CLI
+
+.SH SYNOPSIS
+.B bootcontrol
+.RI [ COMMAND ]
+.RI [ ARGS\&...\fR]
+
+.SH DESCRIPTION
+.B bootcontrol
+is the command-line frontend for BootControl, a memory-safe Rust replacement
+for tools like Grub Customizer. It talks to the
+.BR bootcontrold (8)
+daemon over D\-Bus; every write is authorised through Polkit and protected
+by an ETag freshness check, so concurrent edits or stale-read overwrites
+are rejected before they touch disk.
+
+.B bootcontrol
+never edits configuration files directly. All reads and writes round-trip
+through the daemon, which holds the
+.BR flock (2)
+on the target file for the duration of the operation.
+
+.SH COMMANDS
+.TP
+.BI get-config
+Read the current GRUB configuration and ETag. Prints the parsed key=value
+pairs and the 64-character SHA-256 ETag that callers must pass back on any
+subsequent
+.B set
+call.
+.TP
+.BI get-etag
+Print only the ETag of
+.IR /etc/default/grub .
+Convenience shortcut for scripts that have a cached key map and only need
+to refresh the optimistic-concurrency token.
+.TP
+.BI set " KEY VALUE ETAG"
+Atomically update a single GRUB variable. Requires Polkit authorisation
+and the latest
+.IR ETAG
+returned by
+.B get-config
+or
+.BR get-etag .
+A stale
+.IR ETAG
+causes
+.B org.bootcontrol.Error.StateMismatch
+and no write happens. The daemon also enforces a payload blacklist
+(\fBinit=\fR, \fBselinux=0\fR, etc.) and bails out on configs containing
+complex Bash constructs.
+.TP
+.BI rescue
+Scan attached block devices for installed root filesystems and print a
+chroot recipe for the most likely one. Pure read-only operation — does
+not modify any files. Mounts in the printed recipe are advisory; the user
+runs them by hand.
+.TP
+.BR boot " " list
+List all systemd-boot loader entries discovered under
+.IR /boot/loader/entries/ .
+Marks the current default with
+.BR [default] .
+.TP
+.BI "boot set-default " ID " " ETAG
+Set the default systemd-boot loader entry by ID (filename stem). Same
+ETag-and-Polkit contract as
+.BR set .
+.TP
+.BR cmdline " " get
+Read
+.IR /etc/kernel/cmdline ,
+or on ostree atomic distros (Fedora Silverblue / Kinoite / IoT) read
+.B rpm-ostree kargs
+instead. The ETag is computed over the actual source so subsequent
+.B add
+/
+.B remove
+calls work uniformly across both backends.
+.TP
+.BI "cmdline add " PARAM " " ETAG
+Append a kernel parameter. On rpm-ostree hosts this delegates to
+.BR "rpm-ostree kargs --append" ;
+on classic distros it edits
+.IR /etc/kernel/cmdline
+through the atomic write-rename pipeline. Both paths reject the blacklist.
+.TP
+.BI "cmdline remove " PARAM " " ETAG
+Remove a kernel parameter. Same backend dispatch as
+.BR "cmdline add" .
+.TP
+.BR help
+Print the top-level help; pass a subcommand name to drill into that
+subcommand's options.
+
+.SH ENVIRONMENT
+.TP
+.B BOOTCONTROL_BUS
+Set to
+.B session
+to talk to the daemon on the D\-Bus session bus instead of the system bus
+(used by the E2E test suite). Anything else / unset → system bus.
+.TP
+.B BOOTCONTROL_DEMO
+Set to any non-empty value to use the in-process
+.B MockBackend
+instead of D\-Bus. The CLI returns plausible mock data for read commands
+and refuses write commands. Useful on macOS or any host without a
+bootcontrold installation.
+.TP
+.B RUST_LOG
+Controls the
+.B tracing-subscriber
+verbosity filter
+.RB ( trace ,
+.BR debug ,
+.BR info ,
+.BR warn ,
+.BR error ).
+
+.SH FILES
+.TP
+.I /etc/default/grub
+The GRUB default configuration file. Edited atomically through the daemon
+on every successful
+.B set .
+.TP
+.I /boot/loader/entries/
+systemd-boot loader entries. Edited through
+.BR "boot set-default" .
+.TP
+.I /etc/kernel/cmdline
+UKI kernel command line. Edited through
+.BR "cmdline add/remove" .
+.TP
+.I /run/bootcontrold.sock
+Socket the daemon listens on (socket-activated by systemd).
+
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Generic failure (D\-Bus connection refused, invalid arguments, parser
+error).
+.TP
+.B 2
+A
+.B BootControlError
+the daemon could classify (\fBStateMismatch\fR, \fBPolkitDenied\fR,
+\fBComplexBashDetected\fR, …). The structured D\-Bus error name appears
+in the error message and is the canonical handle for scripted retries.
+
+.SH EXAMPLES
+Read the current config and capture the ETag for a follow-up write:
+.PP
+.RS
+.nf
+$ bootcontrol get-config
+Active Backend: grub
+ETag: 3f9c1aa8d72b...
+
+Configuration:
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+.fi
+.RE
+.PP
+Apply a single change:
+.PP
+.RS
+.nf
+$ bootcontrol set GRUB_TIMEOUT 10 3f9c1aa8d72b...
+.fi
+.RE
+.PP
+List systemd-boot entries:
+.PP
+.RS
+.nf
+$ bootcontrol boot list
+  arch [default]
+  arch-fallback
+.fi
+.RE
+.PP
+Inspect kernel cmdline on a Fedora Silverblue host (transparently
+delegates to
+.BR "rpm-ostree kargs" ):
+.PP
+.RS
+.nf
+$ bootcontrol cmdline get
+ETag: e2bba5...
+Kernel Parameters (3 total):
+  root=UUID=...
+  quiet
+  splash
+.fi
+.RE
+.PP
+Demo Mode (no daemon required):
+.PP
+.RS
+.nf
+$ BOOTCONTROL_DEMO=1 bootcontrol get-config
+.fi
+.RE
+
+.SH SECURITY MODEL
+Every write call goes through:
+.IP \(bu 4
+.B Polkit
+authorisation against an action in the
+.B org.bootcontrol.*
+namespace. The caller's UID is resolved through D\-Bus
+.B GetConnectionUnixUser
+\(em the caller cannot spoof it.
+.IP \(bu 4
+.B ETag
+verification \(em a SHA-256 of the entire file at the moment of the
+operation must match the value the caller cached. Concurrent
+modification by another process (package manager, BTRFS rollback) is
+rejected.
+.IP \(bu 4
+.B POSIX flock
+on the target file before reading \(em closes the TOCTOU window between
+read and write.
+.IP \(bu 4
+.B Payload blacklist
+\(em \fBinit=\fR, \fBselinux=0\fR, \fBapparmor=0\fR, \fBmodule_blacklist=\fR
+and other disabling-security parameters are refused before any write.
+.IP \(bu 4
+.B Atomic write
+via \fIfile.tmp\fR + \fBrename(2)\fR; the original file is replaced in
+one syscall.
+.IP \(bu 4
+.B Failsafe entry
+re-injected into
+.I /etc/bootcontrol/failsafe.cfg
+after every successful GRUB write so a broken main entry still leaves a
+known-good fallback.
+
+.SH SEE ALSO
+.BR bootcontrold (8),
+.BR grub-mkconfig (8),
+.BR systemd-boot (7),
+.BR polkit (8),
+.BR rpm-ostree (1)
+
+.SH BUGS
+Report at
+.UR https://github.com/SzymonPaczos/BootControl/issues
+.UE .
+
+.SH AUTHOR
+Szymon Paczos and BootControl contributors.

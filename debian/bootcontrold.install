@@ -1,1 +1,2 @@
 target/release/bootcontrold usr/bin/
+docs/man/bootcontrold.8 usr/share/man/man8/

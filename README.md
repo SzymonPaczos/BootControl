@@ -165,6 +165,18 @@ cargo test --workspace --features "bootcontrold/experimental_paranoia"
 BOOTCONTROL_BUS=session cargo test --test e2e -- --ignored
 ```
 
+### Man pages
+
+Source lives under [`docs/man/`](./docs/man/). To preview without installing:
+
+```bash
+man -l docs/man/bootcontrol.1
+man -l docs/man/bootcontrold.8
+```
+
+The `.deb` and `.rpm` packaging install them to `/usr/share/man/{man1,man8}/`
+automatically — no extra step on packaged installs.
+
 ### Manual Installation (Local Testing / Contributors)
 
 If you are building from source and not using a package manager, install the configuration files required by D-Bus, Polkit, and systemd:
