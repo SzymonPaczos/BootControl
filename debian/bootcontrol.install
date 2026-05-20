@@ -1,1 +1,2 @@
 target/release/bootcontrol usr/bin/
+docs/man/bootcontrol.1 usr/share/man/man1/

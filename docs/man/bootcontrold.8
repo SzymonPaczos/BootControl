@@ -1,0 +1,259 @@
+.\" bootcontrold(8) man page
+.\" To preview: man -l docs/man/bootcontrold.8
+.\" Install to /usr/share/man/man8/bootcontrold.8 via the .deb / .rpm rules.
+.TH BOOTCONTROLD 8 "2026-05-20" "BootControl 0.1.0" "System Administration"
+
+.SH NAME
+bootcontrold \- privileged D-Bus backend for BootControl
+
+.SH SYNOPSIS
+.B bootcontrold
+
+.SH DESCRIPTION
+.B bootcontrold
+is the privileged backend daemon for BootControl. It serves the
+.B org.bootcontrol.Manager
+interface on D\-Bus and is the only component that ever opens
+.IR /etc/default/grub ,
+.IR /boot/loader/entries/ ,
+.IR /etc/kernel/cmdline
+or
+.I /sys/firmware/efi/efivars/
+for writing.
+
+The daemon is
+.B socket-activated
+by systemd: nothing runs until a frontend (\fBbootcontrol\fR(1),
+\fBbootcontrol-tui\fR(1) or \fBbootcontrol-gui\fR(1)) makes the first
+D\-Bus call. It exits after an idle window so the box pays no continuous
+overhead.
+
+Every mutating method enforces, in order:
+.IP 1. 4
+.B Immutable-distro pre-flight
+\(em on rpm-ostree / ostree / SteamOS / NixOS / Vanilla OS hosts the
+daemon refuses naive writes that would either fail on a read-only mount
+or be discarded on the next rebase, and (on rpm-ostree) transparently
+delegates the kernel-cmdline operations to
+.BR "rpm-ostree kargs" .
+.IP 2. 4
+.B Polkit
+authorisation against the per-method action.
+.IP 3. 4
+.B ETag freshness
+verification under the file's
+.BR flock (2).
+.IP 4. 4
+.B Snapshot
+of every file touched by the operation, written to the snapshot root
+with a manifest. The operation fails closed if the snapshot fails.
+.IP 5. 4
+.B Sanitization
+of any payload that ends up on the kernel command line (blacklist:
+\fBinit=\fR, \fBselinux=0\fR, \fBapparmor=0\fR, \fBmodule_blacklist=\fR,
+…).
+.IP 6. 4
+.B Atomic write
+via
+.IR file.tmp
+\+
+.BR rename (2).
+.IP 7. 4
+.B Failsafe entry
+re-injection after every successful GRUB write so a misbehaving main
+config still leaves a recoverable fallback.
+.IP 8. 4
+.B Audit log
+to journald with structured fields (MESSAGE_ID, OPERATION, TARGET_PATHS,
+ETAG_BEFORE/AFTER, SNAPSHOT_ID, CALLER_UID, POLKIT_ACTION).
+
+The daemon never reads frontend code and never re-exposes its internal
+filesystem API outside D\-Bus.
+
+.SH RUNNING
+The daemon is normally launched by socket activation:
+.PP
+.RS
+.nf
+sudo systemctl enable --now bootcontrold.socket
+.fi
+.RE
+.PP
+That binds
+.I /run/bootcontrold.sock
+and lets D\-Bus auto-start the daemon when
+.B org.bootcontrol.Manager
+is first requested.
+.PP
+For local development you can run the binary directly. Use environment
+overrides to point at non-system paths:
+.PP
+.RS
+.nf
+BOOTCONTROL_BUS=session \\
+BOOTCONTROL_GRUB_PATH=/tmp/grub \\
+BOOTCONTROL_FAILSAFE_PATH=/tmp/failsafe.cfg \\
+BOOTCONTROL_SNAPSHOT_ROOT=/tmp/snapshots \\
+  ./target/debug/bootcontrold
+.fi
+.RE
+
+.SH ENVIRONMENT
+.TP
+.B BOOTCONTROL_BUS
+Set to
+.B session
+to bind to the user's session bus (CI / E2E tests). Anything else / unset
+binds to the system bus.
+.TP
+.B BOOTCONTROL_GRUB_PATH
+Override the path to
+.IR /etc/default/grub .
+E2E tests only.
+.TP
+.B BOOTCONTROL_FAILSAFE_PATH
+Override the failsafe snippet output path. E2E tests only.
+.TP
+.B BOOTCONTROL_SNAPSHOT_ROOT
+Override the snapshot root directory (default:
+.IR /var/lib/bootcontrol/snapshots ).
+Required when running the daemon as an unprivileged user.
+.TP
+.B BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE
+Force the host classification to
+.BR ostree ,
+.BR rpm-ostree ,
+.BR steamos ,
+.BR nixos
+or
+.BR vanilla-os ,
+bypassing all filesystem probes. Used by E2E tests to exercise the
+rejection / delegation paths on a classic host.
+.TP
+.B BOOTCONTROL_VCONSOLE_PATH
+Override the
+.IR /etc/vconsole.conf
+path used by the LUKS keymap pre-flight check.
+.TP
+.B BOOTCONTROL_KBD_KEYMAP_DIRS
+Colon-separated list of kbd data directories scanned by the LUKS
+keymap pre-flight. The default colon-joins, in order:
+.IR /usr/share/kbd/keymaps ,
+.IR /usr/lib/kbd/keymaps ,
+.IR /usr/share/keymaps ,
+.IR /lib/kbd/keymaps .
+.TP
+.B BOOTCONTROL_EFIVARS_DIR
+Override the efivarfs mount point used by the cross-platform UEFI
+variable reader (default:
+.IR /sys/firmware/efi/efivars ).
+.TP
+.B RUST_LOG
+Verbosity filter for
+.BR tracing-subscriber .
+
+.SH FILES
+.TP
+.I /usr/bin/bootcontrold
+The daemon binary.
+.TP
+.I /etc/systemd/system/bootcontrold.service
+systemd unit definition.
+.TP
+.I /etc/systemd/system/bootcontrold.socket
+systemd socket activation unit.
+.TP
+.I /run/bootcontrold.sock
+The activation socket.
+.TP
+.I /usr/share/dbus-1/system.d/org.bootcontrol.Manager.conf
+D\-Bus system policy.
+.TP
+.I /usr/share/dbus-1/system-services/org.bootcontrol.Manager.service
+D\-Bus activation service file.
+.TP
+.I /usr/share/polkit-1/actions/org.bootcontrol.policy
+Polkit action definitions.
+.TP
+.I /var/lib/bootcontrol/snapshots/
+Pre-write snapshots, one subdirectory per operation.
+.TP
+.I /etc/bootcontrol/failsafe.cfg
+Auto-regenerated GRUB failsafe entry.
+
+.SH D-BUS INTERFACE
+The daemon registers
+.B org.bootcontrol.Manager
+on
+.IR /org/bootcontrol/Manager .
+Methods (canonical PascalCase):
+.IP \(bu 4
+.B ReadGrubConfig
+\(em return key=value dict and ETag.
+.IP \(bu 4
+.B SetGrubValue
+\(em atomic write of a single key.
+.IP \(bu 4
+.B GetEtag
+\(em current ETag of
+.IR /etc/default/grub .
+.IP \(bu 4
+.B RebuildGrubConfig
+\(em invoke
+.BR grub-mkconfig (8).
+.IP \(bu 4
+.B ListLoaderEntries
+\(em enumerate systemd-boot entries.
+.IP \(bu 4
+.B SetLoaderDefault
+\(em set systemd-boot default entry.
+.IP \(bu 4
+.B ReadKernelCmdline
+\(em params + ETag for
+.IR /etc/kernel/cmdline
+(or
+.B rpm-ostree kargs
+output on Fedora atomic hosts).
+.IP \(bu 4
+.B AddKernelParam
+/
+.B RemoveKernelParam
+\(em mutate the kernel cmdline.
+.IP \(bu 4
+.B BackupNvram
+\(em archive EFI NVRAM variables.
+.IP \(bu 4
+.B SignAndEnrollUki
+\(em MOK signing path.
+.IP \(bu 4
+.B GenerateParanoiaKeyset
+/
+.B MergeParanoiaWithMicrosoft
+\(em custom PK/KEK/db generation (\fBexperimental_paranoia\fR feature).
+.IP \(bu 4
+.B ListSnapshots
+/
+.B RestoreSnapshot
+\(em snapshot enumeration and rollback.
+
+Errors are propagated as structured D\-Bus names in the
+.B org.bootcontrol.Error.*
+namespace; clients match on the name, never on the message string.
+
+.SH SEE ALSO
+.BR bootcontrol (1),
+.BR systemd.socket (5),
+.BR polkit (8),
+.BR dbus-daemon (1),
+.BR grub-mkconfig (8),
+.BR sbsign (1),
+.BR mokutil (1),
+.BR rpm-ostree (1)
+
+.SH BUGS
+Report at
+.UR https://github.com/SzymonPaczos/BootControl/issues
+.UE .
+
+.SH AUTHOR
+Szymon Paczos and BootControl contributors.
