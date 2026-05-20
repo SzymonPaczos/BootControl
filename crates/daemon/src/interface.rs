@@ -1236,10 +1236,14 @@ impl GrubManager {
                     .map_err(to_daemon_error)?;
                 return rpm_ostree::kargs_append(&param, &etag).map_err(to_daemon_error);
             }
-            Some(ImmutableDistro::Ostree) => {
+            Some(other) => {
+                // Ostree (bare), SteamOs, NixOs, VanillaOs — none of these
+                // have a supported delegation target for kernel cmdline.
+                // Reject with the distro tag carried through so the frontend
+                // can render the right "use this instead" hint.
                 return Err(to_daemon_error(
                     bootcontrol_core::error::BootControlError::ImmutableDistroDetected {
-                        distro: "ostree".to_string(),
+                        distro: other.to_string(),
                     },
                 ));
             }
@@ -1291,10 +1295,14 @@ impl GrubManager {
                     .map_err(to_daemon_error)?;
                 return rpm_ostree::kargs_delete(&param, &etag).map_err(to_daemon_error);
             }
-            Some(ImmutableDistro::Ostree) => {
+            Some(other) => {
+                // Ostree (bare), SteamOs, NixOs, VanillaOs — none of these
+                // have a supported delegation target for kernel cmdline.
+                // Reject with the distro tag carried through so the frontend
+                // can render the right "use this instead" hint.
                 return Err(to_daemon_error(
                     bootcontrol_core::error::BootControlError::ImmutableDistroDetected {
-                        distro: "ostree".to_string(),
+                        distro: other.to_string(),
                     },
                 ));
             }
