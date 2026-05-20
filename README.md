@@ -152,6 +152,19 @@ gated by a pre-push git hook. After cloning, opt the hook in:
 `git push` is rejected if `ci-local.sh` fails. Use `git push --no-verify`
 to bypass on WIP branches.
 
+Cross-distro check (requires `podman` or `docker` on the host):
+
+```bash
+./scripts/test-in-distro.sh ubuntu    # 24.04 LTS — GNU coreutils, dash sh
+./scripts/test-in-distro.sh fedora    # bash sh, dnf-installed rust
+./scripts/test-in-distro.sh arch      # rolling
+./scripts/test-in-distro.sh --all     # everything sequentially
+```
+
+Containerfiles live in [`containers/`](./containers/). Each is pinned to a
+specific base image tag for reproducibility — `latest` is intentionally
+avoided so a Fedora release doesn't invalidate the matrix overnight.
+
 Individual targets:
 
 ```bash
