@@ -141,6 +141,19 @@ BOOTCONTROL_DEMO=1 cargo run -p bootcontrol -- get GRUB_TIMEOUT
 
 ### Run tests
 
+There is **no cloud CI** for this repo — every check runs locally and is
+gated by a pre-push git hook. After cloning, opt the hook in:
+
+```bash
+./scripts/install-hooks.sh    # one-time per clone
+./scripts/ci-local.sh         # runs fmt + clippy + unit tests + E2E session-bus tests
+```
+
+`git push` is rejected if `ci-local.sh` fails. Use `git push --no-verify`
+to bypass on WIP branches.
+
+Individual targets:
+
 ```bash
 # All unit and integration tests (cross-platform, no daemon needed):
 cargo test --workspace

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Pre-push hook: refuse to push if the local CI script does not pass.
+#
+# This repository runs all CI checks locally — there are no GitHub Actions
+# workflows. The same script CI used to run is `scripts/ci-local.sh`; this
+# hook gates `git push` on its success.
+#
+# Bypass (use sparingly, e.g. WIP branches you know don't pass yet):
+#   git push --no-verify
+#
+# Install once per clone:
+#   ./scripts/install-hooks.sh
+#
+# That installer sets `core.hooksPath = .githooks`, which is per-clone
+# configuration and is not auto-applied when cloning. Each contributor
+# runs it once after cloning.
+
+set -euo pipefail
+
+# Skip the hook entirely when the user passes `--no-verify`; git already
+# handles that flag, but documenting it here for visibility.
+
+# Locate the repo root from the hook's vantage point. Hooks run with cwd at
+# the top of the working tree by default, but be explicit so a misbehaving
+# wrapper doesn't surprise us.
+ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="$ROOT/scripts/ci-local.sh"
+
+if [ ! -x "$SCRIPT" ]; then
+    echo "pre-push: $SCRIPT is missing or not executable" >&2
+    echo "Did you delete scripts/ci-local.sh? Restore it before pushing." >&2
+    exit 1
+fi
+
+echo "pre-push: running $SCRIPT (use --no-verify to skip)"
+echo
+
+if ! "$SCRIPT"; then
+    echo >&2
+    echo "pre-push: ci-local.sh failed. Refusing to push." >&2
+    echo "Fix the failures, or push with --no-verify if you know what you're doing." >&2
+    exit 1
+fi
+
+echo
+echo "pre-push: ci-local.sh passed — proceeding with push"
+exit 0
