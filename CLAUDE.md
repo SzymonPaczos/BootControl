@@ -28,7 +28,17 @@ Frontends never bypass `client` to reach the daemon. The daemon never imports fr
 
 ## Canonical commands
 
-Mirror of [`.github/workflows/rust.yml`](.github/workflows/rust.yml) and [`TESTING.md`](./TESTING.md):
+There is **no cloud CI** — all checks run locally. The full pipeline lives
+in [`scripts/ci-local.sh`](./scripts/ci-local.sh) and is enforced by a
+pre-push git hook ([`.githooks/pre-push`](./.githooks/pre-push)). New
+clones must opt into the hook once:
+
+```bash
+./scripts/install-hooks.sh   # one-time, per clone — sets core.hooksPath
+./scripts/ci-local.sh        # run on demand; pre-push runs it automatically
+```
+
+Individual canonical commands (also what `ci-local.sh` invokes):
 
 ```bash
 cargo build --workspace
@@ -37,7 +47,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo test --workspace --doc
 
-# Linux only — requires session bus
+# Linux only — requires session bus; ci-local.sh wraps this in dbus-run-session
 BOOTCONTROL_BUS=session cargo test -p bootcontrol-e2e --test e2e -- --ignored
 
 # macOS / no daemon — uses MockBackend
