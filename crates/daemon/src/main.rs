@@ -1,5 +1,14 @@
 //! Entry point for `bootcontrold`, the privileged BootControl D-Bus daemon.
 //!
+//! # Platform
+//!
+//! Linux-only — depends on efivarfs, `flock(2)`, Polkit, systemd socket
+//! activation, and D-Bus on the system bus. On non-Linux targets this
+//! crate produces a stub binary that prints a clear "not supported"
+//! message and exits non-zero so `cargo build --workspace` still works
+//! when cross-compiling to e.g. `x86_64-pc-windows-gnu` (the frontends
+//! are platform-portable; the daemon by design is not).
+//!
 //! # Runtime behaviour
 //!
 //! 1. Initialises structured logging via `tracing_subscriber`.
@@ -21,17 +30,34 @@
 //! | `BOOTCONTROL_SNAPSHOT_ROOT` | any path | Override the snapshot root dir (E2E tests). |
 //! | `RUST_LOG` | `trace`, `debug`, `info`, `warn`, `error` | Log verbosity filter. |
 
+#[cfg(not(target_os = "linux"))]
+fn main() -> std::process::ExitCode {
+    eprintln!(
+        "bootcontrold is a Linux-only daemon. On Windows / macOS use the \
+         frontends in mock mode (BOOTCONTROL_DEMO=1) or wait for the Windows \
+         port (ROADMAP Phase 7)."
+    );
+    std::process::ExitCode::from(1)
+}
+
+#[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
 use bootcontrold::interface::GrubManager;
+#[cfg(target_os = "linux")]
 use bootcontrold::prober::{build_backend, probe_system};
+#[cfg(target_os = "linux")]
 use tracing::info;
+#[cfg(target_os = "linux")]
 use zbus::connection;
 
 /// Default path to the GRUB default configuration file.
+#[cfg(target_os = "linux")]
 const DEFAULT_GRUB_PATH: &str = "/etc/default/grub";
 
 /// Default path to the golden-parachute failsafe GRUB snippet.
+#[cfg(target_os = "linux")]
 const DEFAULT_FAILSAFE_PATH: &str = "/etc/bootcontrol/failsafe.cfg";
 
 /// Select the D-Bus connection builder based on the `BOOTCONTROL_BUS`
@@ -44,6 +70,7 @@ const DEFAULT_FAILSAFE_PATH: &str = "/etc/bootcontrol/failsafe.cfg";
 ///
 /// Returns a `zbus::Error` if the underlying connection builder fails to
 /// initialise (e.g., the bus is not running).
+#[cfg(target_os = "linux")]
 fn dbus_connection_builder() -> connection::Builder<'static> {
     match std::env::var("BOOTCONTROL_BUS").as_deref() {
         Ok("session") => connection::Builder::session().expect("session bus unavailable"),
@@ -56,6 +83,7 @@ fn dbus_connection_builder() -> connection::Builder<'static> {
 ///
 /// This override is used exclusively by the E2E test helper to point the
 /// daemon at a `tempfile` without needing real root access.
+#[cfg(target_os = "linux")]
 fn resolve_grub_path() -> PathBuf {
     match std::env::var("BOOTCONTROL_GRUB_PATH") {
         Ok(p) if !p.is_empty() => PathBuf::from(p),
@@ -68,6 +96,7 @@ fn resolve_grub_path() -> PathBuf {
 ///
 /// This override is used exclusively by the E2E test helper to redirect the
 /// golden-parachute write to a temp directory rather than `/etc/bootcontrol/`.
+#[cfg(target_os = "linux")]
 fn resolve_failsafe_path() -> PathBuf {
     match std::env::var("BOOTCONTROL_FAILSAFE_PATH") {
         Ok(p) if !p.is_empty() => PathBuf::from(p),
@@ -80,6 +109,7 @@ fn resolve_failsafe_path() -> PathBuf {
 /// Returns `None` to mean "use the GrubManager default"
 /// (`/var/lib/bootcontrol/snapshots`). E2E tests inject a tempdir here
 /// because they run the daemon as an unprivileged user.
+#[cfg(target_os = "linux")]
 fn resolve_snapshot_root() -> Option<PathBuf> {
     std::env::var("BOOTCONTROL_SNAPSHOT_ROOT")
         .ok()
@@ -87,6 +117,7 @@ fn resolve_snapshot_root() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 1. Initialise structured logging ────────────────────────────────────

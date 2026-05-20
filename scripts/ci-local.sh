@@ -26,16 +26,29 @@ step() {
     echo "==> $*"
 }
 
-step "1/4  cargo fmt --all -- --check"
+step "1/5  cargo fmt --all -- --check"
 cargo fmt --all -- --check
 
-step "2/4  cargo clippy --workspace --all-targets --all-features -- -D warnings"
+step "2/5  cargo clippy --workspace --all-targets --all-features -- -D warnings"
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-step "3/4  cargo test --workspace --all-features"
+step "3/5  cargo test --workspace --all-features"
 cargo test --workspace --all-features
 
-step "4/4  E2E tests against a session bus"
+step "4/5  Windows cross-compile (x86_64-pc-windows-gnu, daemon excluded)"
+# Phase 7 PR4-6: the frontends and core are platform-portable; the
+# daemon is Linux-only and produces a no-op stub on non-Linux. We
+# skip this step gracefully when the target or mingw toolchain isn't
+# installed — it's a "nice to have" guard, not a blocker.
+if rustup target list --installed | grep -q '^x86_64-pc-windows-gnu$' \
+        && command -v x86_64-w64-mingw32-gcc > /dev/null; then
+    cargo check --target x86_64-pc-windows-gnu --workspace --exclude bootcontrol-e2e
+else
+    echo "skipped — install with: sudo apt install gcc-mingw-w64-x86-64"
+    echo "                       rustup target add x86_64-pc-windows-gnu"
+fi
+
+step "5/5  E2E tests against a session bus"
 # Match CI exactly: use dbus-run-session to spawn a fresh session bus that
 # only lives for the duration of cargo test. Works whether or not the user
 # already has a session bus from their login (DBUS_SESSION_BUS_ADDRESS).
