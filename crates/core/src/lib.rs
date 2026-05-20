@@ -35,3 +35,4 @@ pub mod initramfs;
 pub mod luks_keymap;
 pub mod prober;
 pub mod secureboot;
+pub mod uefi_vars;

@@ -41,4 +41,5 @@ pub mod sanitize;
 pub mod secureboot;
 pub mod snapshot;
 pub mod systemd_boot_manager;
+pub mod uefi_vars_linux;
 pub mod uki_manager;
