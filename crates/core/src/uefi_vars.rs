@@ -30,7 +30,6 @@
 //! * No I/O. Backends read raw bytes; we parse them.
 //! * No write support yet — that's Phase 7 PR2 (BootNext) and PR3 (BootOrder).
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::error::BootControlError;

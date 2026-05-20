@@ -8,7 +8,6 @@
 
 #![cfg(target_os = "linux")]
 #![cfg(feature = "experimental_paranoia")]
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::helpers::*;

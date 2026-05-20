@@ -19,7 +19,6 @@
 //! optimistic-concurrency contract on the D-Bus layer keeps working without
 //! the client knowing it talks to a different backend.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::process::Command;

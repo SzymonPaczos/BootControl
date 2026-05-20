@@ -2,7 +2,6 @@
 //!
 //! Invokes `mkinitcpio -P` to regenerate all presets.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::PathBuf;

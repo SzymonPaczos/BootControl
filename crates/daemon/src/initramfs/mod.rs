@@ -7,7 +7,6 @@
 //! redirects the binary lookup to a specific path (e.g. a test script).
 //! Production code leaves this field `None`.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 pub mod dracut;

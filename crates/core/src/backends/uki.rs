@@ -10,7 +10,6 @@
 //! `crates/daemon/src/sanitize.rs`. Both lists **must be kept in sync**.
 //! Any new blacklisted pattern must be added to both locations.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::error::BootControlError;

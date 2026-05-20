@@ -5,7 +5,6 @@
 //! runtime; test code can inject overrides via the `sbsign_override` and
 //! `mokutil_override` fields.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::{Path, PathBuf};

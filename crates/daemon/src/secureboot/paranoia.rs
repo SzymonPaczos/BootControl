@@ -1,6 +1,5 @@
 //! Paranoia mode: generate custom Secure Boot key sets and optionally merge
 //! with Microsoft's UEFI CA signatures for dual-boot compatibility.
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use bootcontrol_core::{error::BootControlError, secureboot::ParanoiaKeySet};

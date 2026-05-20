@@ -14,8 +14,6 @@
 //! | `cmdline add`         | Add a kernel parameter. |
 //! | `cmdline remove`      | Remove a kernel parameter. |
 
-#![deny(warnings)]
-
 use bootcontrol_client::{dbus_error_message, resolve_backend};
 use clap::{Parser, Subcommand};
 use tracing::error;

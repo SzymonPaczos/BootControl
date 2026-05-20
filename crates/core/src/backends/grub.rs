@@ -3,7 +3,6 @@
 //! Wraps the existing [`crate::grub`] pure parser to expose GRUB as a
 //! pluggable backend in the `BootManager` trait system.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::{

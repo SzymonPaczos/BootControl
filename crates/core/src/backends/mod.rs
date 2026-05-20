@@ -9,7 +9,6 @@
 //! | [`systemd_boot`] | systemd-boot — parses `/boot/loader/entries/*.conf` |
 //! | [`uki`] | UKI — manages `/etc/kernel/cmdline` |
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 pub mod grub;

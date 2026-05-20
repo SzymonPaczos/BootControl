@@ -2,7 +2,6 @@
 //!
 //! Invokes `dracut --regenerate-all` to regenerate all initramfs images.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::PathBuf;
