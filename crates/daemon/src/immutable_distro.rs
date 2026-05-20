@@ -140,12 +140,18 @@ mod tests {
     // the env-var override hook routes correctly and the wrapper returns
     // `None` on a classic test host (the assumption used by every other
     // test in the workspace).
+    //
+    // Tests in this module manipulate the same process-wide
+    // `BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE` env var; without
+    // serialisation they race in `cargo test`'s default parallel scheduler
+    // and silently clobber each other. Reuse the workspace `lock_path()`
+    // guard from grub_rebuild::tests so the entire env-mutation universe
+    // shares one mutex.
+    use crate::grub_rebuild::tests::lock_path;
 
     #[test]
     fn override_rpm_ostree_takes_precedence() {
-        // SAFETY: tests within a single crate run in the same process and may
-        // race on env vars. The override is restored at the end. No other
-        // test in this module reads this var, so the window is bounded.
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE", "rpm-ostree");
         let probed = probe_immutable_distro();
         std::env::remove_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE");
@@ -154,6 +160,7 @@ mod tests {
 
     #[test]
     fn override_ostree_takes_precedence() {
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE", "ostree");
         let probed = probe_immutable_distro();
         std::env::remove_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE");
@@ -162,6 +169,7 @@ mod tests {
 
     #[test]
     fn unknown_override_value_is_none() {
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE", "bogus-distro");
         let probed = probe_immutable_distro();
         std::env::remove_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE");
@@ -170,6 +178,7 @@ mod tests {
 
     #[test]
     fn override_steamos_takes_precedence() {
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE", "steamos");
         let probed = probe_immutable_distro();
         std::env::remove_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE");
@@ -178,6 +187,7 @@ mod tests {
 
     #[test]
     fn override_nixos_takes_precedence() {
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE", "nixos");
         let probed = probe_immutable_distro();
         std::env::remove_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE");

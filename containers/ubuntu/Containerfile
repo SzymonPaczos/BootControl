@@ -1,0 +1,29 @@
+# Ubuntu 24.04 LTS — long-term-stable, GNU coreutils, dash as /bin/sh.
+#
+# Why 24.04 not 26.04: the dev host is 26.04, so testing against 24.04
+# catches glibc / clippy lint deltas in the opposite direction. The
+# `--all` matrix already implicitly covers 26.04 via the host pre-push
+# hook.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CARGO_TERM_COLOR=always
+ENV PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential pkg-config cmake curl ca-certificates git \
+        libdbus-1-dev \
+        libfontconfig-dev libfreetype-dev \
+        libxkbcommon-dev libwayland-dev \
+        libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+        libegl-dev libgl-dev \
+        dbus dbus-x11 \
+    && rm -rf /var/lib/apt/lists/*
+
+# rustup-installed stable Rust — matches how every developer runs locally.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --profile minimal
+
+# The test runner copies the workspace in at runtime via bind-mount; no
+# COPY here. Container starts in /workspace by convention.
+WORKDIR /workspace

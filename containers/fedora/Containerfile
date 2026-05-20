@@ -1,0 +1,26 @@
+# Fedora — bash as /bin/sh (not dash), glibc-coreutils (not uutils),
+# dnf-installed Rust (not rustup) for the "what does a packaged install
+# look like" angle.
+#
+# Pinned to fedora:41 specifically to keep the matrix reproducible —
+# `latest` floats and would invalidate the local cargo cache on every
+# Fedora release.
+FROM fedora:41
+
+ENV CARGO_TERM_COLOR=always
+
+# Fedora's dbus-devel == Ubuntu's libdbus-1-dev. fontconfig-devel covers
+# the slint dependency; libxkbcommon-devel + wayland-devel + libxcb-devel
+# round out the GUI toolchain.
+RUN dnf install -y --setopt=install_weak_deps=False \
+        gcc gcc-c++ make pkgconf-pkg-config cmake git \
+        rust cargo \
+        dbus-devel \
+        fontconfig-devel freetype-devel \
+        libxkbcommon-devel wayland-devel \
+        libxcb-devel \
+        mesa-libEGL-devel mesa-libGL-devel \
+        dbus-daemon dbus-x11 \
+    && dnf clean all
+
+WORKDIR /workspace
