@@ -1,0 +1,19 @@
+# Arch Linux — rolling release, mkinitcpio (not dracut), pacman-installed
+# Rust (rustup-style toolchain manager `rustup` is also packaged but the
+# system-rust we use here matches what the AUR PKGBUILD installs).
+FROM archlinux:latest
+
+ENV CARGO_TERM_COLOR=always
+
+RUN pacman -Syu --noconfirm --needed \
+        base-devel pkgconf cmake git \
+        rust \
+        dbus \
+        fontconfig freetype2 \
+        libxkbcommon wayland \
+        libxcb \
+        mesa libglvnd \
+        dbus-broker \
+    && pacman -Scc --noconfirm
+
+WORKDIR /workspace
