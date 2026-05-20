@@ -22,8 +22,69 @@ enum UiMessage {
     RestoreSnapshot(String),
 }
 
+/// Suppress the AccessKit-driven `zbus::Connection::Builder::build` panic
+/// that fires on every Slint startup under the GUI's default a11y backend.
+///
+/// # The panic
+///
+/// `accesskit_unix::context::get_or_init_messages` runs on its own worker
+/// thread and constructs a `zbus::Connection` to bridge to AT-SPI. zbus
+/// (compiled with the `tokio` feature, as the daemon needs) requires the
+/// thread that builds the connection to be inside a Tokio runtime, calls
+/// `tokio::runtime::Handle::current()`, panics on absence. AccessKit knows
+/// nothing about Tokio, so the panic is structural — not a transient bug.
+///
+/// # Why a filter rather than an upstream fix
+///
+/// Two options would actually fix it:
+///   1. AccessKit migrates to `zbus`'s `async-io` feature (loses Tokio
+///      dependency entirely).
+///   2. Slint runs AccessKit's worker thread inside a Tokio runtime.
+///
+/// Both are upstream changes. Until one ships, the panic fires once per
+/// process on a side thread that the GUI does not depend on — the main
+/// window keeps working, only the AT-SPI bridge dies. Silencing exactly
+/// this one panic message keeps stderr clean for users while leaving every
+/// other panic loud and visible.
+///
+/// # Safety
+///
+/// The hook installed here delegates to the previous hook (typically the
+/// libstd default) for any panic whose payload does not contain the
+/// signature string. We never drop unrelated panics on the floor.
+fn install_accesskit_panic_filter() {
+    use std::panic;
+    let prev = panic::take_hook();
+    panic::set_hook(Box::new(move |info| {
+        let msg = info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| info.payload().downcast_ref::<String>().map(|s| s.as_str()))
+            .unwrap_or("");
+        let is_accesskit_zbus = msg.contains("no reactor running")
+            && info
+                .location()
+                .map(|l| l.file().contains("zbus-"))
+                .unwrap_or(false);
+        if is_accesskit_zbus {
+            // Single short stderr breadcrumb so the failure mode is still
+            // discoverable for someone debugging missing a11y, without the
+            // 20-line backtrace flooding the terminal on every launch.
+            eprintln!(
+                "bootcontrol-gui: AccessKit AT-SPI bridge disabled \
+                 (zbus/Tokio runtime mismatch — non-fatal; GUI is unaffected)"
+            );
+            return;
+        }
+        prev(info);
+    }));
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    install_accesskit_panic_filter();
+
     // Register bundled fonts BEFORE constructing the AppWindow so they
     // are picked up by the first paint. Failures are non-fatal (fallback
     // to system stack — see appwindow.slint default-font-family).
