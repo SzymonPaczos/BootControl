@@ -32,5 +32,6 @@ pub mod grub;
 pub mod hash;
 pub mod immutable_distro;
 pub mod initramfs;
+pub mod luks_keymap;
 pub mod prober;
 pub mod secureboot;

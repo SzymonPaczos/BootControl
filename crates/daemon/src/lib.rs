@@ -33,6 +33,7 @@ pub mod grub_rebuild;
 pub mod immutable_distro;
 pub mod initramfs;
 pub mod interface;
+pub mod luks_keymap;
 pub mod polkit;
 pub mod prober;
 pub mod rpm_ostree;
