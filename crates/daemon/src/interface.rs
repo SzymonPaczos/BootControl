@@ -40,13 +40,14 @@ use crate::{
     audit::{self, message_ids, AuditEvent, Phase},
     dbus_error::{snapshot_to_daemon_error, to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
-    immutable_distro::enforce_writable_distro,
+    immutable_distro::{enforce_writable_distro, probe_immutable_distro},
     polkit::authorize_with_polkit,
-    sanitize,
+    rpm_ostree, sanitize,
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
     snapshot, systemd_boot_manager, uki_manager,
 };
+use bootcontrol_core::immutable_distro::ImmutableDistro;
 
 use serde::Serialize;
 
@@ -1182,6 +1183,13 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.EspScanFailed` — file not found or unreadable.
     async fn read_kernel_cmdline(&self) -> Result<(Vec<String>, String), DaemonError> {
         info!(path = ?self.kernel_cmdline_path, "D-Bus: ReadKernelCmdline");
+        // Phase 6 PR2: on rpm-ostree hosts the on-disk cmdline is owned by
+        // ostree and overwritten on every upgrade. Read through
+        // `rpm-ostree kargs` instead so the value matches what will actually
+        // boot.
+        if let Some(ImmutableDistro::RpmOstree) = probe_immutable_distro() {
+            return rpm_ostree::kargs_read().map_err(to_daemon_error);
+        }
         uki_manager::read_kernel_cmdline(&self.kernel_cmdline_path).map_err(to_daemon_error)
     }
 
@@ -1215,8 +1223,29 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: AddKernelParam");
-        // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
-        enforce_writable_distro().map_err(to_daemon_error)?;
+        // Phase 6 PR2: dispatch on host class.
+        //
+        //   classic mutable host  → uki_manager (write `/etc/kernel/cmdline`)
+        //   rpm-ostree host       → rpm-ostree kargs --append=<param>
+        //   bare ostree host      → reject (no supported delegation target)
+        match probe_immutable_distro() {
+            Some(ImmutableDistro::RpmOstree) => {
+                let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
+                authorize_with_polkit(caller_uid)
+                    .await
+                    .map_err(to_daemon_error)?;
+                return rpm_ostree::kargs_append(&param, &etag).map_err(to_daemon_error);
+            }
+            Some(ImmutableDistro::Ostree) => {
+                return Err(to_daemon_error(
+                    bootcontrol_core::error::BootControlError::ImmutableDistroDetected {
+                        distro: "ostree".to_string(),
+                    },
+                ));
+            }
+            None => {}
+        }
+
         let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
         authorize_with_polkit(caller_uid)
             .await
@@ -1253,8 +1282,25 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: RemoveKernelParam");
-        // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
-        enforce_writable_distro().map_err(to_daemon_error)?;
+        // Phase 6 PR2: dispatch on host class (see AddKernelParam).
+        match probe_immutable_distro() {
+            Some(ImmutableDistro::RpmOstree) => {
+                let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
+                authorize_with_polkit(caller_uid)
+                    .await
+                    .map_err(to_daemon_error)?;
+                return rpm_ostree::kargs_delete(&param, &etag).map_err(to_daemon_error);
+            }
+            Some(ImmutableDistro::Ostree) => {
+                return Err(to_daemon_error(
+                    bootcontrol_core::error::BootControlError::ImmutableDistroDetected {
+                        distro: "ostree".to_string(),
+                    },
+                ));
+            }
+            None => {}
+        }
+
         let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
         authorize_with_polkit(caller_uid)
             .await
