@@ -221,7 +221,10 @@ The project follows **Conventional Commits** and requires tests for all filesyst
 ## Security
 
 BootControl operates at the kernel boot level. A bug here can brick a machine.  
-Every write path has a guardrail. See the [Red Teaming section](./ARCHITECTURE.md#v-red-teaming--edge-cases--mitigacje) in `ARCHITECTURE.md` for the full threat model.
+Every write path has a guardrail. The full structured walk-through —
+trust boundaries, STRIDE per-component, every threat mapped to mitigation
+and test — lives in [`docs/threat-model.md`](./docs/threat-model.md). The
+short tour stays in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §V.
 
 **Key security properties:**
 - 🔒 **Polkit authorization** — every write requires user authentication
@@ -230,5 +233,7 @@ Every write path has a guardrail. See the [Red Teaming section](./ARCHITECTURE.m
 - 🔒 **Payload blacklist** — blocks injection of dangerous kernel parameters (`init=`, `selinux=0`, etc.)
 - 🔒 **Failsafe GRUB entry** — golden-parachute entry written after every successful config change
 - 🔒 **Bail-out policy** — any complex Bash in `/etc/default/grub` causes an immediate error, never a partial edit
+- 🔒 **Snapshot before every write** — pre-write contents archived to `/var/lib/bootcontrol/snapshots/`, rollback restores byte-for-byte
+- 🔒 **Atomic-distro pre-flight** — refuses writes on ostree / rpm-ostree / SteamOS / NixOS / Vanilla OS that would either fail or get rolled back
 
-**Found a vulnerability?** Open a private issue or contact the maintainer directly.
+**Found a vulnerability?** See the [reporting section](./docs/threat-model.md#6-reporting-a-vulnerability) in the threat model.
