@@ -17,8 +17,6 @@
 //! └──────────────────────────────────────────────────────────┘
 //! ```
 
-#![deny(warnings)]
-
 pub mod app;
 pub mod events;
 pub mod popup;

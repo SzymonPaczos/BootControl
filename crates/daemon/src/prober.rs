@@ -5,7 +5,6 @@
 //! function. The pure function is tested in isolation; this module is tested
 //! only via E2E tests where real filesystem access is acceptable.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::Path;

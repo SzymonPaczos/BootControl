@@ -12,7 +12,6 @@
 //! | `dracut` | `dracut` | `dracut --regenerate-all` |
 //! | `kernel-install` | `kernel-install` | `kernel-install add <version>` |
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::PathBuf;

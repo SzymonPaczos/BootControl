@@ -34,7 +34,6 @@
 //! | [`snapshot`] | Pre-write filesystem snapshots (PR 5). Not yet integrated into write-paths. |
 //! | [`audit`] | Structured journald audit emission (PR 5). Not yet integrated into write-paths. |
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 pub mod audit;

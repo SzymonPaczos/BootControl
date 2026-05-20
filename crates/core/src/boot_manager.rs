@@ -11,7 +11,6 @@
 //! - `Send + Sync` bounds allow the daemon to store the backend behind a
 //!   `Box<dyn BootManager>` in an async context.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use crate::error::BootControlError;

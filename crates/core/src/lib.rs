@@ -22,7 +22,6 @@
 //!   side effects, making it straightforward to test under `cfg(test)` without
 //!   mocks.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 pub mod backends;

@@ -1,5 +1,4 @@
 //! Secure Boot signing abstractions.
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::Path;

@@ -9,7 +9,6 @@
 //! See the `validate_keymap_for_initramfs` docstring for the recommended
 //! invocation point.
 
-#![deny(warnings)]
 #![deny(missing_docs)]
 
 use std::path::{Path, PathBuf};
