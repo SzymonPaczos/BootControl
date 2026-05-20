@@ -1,3 +1,15 @@
+// The daemon is Linux-only by design: it depends on `nix::fcntl::flock`,
+// efivarfs at `/sys/firmware/efi/efivars`, systemd socket activation,
+// Polkit, and D-Bus name `org.bootcontrol.Manager` on the system bus.
+// On Windows the analogous code lives in the per-frontend binaries that
+// call `SetFirmwareEnvironmentVariableExW` directly with the user's UAC
+// elevation. That port is out of scope for this crate.
+//
+// Gate the entire lib content on Linux so `cargo build --workspace` on
+// any other target produces an empty (but valid) library and links
+// against the `main.rs` Windows stub. See Phase 7 PR4-6 in ROADMAP.md.
+#![cfg(target_os = "linux")]
+
 //! `bootcontrold` — privileged D-Bus backend for BootControl.
 //!
 //! This crate implements the system daemon that reads and writes
