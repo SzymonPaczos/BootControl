@@ -88,19 +88,24 @@ jobs:
           ${{ runner.os }}-cargo-e2e-
           ${{ runner.os }}-cargo-
 
-    - name: Install D-Bus
-      run: sudo apt-get install -y dbus
-
-    - name: Start D-Bus session bus
+    - name: Install system dependencies
       run: |
-        # Launch a session bus and export its address to subsequent steps.
-        eval $(dbus-launch --sh-syntax)
-        echo "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}" >> "${GITHUB_ENV}"
+        sudo apt-get update
+        sudo apt-get install -y dbus dbus-x11 \
+            pkg-config libdbus-1-dev libfontconfig1-dev
 
     - name: Clippy — E2E test code
       run: cargo clippy -p bootcontrol-e2e --tests -- -D warnings
 
+    # `dbus-launch` in a separate step only survives the lifetime of that
+    # step's shell — by the time `Run E2E tests` starts the daemon is gone
+    # and `Connection::session()` fails with "address error: Invalid
+    # address". `dbus-run-session` (from dbus-x11) spawns a fresh session
+    # bus that lives for the duration of the wrapped command, then tears
+    # it down cleanly. No GITHUB_ENV plumbing needed.
     - name: Run E2E tests
       env:
         BOOTCONTROL_BUS: session
-      run: cargo test -p bootcontrol-e2e --test e2e -- --ignored --nocapture
+      run: |
+        dbus-run-session -- \
+          cargo test -p bootcontrol-e2e --test e2e -- --ignored --nocapture
