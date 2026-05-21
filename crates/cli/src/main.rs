@@ -7,12 +7,21 @@
 //! | `rescue`              | Scan for a Linux root filesystem and print chroot instructions. |
 //! | `get-config`          | Read GRUB configuration (key-values + ETag) from the daemon. |
 //! | `get-etag`            | Read the current ETag from the daemon. |
+//! | `get-backend`         | Print the active bootloader backend (`grub` / `systemd-boot` / `uki`). |
 //! | `set`                 | Set a GRUB key-value pair. |
+//! | `rebuild`             | Re-run `grub-mkconfig` to regenerate `/boot/grub/grub.cfg`. |
 //! | `boot list`           | List systemd-boot loader entries. |
+//! | `boot read-entry`     | Read a single loader entry by ID. |
 //! | `boot set-default`    | Set the default systemd-boot entry. |
 //! | `cmdline get`         | Read the current kernel cmdline parameters. |
 //! | `cmdline add`         | Add a kernel parameter. |
 //! | `cmdline remove`      | Remove a kernel parameter. |
+//! | `snapshot list`       | Enumerate pre-write snapshots. |
+//! | `snapshot restore`    | Restore a snapshot by ID. |
+//! | `nvram backup`        | Archive EFI NVRAM variables to a target directory. |
+//! | `mok sign`            | Sign a UKI image with the MOK and enroll the certificate. |
+//! | `paranoia generate`   | Generate a custom Secure Boot keyset (PK/KEK/db). |
+//! | `paranoia merge`      | Merge the custom db cert with Microsoft UEFI CA signatures. |
 
 use bootcontrol_client::{dbus_error_message, resolve_backend};
 use clap::{Parser, Subcommand};
@@ -42,6 +51,8 @@ enum Commands {
     GetConfig,
     /// Read the current ETag from the daemon.
     GetEtag,
+    /// Print the active bootloader backend (grub / systemd-boot / uki).
+    GetBackend,
     /// Set a GRUB value.
     Set {
         /// The GRUB key to update (e.g. GRUB_TIMEOUT)
@@ -51,6 +62,8 @@ enum Commands {
         /// The latest ETag from the daemon
         etag: String,
     },
+    /// Re-run grub-mkconfig to regenerate /boot/grub/grub.cfg.
+    Rebuild,
     /// systemd-boot loader entry management.
     Boot {
         #[command(subcommand)]
@@ -61,6 +74,26 @@ enum Commands {
         #[command(subcommand)]
         action: CmdlineAction,
     },
+    /// Pre-write snapshot management (list, restore).
+    Snapshot {
+        #[command(subcommand)]
+        action: SnapshotAction,
+    },
+    /// EFI NVRAM operations (backup).
+    Nvram {
+        #[command(subcommand)]
+        action: NvramAction,
+    },
+    /// Secure Boot MOK signing and enrollment.
+    Mok {
+        #[command(subcommand)]
+        action: MokAction,
+    },
+    /// Paranoia Mode — custom PK/KEK/db key generation and Microsoft merge.
+    Paranoia {
+        #[command(subcommand)]
+        action: ParanoiaAction,
+    },
 }
 
 /// systemd-boot subcommands.
@@ -68,12 +101,73 @@ enum Commands {
 enum BootAction {
     /// List all systemd-boot loader entries.
     List,
+    /// Read a single loader entry by ID.
+    ReadEntry {
+        /// Entry ID (filename stem, e.g. `arch`)
+        id: String,
+    },
     /// Set the default loader entry.
     SetDefault {
         /// Entry ID (filename stem, e.g. `arch`)
         id: String,
         /// Current ETag of loader.conf
         etag: String,
+    },
+}
+
+/// Pre-write snapshot subcommands.
+#[derive(Debug, Subcommand)]
+enum SnapshotAction {
+    /// List snapshots, newest first.
+    List,
+    /// Restore a snapshot by ID. Overwrites every file captured in its
+    /// manifest with the byte-for-byte pre-write contents.
+    Restore {
+        /// Snapshot id as returned by `snapshot list`.
+        id: String,
+    },
+}
+
+/// NVRAM backup subcommands.
+#[derive(Debug, Subcommand)]
+enum NvramAction {
+    /// Archive EFI NVRAM variables to `target_dir`. Empty string ("") uses
+    /// the daemon-side default (`/var/lib/bootcontrol/nvram-backups/`).
+    Backup {
+        /// Output directory. Pass "" to accept the daemon default.
+        target_dir: String,
+    },
+}
+
+/// MOK subcommands.
+#[derive(Debug, Subcommand)]
+enum MokAction {
+    /// Sign a UKI image with the host's MOK and enroll the certificate
+    /// for the next boot. Pre-flight checks against the policy blacklist.
+    Sign {
+        /// Path to the unsigned UKI image (`.efi`).
+        uki_path: String,
+    },
+}
+
+/// Paranoia Mode subcommands.
+///
+/// Only present when the daemon is compiled with the
+/// `experimental_paranoia` feature; otherwise both calls return
+/// `org.freedesktop.DBus.Error.UnknownMethod`.
+#[derive(Debug, Subcommand)]
+enum ParanoiaAction {
+    /// Generate a custom Secure Boot keyset (PK / KEK / db) under
+    /// `output_dir`. Empty string uses the daemon default.
+    Generate {
+        /// Output directory. Pass "" to accept the daemon default.
+        output_dir: String,
+    },
+    /// Merge the custom db certificate with Microsoft's UEFI CA
+    /// signatures into a `.auth` file usable for dual-boot.
+    Merge {
+        /// Output directory holding the previously generated keyset.
+        output_dir: String,
     },
 }
 
@@ -188,10 +282,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        Commands::GetBackend => {
+            let backend = resolve_backend().await;
+            let name = backend
+                .get_active_backend()
+                .await
+                .map_err(|e| dbus_error_message(&e).to_string())?;
+            println!("{}", name);
+        }
+
         Commands::Set { key, value, etag } => {
             let backend = resolve_backend().await;
             backend.set_value(&key, &value, &etag).await?;
             println!("Successfully set {}={}", key, value);
+        }
+
+        Commands::Rebuild => {
+            let backend = resolve_backend().await;
+            backend
+                .rebuild_grub_config()
+                .await
+                .map_err(|e| dbus_error_message(&e).to_string())?;
+            println!("grub.cfg regenerated.");
         }
 
         Commands::Boot { action } => {
@@ -221,6 +333,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         println!("    etag:    {}", e.etag);
                     }
+                }
+                BootAction::ReadEntry { id } => {
+                    let (entry, etag) = backend
+                        .read_loader_entry(&id)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("ID:        {}", entry.id);
+                    if let Some(t) = &entry.title {
+                        println!("Title:     {t}");
+                    }
+                    if let Some(l) = &entry.linux {
+                        println!("Linux:     {l}");
+                    }
+                    if let Some(i) = &entry.initrd {
+                        println!("Initrd:    {i}");
+                    }
+                    if let Some(o) = &entry.options {
+                        println!("Options:   {o}");
+                    }
+                    if let Some(m) = &entry.machine_id {
+                        println!("MachineID: {m}");
+                    }
+                    println!("Default:   {}", entry.is_default);
+                    println!("Entry ETag:  {}", entry.etag);
+                    println!("loader.conf ETag: {etag}");
                 }
                 BootAction::SetDefault { id, etag } => {
                     backend
@@ -259,6 +396,84 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .await
                         .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Removed parameter: {param}");
+                }
+            }
+        }
+
+        Commands::Snapshot { action } => {
+            let backend = resolve_backend().await;
+            match action {
+                SnapshotAction::List => {
+                    let snaps = backend
+                        .list_snapshots()
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    if snaps.is_empty() {
+                        println!("No snapshots.");
+                    } else {
+                        println!("Snapshots ({} total, newest first):", snaps.len());
+                        for s in &snaps {
+                            println!("  {}", s.id);
+                            println!("    op:    {}", s.op);
+                            println!("    ts:    {}", s.ts);
+                            if !s.audit_job_id.is_empty() {
+                                println!("    audit: {}", s.audit_job_id);
+                            }
+                        }
+                    }
+                }
+                SnapshotAction::Restore { id } => {
+                    backend
+                        .restore_snapshot(&id)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("Restored snapshot: {id}");
+                }
+            }
+        }
+
+        Commands::Nvram { action } => {
+            let backend = resolve_backend().await;
+            match action {
+                NvramAction::Backup { target_dir } => {
+                    let json = backend
+                        .backup_nvram(&target_dir)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("{json}");
+                }
+            }
+        }
+
+        Commands::Mok { action } => {
+            let backend = resolve_backend().await;
+            match action {
+                MokAction::Sign { uki_path } => {
+                    backend
+                        .sign_and_enroll_uki(&uki_path)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("Signed and enrolled: {uki_path}");
+                }
+            }
+        }
+
+        Commands::Paranoia { action } => {
+            let backend = resolve_backend().await;
+            match action {
+                ParanoiaAction::Generate { output_dir } => {
+                    let json = backend
+                        .generate_paranoia_keyset(&output_dir)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("{json}");
+                }
+                ParanoiaAction::Merge { output_dir } => {
+                    let auth = backend
+                        .merge_paranoia_with_microsoft(&output_dir)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("Merged .auth: {auth}");
                 }
             }
         }
