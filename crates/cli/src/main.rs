@@ -22,6 +22,13 @@
 //! | `mok sign`            | Sign a UKI image with the MOK and enroll the certificate. |
 //! | `paranoia generate`   | Generate a custom Secure Boot keyset (PK/KEK/db). |
 //! | `paranoia merge`      | Merge the custom db cert with Microsoft UEFI CA signatures. |
+//! | `efi list-entries`    | List `Boot####` UEFI variables (parsed). |
+//! | `efi get-order`       | Print current `BootOrder` as comma-separated indices. |
+//! | `efi set-order`       | Replace `BootOrder` with a permutation. |
+//! | `efi move-entry`      | Move one entry within `BootOrder` (zero-based positions). |
+//! | `efi get-next`        | Print `BootNext`, or `(unset)`. |
+//! | `efi set-next`        | One-shot boot override (consumed by firmware on next boot). |
+//! | `efi clear-next`      | Clear `BootNext`. Idempotent. |
 
 use bootcontrol_client::{dbus_error_message, resolve_backend};
 use clap::{Parser, Subcommand};
@@ -94,6 +101,45 @@ enum Commands {
         #[command(subcommand)]
         action: ParanoiaAction,
     },
+    /// UEFI boot menu management (BootOrder, BootNext, Boot####).
+    Efi {
+        #[command(subcommand)]
+        action: EfiAction,
+    },
+}
+
+/// UEFI boot-menu subcommands.
+///
+/// Wraps the `Boot####`, `BootOrder` and `BootNext` namespace from the
+/// global EFI variable store. Reads do not require Polkit; writes do.
+#[derive(Debug, Subcommand)]
+enum EfiAction {
+    /// List every `Boot####` entry the firmware advertises.
+    ListEntries,
+    /// Print the current `BootOrder` as a comma-separated decimal list.
+    GetOrder,
+    /// Replace `BootOrder`. Must be a comma-separated permutation of the
+    /// current set (e.g. `1,0,2`).
+    SetOrder {
+        /// Comma-separated decimal indices in the desired order.
+        new_order: String,
+    },
+    /// Move a single entry within `BootOrder`. Positions are zero-based.
+    MoveEntry {
+        /// Position of the entry to move (0 = first).
+        from_position: usize,
+        /// Target position; clamped to the valid range.
+        to_position: usize,
+    },
+    /// Print the current `BootNext` index, or `(unset)` when absent.
+    GetNext,
+    /// Set `BootNext` to a single index. One-shot override.
+    SetNext {
+        /// `Boot####` index to attempt at next boot.
+        index: u16,
+    },
+    /// Clear `BootNext`. Idempotent.
+    ClearNext,
 }
 
 /// systemd-boot subcommands.
@@ -474,6 +520,99 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .await
                         .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Merged .auth: {auth}");
+                }
+            }
+        }
+
+        Commands::Efi { action } => {
+            let backend = resolve_backend().await;
+            match action {
+                EfiAction::ListEntries => {
+                    let json = backend
+                        .list_efi_boot_entries()
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    // Pretty-print without pulling serde_json as a CLI dep:
+                    // the JSON is small, line-by-line decoding via the
+                    // already-imported client DTO would be heavier.
+                    println!("{json}");
+                }
+                EfiAction::GetOrder => {
+                    let order = backend
+                        .get_boot_order()
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    let csv: Vec<String> = order.iter().map(|i| i.to_string()).collect();
+                    println!("{}", csv.join(","));
+                }
+                EfiAction::SetOrder { new_order } => {
+                    let parsed: Result<Vec<u16>, _> = new_order
+                        .split(',')
+                        .map(|s| s.trim().parse::<u16>())
+                        .collect();
+                    let parsed = parsed.map_err(|e| {
+                        format!("invalid new_order — expected comma-separated u16: {e}")
+                    })?;
+                    backend
+                        .set_boot_order(parsed)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("BootOrder updated.");
+                }
+                EfiAction::MoveEntry {
+                    from_position,
+                    to_position,
+                } => {
+                    // Read current order, mutate locally, write back. Same
+                    // semantics as `core::uefi_vars::move_boot_order_entry`
+                    // but composed from CLI primitives so the daemon-side
+                    // permutation check still fires.
+                    let mut order = backend
+                        .get_boot_order()
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    if from_position >= order.len() {
+                        return Err(format!(
+                            "from_position {from_position} is past the end of BootOrder \
+                             (len = {len})",
+                            len = order.len()
+                        )
+                        .into());
+                    }
+                    let to = to_position.min(order.len().saturating_sub(1));
+                    let entry = order.remove(from_position);
+                    order.insert(to, entry);
+                    backend
+                        .set_boot_order(order.clone())
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    let csv: Vec<String> = order.iter().map(|i| i.to_string()).collect();
+                    println!("BootOrder updated: {}", csv.join(","));
+                }
+                EfiAction::GetNext => {
+                    let n = backend
+                        .get_boot_next()
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    if n < 0 {
+                        println!("(unset)");
+                    } else {
+                        println!("{n}");
+                    }
+                }
+                EfiAction::SetNext { index } => {
+                    backend
+                        .set_boot_next(index)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("BootNext set to: {index}");
+                }
+                EfiAction::ClearNext => {
+                    backend
+                        .clear_boot_next()
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("BootNext cleared.");
                 }
             }
         }
