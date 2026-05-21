@@ -36,6 +36,25 @@ pub struct LoaderEntryDto {
 /// Mirrors the on-disk manifest summary fields. The full manifest stays
 /// in `/var/lib/bootcontrol/snapshots/<id>/manifest.json` and is read by
 /// the daemon only when a snapshot is actually restored.
+/// A parsed `Boot####` UEFI variable as returned by `ListEfiBootEntries`.
+///
+/// Mirrors `bootcontrol_core::uefi_vars::EfiBootEntry`. Kept as a separate
+/// DTO so the wire format is owned by the client crate (the daemon
+/// serialises a `Vec<EfiBootEntryDto>` to JSON and ships it as a single
+/// string D-Bus method return; the client deserialises the same shape).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EfiBootEntryDto {
+    /// Hex index from the variable name (e.g. `1` for `Boot0001`).
+    pub index: u16,
+    /// `LOAD_OPTION_ACTIVE` bit; inactive entries are skipped by firmware.
+    pub active: bool,
+    /// `LOAD_OPTION_HIDDEN` bit; hidden entries do not appear in firmware menus.
+    pub hidden: bool,
+    /// Human-readable description decoded from UTF-16. Examples:
+    /// `"Windows Boot Manager"`, `"ubuntu"`, `"UEFI: SK hynix BC711..."`.
+    pub description: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SnapshotInfoDto {
     /// Filesystem-safe snapshot id (e.g. `2026-04-30T130211Z-set_grub_value`).
@@ -130,6 +149,31 @@ pub trait Manager {
 
     /// Restore a snapshot by id. Overwrites all files captured in the manifest.
     async fn restore_snapshot(&self, id: &str) -> zbus::Result<()>;
+
+    // ── EFI boot menu ─────────────────────────────────────────────────────────
+
+    /// List every `Boot####` UEFI variable as a JSON array of
+    /// `EfiBootEntryDto`.
+    async fn list_efi_boot_entries(&self) -> zbus::Result<String>;
+
+    /// Read the current `BootOrder` UEFI variable.
+    async fn get_boot_order(&self) -> zbus::Result<Vec<u16>>;
+
+    /// Replace `BootOrder` with `new_order`. Must be a permutation of the
+    /// current set of indices — add/remove are out of scope here.
+    async fn set_boot_order(&self, new_order: Vec<u16>) -> zbus::Result<()>;
+
+    /// Read `BootNext`. Returns `-1` when the variable is absent (the
+    /// next boot follows the normal `BootOrder`), `0..=65535` otherwise.
+    async fn get_boot_next(&self) -> zbus::Result<i32>;
+
+    /// Set `BootNext` to `index`, a one-shot override consumed by firmware
+    /// on the next boot.
+    async fn set_boot_next(&self, index: u16) -> zbus::Result<()>;
+
+    /// Clear `BootNext` so the next boot falls back to `BootOrder`.
+    /// Idempotent — succeeds when the variable was already absent.
+    async fn clear_boot_next(&self) -> zbus::Result<()>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,6 +246,26 @@ pub trait BootBackend: Send + Sync {
 
     /// Restore a snapshot by id.
     async fn restore_snapshot(&self, id: &str) -> zbus::Result<()>;
+
+    // ── EFI boot menu ─────────────────────────────────────────────────────────
+
+    /// JSON array of `EfiBootEntryDto`.
+    async fn list_efi_boot_entries(&self) -> zbus::Result<String>;
+
+    /// Current `BootOrder` indices, in firmware-defined order.
+    async fn get_boot_order(&self) -> zbus::Result<Vec<u16>>;
+
+    /// Replace `BootOrder` with a permutation of the current entries.
+    async fn set_boot_order(&self, new_order: Vec<u16>) -> zbus::Result<()>;
+
+    /// `-1` when unset, `0..=65535` when set.
+    async fn get_boot_next(&self) -> zbus::Result<i32>;
+
+    /// One-shot boot override consumed by firmware on next boot.
+    async fn set_boot_next(&self, index: u16) -> zbus::Result<()>;
+
+    /// Idempotent — succeeds even when `BootNext` is already absent.
+    async fn clear_boot_next(&self) -> zbus::Result<()>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -313,6 +377,36 @@ impl BootBackend for DbusBackend {
     async fn restore_snapshot(&self, id: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.restore_snapshot(id).await
+    }
+
+    async fn list_efi_boot_entries(&self) -> zbus::Result<String> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.list_efi_boot_entries().await
+    }
+
+    async fn get_boot_order(&self) -> zbus::Result<Vec<u16>> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.get_boot_order().await
+    }
+
+    async fn set_boot_order(&self, new_order: Vec<u16>) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.set_boot_order(new_order).await
+    }
+
+    async fn get_boot_next(&self) -> zbus::Result<i32> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.get_boot_next().await
+    }
+
+    async fn set_boot_next(&self, index: u16) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.set_boot_next(index).await
+    }
+
+    async fn clear_boot_next(&self) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.clear_boot_next().await
     }
 }
 
@@ -457,6 +551,53 @@ impl BootBackend for MockBackend {
     }
 
     async fn restore_snapshot(&self, _id: &str) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn list_efi_boot_entries(&self) -> zbus::Result<String> {
+        // Plausible-looking firmware list for Demo Mode: two real OSes
+        // (Linux + Windows) and one inactive UEFI shell entry.
+        let dtos = vec![
+            EfiBootEntryDto {
+                index: 0,
+                active: true,
+                hidden: false,
+                description: "ubuntu".to_string(),
+            },
+            EfiBootEntryDto {
+                index: 1,
+                active: true,
+                hidden: false,
+                description: "Windows Boot Manager".to_string(),
+            },
+            EfiBootEntryDto {
+                index: 2,
+                active: false,
+                hidden: true,
+                description: "UEFI Shell".to_string(),
+            },
+        ];
+        Ok(serde_json::to_string(&dtos).unwrap())
+    }
+
+    async fn get_boot_order(&self) -> zbus::Result<Vec<u16>> {
+        Ok(vec![0u16, 1u16, 2u16])
+    }
+
+    async fn set_boot_order(&self, _new_order: Vec<u16>) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn get_boot_next(&self) -> zbus::Result<i32> {
+        // Default: BootNext not set.
+        Ok(-1)
+    }
+
+    async fn set_boot_next(&self, _index: u16) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn clear_boot_next(&self) -> zbus::Result<()> {
         Ok(())
     }
 }
