@@ -13,6 +13,7 @@
 //! | `boot list`           | List systemd-boot loader entries. |
 //! | `boot read-entry`     | Read a single loader entry by ID. |
 //! | `boot set-default`    | Set the default systemd-boot entry. |
+//! | `boot rename`         | Rename a loader entry (rewrites only `title`). |
 //! | `cmdline get`         | Read the current kernel cmdline parameters. |
 //! | `cmdline add`         | Add a kernel parameter. |
 //! | `cmdline remove`      | Remove a kernel parameter. |
@@ -157,6 +158,15 @@ enum BootAction {
         /// Entry ID (filename stem, e.g. `arch`)
         id: String,
         /// Current ETag of loader.conf
+        etag: String,
+    },
+    /// Rename a loader entry (rewrites only its `title` line).
+    Rename {
+        /// Entry ID (filename stem, e.g. `arch`)
+        id: String,
+        /// New title (single line, non-empty)
+        new_title: String,
+        /// Current ETag of the entry's `.conf` file
         etag: String,
     },
 }
@@ -411,6 +421,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .await
                         .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Default entry set to: {id}");
+                }
+                BootAction::Rename {
+                    id,
+                    new_title,
+                    etag,
+                } => {
+                    backend
+                        .rename_loader_entry(&id, &new_title, &etag)
+                        .await
+                        .map_err(|e| dbus_error_message(&e).to_string())?;
+                    println!("Renamed {id} → {new_title:?}");
                 }
             }
         }

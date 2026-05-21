@@ -189,6 +189,47 @@ pub fn write_loader_entry(
     atomic_write_with_etag(&path, &new_content, expected_etag)
 }
 
+/// Update only the `title` field of a single loader entry.
+///
+/// Reads the current entry, replaces its title, re-serialises, and writes
+/// atomically through [`write_loader_entry`] under the supplied ETag. All
+/// other fields (`linux`, `initrd`, `options`, `machine_id`) are
+/// preserved byte-for-byte. ID validation matches [`write_loader_entry`].
+///
+/// # Errors
+///
+/// - [`BootControlError::MalformedValue`] — the new title contains a
+///   newline or other control character that would break the
+///   `title <value>` line.
+/// - [`BootControlError::StateMismatch`] — `expected_etag` is stale.
+/// - [`BootControlError::EspScanFailed`] — entry file unreadable or
+///   unwritable.
+pub fn rename_loader_entry(
+    entries_dir: &Path,
+    id: &str,
+    new_title: &str,
+    expected_etag: &str,
+) -> Result<(), BootControlError> {
+    validate_entry_id(id)?;
+    if new_title.is_empty() || new_title.contains('\n') || new_title.contains('\r') {
+        return Err(BootControlError::MalformedValue {
+            key: "title".to_string(),
+            reason: format!(
+                "loader entry title must be a non-empty single line; got: {new_title:?}"
+            ),
+        });
+    }
+
+    let path = entry_path(entries_dir, id);
+    let content = fs::read_to_string(&path).map_err(|e| BootControlError::EspScanFailed {
+        reason: format!("cannot read entry '{id}': {e}"),
+    })?;
+    let mut entry = parse_loader_entry(&content)?;
+    entry.title = Some(new_title.to_string());
+    let new_content = serialize_loader_entry(&entry);
+    atomic_write_with_etag(&path, &new_content, expected_etag)
+}
+
 /// Update the `default` entry in `loader.conf`.
 ///
 /// If `loader.conf` does not exist, it is created with only the `default` key.

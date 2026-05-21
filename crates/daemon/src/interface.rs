@@ -1160,6 +1160,40 @@ impl GrubManager {
             .map_err(to_daemon_error)
     }
 
+    /// Rename a systemd-boot loader entry. Only the `title <…>` line of the
+    /// underlying `.conf` is rewritten; every other field is preserved
+    /// byte-for-byte.
+    ///
+    /// Polkit-gated; immutable-distro pre-flight refuses on
+    /// ostree/SteamOS/NixOS/Vanilla OS.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied`
+    /// - `org.bootcontrol.Error.ImmutableDistroDetected`
+    /// - `org.bootcontrol.Error.MalformedValue` — empty title or title
+    ///   containing newline / CR (would corrupt the loader entry format).
+    /// - `org.bootcontrol.Error.StateMismatch` — stale ETag.
+    /// - `org.bootcontrol.Error.EspScanFailed` — entry file unreadable or
+    ///   unwritable.
+    async fn rename_loader_entry(
+        &self,
+        id: String,
+        new_title: String,
+        etag: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(id = %id, new_title = %new_title, "D-Bus: RenameLoaderEntry");
+        enforce_writable_distro().map_err(to_daemon_error)?;
+        let caller_uid = resolve_uid(&header, connection, "RenameLoaderEntry").await?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
+        systemd_boot_manager::rename_loader_entry(&self.loader_entries_dir, &id, &new_title, &etag)
+            .map_err(to_daemon_error)
+    }
+
     /// Get the ETag of `loader.conf`.
     ///
     /// ## D-Bus signature

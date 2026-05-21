@@ -127,6 +127,9 @@ pub trait Manager {
     /// Set the default systemd-boot loader entry.
     async fn set_loader_default(&self, id: &str, etag: &str) -> zbus::Result<()>;
 
+    /// Rename a systemd-boot loader entry (rewrites only the `title` line).
+    async fn rename_loader_entry(&self, id: &str, new_title: &str, etag: &str) -> zbus::Result<()>;
+
     /// Get the ETag of `loader.conf`.
     async fn get_loader_conf_etag(&self) -> zbus::Result<String>;
 
@@ -224,6 +227,10 @@ pub trait BootBackend: Send + Sync {
 
     /// Set the default systemd-boot entry.
     async fn set_loader_default(&self, id: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Rename a systemd-boot loader entry. Only the `title` line is
+    /// rewritten; every other field stays byte-identical.
+    async fn rename_loader_entry(&self, id: &str, new_title: &str, etag: &str) -> zbus::Result<()>;
 
     /// Get the ETag of `loader.conf`.
     async fn get_loader_conf_etag(&self) -> zbus::Result<String>;
@@ -345,6 +352,11 @@ impl BootBackend for DbusBackend {
     async fn set_loader_default(&self, id: &str, etag: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.set_loader_default(id, etag).await
+    }
+
+    async fn rename_loader_entry(&self, id: &str, new_title: &str, etag: &str) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy.rename_loader_entry(id, new_title, etag).await
     }
 
     async fn get_loader_conf_etag(&self) -> zbus::Result<String> {
@@ -497,6 +509,15 @@ impl BootBackend for MockBackend {
             is_default: false,
         };
         Ok((entry, "mock-entry-etag-12345".to_string()))
+    }
+
+    async fn rename_loader_entry(
+        &self,
+        _id: &str,
+        _new_title: &str,
+        _etag: &str,
+    ) -> zbus::Result<()> {
+        Ok(())
     }
 
     async fn set_loader_default(&self, _id: &str, _etag: &str) -> zbus::Result<()> {
