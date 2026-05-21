@@ -57,6 +57,16 @@ use serde::Serialize;
 ///
 /// The client (`crates/client/src/lib.rs`) declares a matching
 /// `SnapshotInfoDto` and deserializes identical JSON.
+/// Daemon-side mirror of `bootcontrol_client::EfiBootEntryDto`. Serialised
+/// as JSON inside the `ListEfiBootEntries` D-Bus method's string return.
+#[derive(Debug, Clone, Serialize)]
+struct EfiBootEntryDto {
+    pub index: u16,
+    pub active: bool,
+    pub hidden: bool,
+    pub description: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct SnapshotInfoDto {
     /// Filesystem-safe snapshot id (e.g. `2026-04-30T130211Z-set_grub_value`).
@@ -1454,6 +1464,142 @@ impl GrubManager {
         });
 
         result
+    }
+
+    // ── EFI boot menu (Phase 7 follow-up: BootOrder / BootNext / entries) ────
+
+    /// List every `Boot####` UEFI variable currently present in the global
+    /// EFI namespace. Read-only, no Polkit.
+    ///
+    /// Returns a JSON array of `EfiBootEntryDto` records (matching the
+    /// client-side DTO).
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.EspScanFailed` — efivarfs unreachable.
+    /// - `org.bootcontrol.Error.MalformedValue` — at least one `Boot####`
+    ///   payload was shorter than the load-option header.
+    async fn list_efi_boot_entries(&self) -> Result<String, DaemonError> {
+        info!("D-Bus: ListEfiBootEntries");
+        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        let entries =
+            crate::uefi_vars_linux::list_boot_entries(&reader).map_err(to_daemon_error)?;
+        let dtos: Vec<EfiBootEntryDto> = entries
+            .into_iter()
+            .map(|e| EfiBootEntryDto {
+                index: e.index,
+                active: e.active,
+                hidden: e.hidden,
+                description: e.description,
+            })
+            .collect();
+        serde_json::to_string(&dtos)
+            .map_err(|e| DaemonError::EspScanFailed(format!("serialization error: {e}")))
+    }
+
+    /// Read the current `BootOrder` UEFI variable.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.EspScanFailed` — variable absent or efivarfs
+    ///   unreachable.
+    /// - `org.bootcontrol.Error.MalformedValue` — payload not a multiple
+    ///   of 2 bytes.
+    async fn get_boot_order(&self) -> Result<Vec<u16>, DaemonError> {
+        info!("D-Bus: GetBootOrder");
+        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        use bootcontrol_core::uefi_vars::UefiVarReader;
+        let payload = reader.read_global("BootOrder").map_err(to_daemon_error)?;
+        bootcontrol_core::uefi_vars::parse_boot_order(&payload).map_err(to_daemon_error)
+    }
+
+    /// Replace `BootOrder` with a permutation of the current entries.
+    /// Polkit-gated; pre-flight refuses on immutable distros.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied`
+    /// - `org.bootcontrol.Error.ImmutableDistroDetected`
+    /// - `org.bootcontrol.Error.MalformedValue` — `new_order` has duplicates
+    ///   or does not match the current set of indices (add/remove is a
+    ///   separate operation, deliberately).
+    async fn set_boot_order(
+        &self,
+        new_order: Vec<u16>,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(new_order = ?new_order, "D-Bus: SetBootOrder");
+        enforce_writable_distro().map_err(to_daemon_error)?;
+        let caller_uid = resolve_uid(&header, connection, "SetBootOrder").await?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
+        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        bootcontrol_core::uefi_vars::set_boot_order(&reader, &reader, &new_order)
+            .map_err(to_daemon_error)
+    }
+
+    /// Read `BootNext`. Returns `-1` when the variable is absent (next
+    /// boot follows `BootOrder`), `0..=65535` when set.
+    ///
+    /// Idempotent and read-only — no Polkit.
+    async fn get_boot_next(&self) -> Result<i32, DaemonError> {
+        info!("D-Bus: GetBootNext");
+        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        use bootcontrol_core::uefi_vars::UefiVarReader;
+        match reader.read_global("BootNext") {
+            Ok(payload) => bootcontrol_core::uefi_vars::parse_single_u16_var("BootNext", &payload)
+                .map(|v| v as i32)
+                .map_err(to_daemon_error),
+            // Missing variable is not an error — it just means "no override".
+            Err(bootcontrol_core::error::BootControlError::EspScanFailed { .. }) => Ok(-1),
+            Err(e) => Err(to_daemon_error(e)),
+        }
+    }
+
+    /// Set `BootNext` to `index`, a one-shot override consumed by the
+    /// firmware on the next boot. Polkit-gated; pre-flight refuses on
+    /// immutable distros.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.PolkitDenied`
+    /// - `org.bootcontrol.Error.ImmutableDistroDetected`
+    /// - `org.bootcontrol.Error.KeyNotFound` — `index` does not appear in
+    ///   the current `BootOrder`.
+    async fn set_boot_next(
+        &self,
+        index: u16,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!(index = index, "D-Bus: SetBootNext");
+        enforce_writable_distro().map_err(to_daemon_error)?;
+        let caller_uid = resolve_uid(&header, connection, "SetBootNext").await?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
+        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        bootcontrol_core::uefi_vars::set_boot_next(&reader, &reader, index, true)
+            .map_err(to_daemon_error)
+    }
+
+    /// Clear `BootNext` so the next boot falls back to `BootOrder`.
+    /// Idempotent; Polkit-gated; pre-flight refuses on immutable distros.
+    async fn clear_boot_next(
+        &self,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        info!("D-Bus: ClearBootNext");
+        enforce_writable_distro().map_err(to_daemon_error)?;
+        let caller_uid = resolve_uid(&header, connection, "ClearBootNext").await?;
+        authorize_with_polkit(caller_uid)
+            .await
+            .map_err(to_daemon_error)?;
+        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        bootcontrol_core::uefi_vars::clear_boot_next(&reader).map_err(to_daemon_error)
     }
 }
 

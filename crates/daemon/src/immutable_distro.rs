@@ -195,6 +195,7 @@ mod tests {
 
     #[test]
     fn override_vanilla_takes_precedence() {
+        let _guard = lock_path();
         std::env::set_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE", "vanilla-os");
         let probed = probe_immutable_distro();
         std::env::remove_var("BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE");
