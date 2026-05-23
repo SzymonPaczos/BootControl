@@ -137,11 +137,15 @@ add ""
 # (AGENT.md §II wymaga `# Examples` na publicznym API). Gdy stan rośnie,
 # zaktualizuj te liczby w **górę** — raz osiągnięty poziom jest podłogą,
 # nie sufitem (audit.md "Krok 4 Ratchet").
-DOCTEST_MIN_core=61
-DOCTEST_MIN_daemon=36
-DOCTEST_MIN_client=14  # ratchet'd up 2026-05-23 follow-up po dorobieniu # Examples
+# Floors set to current observed values after the 2026-05-23 follow-up
+# (indent-aware doctest counter — the previous floor numbers undercounted
+# anything inside `impl`/`mod` blocks because the regex used `^/// ...`
+# instead of `^\s*/// ...`).
+DOCTEST_MIN_core=93
+DOCTEST_MIN_daemon=85
+DOCTEST_MIN_client=14
 DOCTEST_MIN_cli=4
-DOCTEST_MIN_tui=4
+DOCTEST_MIN_tui=30
 DOCTEST_MIN_gui=0  # gui to Slint UI; doctesty na .slint nie istnieją, na .rs sensowne tylko dla logic
 add "### Testy"
 add ""
@@ -159,7 +163,9 @@ for c in $CRATES; do
         TESTS_FILES=0
     fi
     # Doctest = '''rust' lub '''no_run' lub '''ignore' w docs.
-    DOCTESTS=$(grep -rE "^/// \`\`\`($|rust|no_run|ignore|compile_fail)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    # Indent-aware: doctesty wewnątrz `impl Foo {` / `mod tests {` mają
+    # wcięcie (4 spacje), więc anchor musi tolerować leading whitespace.
+    DOCTESTS=$(grep -rE "^\s*/// \`\`\`($|rust|no_run|ignore|compile_fail)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
     MIN_VAR="DOCTEST_MIN_$c"
     MIN_VAL="${!MIN_VAR:-0}"
     if [ "$DOCTESTS" -lt "$MIN_VAL" ]; then

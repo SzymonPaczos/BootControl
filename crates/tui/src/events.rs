@@ -15,6 +15,25 @@ use tokio::time::{Duration, Instant};
 use tokio_stream::StreamExt as _;
 
 /// Events produced by the terminal input adapter.
+///
+/// The TUI event loop ([`crate::main`]) matches on these variants — each
+/// represents one possible reason the loop just woke up. `Key` is the only
+/// variant that carries data; `Tick` and `Resize` are signals.
+///
+/// # Examples
+///
+/// ```
+/// use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+/// use bootcontrol_tui::events::AppEvent;
+///
+/// // The Debug impl is what the TUI main loop logs at trace-level.
+/// let k = AppEvent::Key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+/// let dbg = format!("{k:?}");
+/// assert!(dbg.contains("Key"));
+///
+/// let tick = AppEvent::Tick;
+/// assert_eq!(format!("{tick:?}"), "Tick");
+/// ```
 #[derive(Debug)]
 pub enum AppEvent {
     /// A keyboard event delivered by crossterm.
@@ -75,6 +94,21 @@ pub fn is_quit_key(key: &KeyEvent) -> bool {
 /// # Errors
 ///
 /// Returns `None` when the crossterm event stream ends (terminal closed).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use crossterm::event::EventStream;
+/// # use tokio::time::{Duration, Instant};
+/// # use bootcontrol_tui::events::next_event;
+/// # async fn run() {
+/// // Real usage requires a live crossterm terminal; flagged `no_run` so the
+/// // doctest still type-checks under `cargo test --doc` without a TTY.
+/// let mut stream = EventStream::new();
+/// let mut last_tick = Instant::now();
+/// let _ev = next_event(&mut stream, Duration::from_millis(250), &mut last_tick).await;
+/// # }
+/// ```
 pub async fn next_event(
     stream: &mut EventStream,
     tick_rate: Duration,
