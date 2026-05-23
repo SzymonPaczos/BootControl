@@ -39,7 +39,39 @@ cargo test --workspace --features "bootcontrold/experimental_paranoia"
 cargo test --workspace --doc
 ```
 
-Expected output: **383+ tests passing, 0 failures**.
+Expected output (rough envelope, varies by platform):
+
+- **Linux**: ~550 tests passing, 0 failures (all crates; daemon is the
+  largest contributor with 174 inline + 36 doctests).
+- **macOS / non-Linux**: ~350 tests passing — `bootcontrold` is
+  `#![cfg(target_os = "linux")]` so its 210 tests are skipped at the
+  link layer. Use `BOOTCONTROL_DEMO=1` flow for behaviour testing of
+  the frontends + `MockBackend`.
+
+The exact number floats as the test suite grows. The doctest ratchet in
+`.claude/audit.sh` (`DOCTEST_MIN_<crate>`) is the floor on per-crate
+documentation tests and will trip the weekly audit on regression.
+
+---
+
+## Local CI gates (no cloud — git hooks gate every commit and push)
+
+| Stage | Hook | Runs | When to skip with `--no-verify` |
+|-------|------|------|-------------------------------|
+| `git commit` | `.githooks/pre-commit` | `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` (without `--all-features` — fast path) | WIP commit you know is dirty |
+| `git push`   | `.githooks/pre-push` | `scripts/ci-local.sh` (fmt + clippy `--all-features` + workspace tests + Windows cross-compile + E2E session-bus tests) | WIP branch you know fails |
+
+Activate once per clone:
+
+```bash
+./scripts/install-hooks.sh   # sets core.hooksPath = .githooks/
+```
+
+On macOS `scripts/ci-local.sh` auto-spawns its own session bus via a
+generated `session.conf` because `dbus-run-session` reuses Homebrew's
+config that hardcodes a launchd listener (and launchd integration is
+flaky outside a full GUI login session). On Linux the script uses
+`dbus-run-session` directly — no manual setup needed.
 
 ---
 

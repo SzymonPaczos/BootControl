@@ -7,7 +7,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
 ![Language](https://img.shields.io/badge/language-Rust%202021-orange)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
-![Tests](https://img.shields.io/badge/tests-383%2B%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-550%2B%20passing-brightgreen)
 
 ---
 
@@ -82,7 +82,7 @@ All frontends run in **user space**. Only `bootcontrold` runs as root, activated
 | **systemd-boot / UKI** | ✅ Core implemented — loader entry parser, UKI cmdline |
 | **Secure Boot (MOK)** | ✅ Implemented — sbsign, mokutil enrollment |
 | **Secure Boot (Paranoia Mode)** | 🧪 Experimental — full PK/KEK/db key generation (`--features experimental_paranoia`) |
-| **Windows BCD (UEFI vars)** | 📋 Planned — v2.x |
+| **Windows UEFI boot menu (BootOrder/BootNext/Boot####)** | ✅ Core + D-Bus + CLI implemented (Phase 7) — cross-compile scaffold for `x86_64-pc-windows-gnu`; full Windows GUI panel post-v3.0 |
 
 ---
 
