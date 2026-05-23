@@ -73,7 +73,7 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 ### Phase 3.5 — GUI v2 Redesign ✅ Complete
 
-GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with backend-aware views, snapshot-backed undo, full WCAG a11y, and Cockpit-style audit transparency. Authoritative spec: [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md). Supporting docs: [`docs/UX_BRIEF.md`](./docs/UX_BRIEF.md), [`docs/UX_MAPPING.md`](./docs/UX_MAPPING.md), `docs/red-team/`. Granite visual redesign (Phase C/D from the Claude Design handoff in [`docs/handoff/HANDOFF.md`](./docs/handoff/HANDOFF.md)) applied on top of PR 7b — Sapphire palette, 27 SVG icons, sidebar layout overhaul, bundled fonts.
+GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with backend-aware views, snapshot-backed undo, full WCAG a11y, and Cockpit-style audit transparency. Authoritative spec: [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md). Supporting docs: [`docs/UX_BRIEF.md`](./docs/UX_BRIEF.md), [`docs/UX_MAPPING.md`](./docs/UX_MAPPING.md), `docs/red-team/`. Granite visual redesign (Phase C/D from the Claude Design handoff, archived at [`.claude/history/2026-05-04-granite-handoff/HANDOFF.md`](./.claude/history/2026-05-04-granite-handoff/HANDOFF.md)) applied on top of PR 7b — Sapphire palette, 27 SVG icons, sidebar layout overhaul, bundled fonts.
 
 | PR | Commit | Deliverable | Status |
 |----|--------|------------|--------|

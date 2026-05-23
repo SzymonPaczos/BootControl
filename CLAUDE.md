@@ -5,9 +5,26 @@ This file is loaded automatically by Claude Code. It is a thin shim that points 
 1. [`README.md`](./README.md) — project overview, scope, install
 2. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — approved technical decisions + threat model
 3. [`AGENT.md`](./AGENT.md) — coding rules, TDD requirements, commit convention (mandatory)
-4. [`ROADMAP.md`](./ROADMAP.md) — phase status (Phases 0–5 ✅ complete; 6–8 pending)
+4. [`ROADMAP.md`](./ROADMAP.md) — strategic phases. **Note (2026-05-23):** ROADMAP top sekcji jest desynchronizowany z gitem — Phase 6/7 PRs i część Phase 8 są zmergowane mimo "not yet started" w nagłówku. Patrz [`.claude/backlog.md`](./.claude/backlog.md) P2 "ROADMAP top vs tabele per-PR — drift". Granularne TODO/otwarta praca **nie żyje w ROADMAP** — żyje w [`.claude/backlog.md`](./.claude/backlog.md).
 
 Out-of-order reads cause hallucinations at interface definition time. No exceptions.
+
+---
+
+## Stan projektu (start sesji)
+
+| Plik | Co tam | Kiedy linia stąd znika |
+|------|--------|-------------------------|
+| [`.claude/backlog.md`](./.claude/backlog.md) | jedyne źródło otwartej pracy (P0/P1/P2, decyzje czekające, blockery) | gdy pozycja zrobiona (dowód = commit) |
+| [`.claude/status.md`](./.claude/status.md) | known-issues: co teraz zepsute / niekompletne | gdy stan się zmienia |
+| [`.claude/rules/decisions.md`](./.claude/rules/decisions.md) | rejestr decyzji projektowych (ADR-lite) — naruszenie aktywnej decyzji = P0/P1 w audycie | nigdy (status: aktywna → wycofana z datą) |
+| [`.claude/rules/audit.md`](./.claude/rules/audit.md) | procedura cotygodniowego audytu (warstwa statyczna + osąd agenta) | nigdy (trwała instrukcja) |
+| [`.claude/audit-log.md`](./.claude/audit-log.md) | historia audytów, najnowszy na górze | nigdy (append-only) |
+| [`.claude/history/`](./.claude/history/) | zamknięte raporty sesji, ukończone pakiety dostawcze | nigdy (archiwum) |
+
+Układ wg konwencji `claude-toolkit/conventions/project-state-layout.md` (adopcja 2026-05-23, decyzja w `decisions.md`).
+
+**Reminder audytu:** na starcie sesji sprawdź datę pierwszego wpisu `## Audyt YYYY-MM-DD` w [`.claude/audit-log.md`](./.claude/audit-log.md). Jeśli >7 dni od dziś — zaproponuj uruchomienie audytu (skill: `weekly-audit`, lub `bash .claude/audit.sh` ręcznie).
 
 ---
 
@@ -66,7 +83,7 @@ cargo test --workspace --features bootcontrold/experimental_paranoia
 
 ## Platform
 
-Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows is roadmap Phase 7, not yet implemented.
+Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows Phase 7 scaffold landed (commits `5ddac93`–`ba88b4d`) — UEFI variable read/write i cross-compile target gotowe, GUI panel jeszcze nie. Aktualna lista otwartych Windows-aware items → [`.claude/backlog.md`](./.claude/backlog.md).
 
 ---
 

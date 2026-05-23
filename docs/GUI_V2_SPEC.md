@@ -1,5 +1,7 @@
 # BootControl GUI v2 — Implementation Specification
 
+> **DEPRECATED — v1 of the v2 redesign.** Superseded by [`GUI_V2_SPEC_v2.md`](./GUI_V2_SPEC_v2.md) on 2026-05-03 (post-red-team). Engineering implements from v2. This file is kept in `docs/` only because [`docs/red-team/`](./red-team/) reviews cite specific line numbers here as diffable anchors — moving v1 would invalidate ~200 wireframe citations. Do not edit v1; corrections go into v2. Future cleanup: bundle v1 + red-team into `.claude/history/2026-05-01-gui-v2-redesign/` (tracked in [`.claude/backlog.md`](../.claude/backlog.md), P2).
+
 ## 1. Document scope
 
 This is the production specification for the BootControl Slint GUI v2. It tells engineering what to build, where files live, what each component's public API is, and how every page transitions through its four visual states. It is read top-to-bottom; sections do not stand alone.

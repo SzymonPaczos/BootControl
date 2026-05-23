@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# audit.sh — cotygodniowy audyt jakości (warstwa statyczna).
+# Liczy metryki, dopisuje sekcję na górę .claude/audit-log.md. BEZ LLM.
+# Pełna procedura: .claude/rules/audit.md
+#
+# Uruchom w głównym working tree (nie worktree):
+#   bash .claude/audit.sh
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+LOG="$REPO_ROOT/.claude/audit-log.md"
+DATE="$(date '+%Y-%m-%d')"
+section=""
+add() { section+="$1"$'\n'; }
+
+CRATES="core daemon client cli tui gui"
+
+add "## Audyt $DATE"
+add ""
+add "_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._"
+add ""
+
+# === 1. Toolchain & basic build sanity =========================================
+add "### Toolchain"
+add "- rustc: \`$(rustc --version 2>/dev/null || echo 'BRAK')\`"
+add "- cargo: \`$(cargo --version 2>/dev/null || echo 'BRAK')\`"
+add ""
+
+# === 2. Format ================================================================
+add "### Formatowanie"
+if command -v cargo >/dev/null 2>&1; then
+    if cargo fmt --all -- --check >/dev/null 2>&1; then
+        add "- cargo fmt: ✅ czysto"
+    else
+        add "- cargo fmt: ❌ wymaga \`cargo fmt --all\`"
+    fi
+else
+    add "- cargo fmt: ⚠️  cargo niedostępne"
+fi
+add ""
+
+# === 3. Clippy ================================================================
+add "### Clippy (workspace, -D warnings)"
+if command -v cargo >/dev/null 2>&1; then
+    CLIPPY_TMP="$(mktemp)"
+    if cargo clippy --workspace --all-targets --all-features -- -D warnings >"$CLIPPY_TMP" 2>&1; then
+        add "- clippy: ✅ 0 findings"
+    else
+        CLIPPY_WARN=$(grep -cE "^warning:" "$CLIPPY_TMP" || echo 0)
+        CLIPPY_ERR=$(grep -cE "^error:" "$CLIPPY_TMP" || echo 0)
+        add "- clippy: ❌ warnings=$CLIPPY_WARN errors=$CLIPPY_ERR"
+        add "  - top 5 findings:"
+        grep -E "^(warning|error):" "$CLIPPY_TMP" | head -5 | sed 's/^/    /' | while IFS= read -r line; do section+="$line"$'\n'; done
+    fi
+    rm -f "$CLIPPY_TMP"
+else
+    add "- clippy: ⚠️  cargo niedostępne"
+fi
+add ""
+
+# === 4. unwrap/expect/panic budgets per crate =================================
+add "### \`unwrap\` / \`expect\` / \`panic!\` w production (poza testami)"
+add ""
+add "| Crate | unwrap | expect | panic! | Budżet |"
+add "|-------|--------|--------|--------|--------|"
+for c in $CRATES; do
+    SRC_DIR="crates/$c/src"
+    [ -d "$SRC_DIR" ] || continue
+    # Tylko src/, bez tests/. Wyklucz pliki .rs w katalogach tests/.
+    UNWRAP=$(grep -rEho "\.unwrap\(\)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    EXPECT=$(grep -rEho "\.expect\(" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    PANIC=$(grep -rEho "panic!\(" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    # Budżety per decisions.md (2026-05-03 unwrap banned). Core/daemon strict, frontend mniej rygorystyczne.
+    case "$c" in
+        core|daemon) BUDGET="0/0/0 (strict)" ;;
+        client) BUDGET="≤2/≤2/0" ;;
+        cli|tui|gui) BUDGET="≤5/≤5/≤1" ;;
+        *) BUDGET="?" ;;
+    esac
+    add "| $c | $UNWRAP | $EXPECT | $PANIC | $BUDGET |"
+done
+add ""
+
+# === 5. TODO / FIXME / HACK / XXX =============================================
+add "### TODO / FIXME / HACK / XXX w kodzie"
+TODO_COUNT=$(grep -rEo "(TODO|FIXME|HACK|XXX)" --include="*.rs" --include="*.slint" --include="*.toml" crates/ 2>/dev/null | wc -l | tr -d ' ')
+TODO_FILES=$(grep -rElE "(TODO|FIXME|HACK|XXX)" --include="*.rs" --include="*.slint" crates/ 2>/dev/null | wc -l | tr -d ' ')
+add "- łącznie wystąpień: **$TODO_COUNT** (w $TODO_FILES plikach)"
+add ""
+
+# === 6. unsafe blocks =========================================================
+add "### \`unsafe\` blocks"
+add ""
+add "| Crate | unsafe blocks |"
+add "|-------|---------------|"
+for c in $CRATES; do
+    SRC_DIR="crates/$c/src"
+    [ -d "$SRC_DIR" ] || continue
+    UNSAFE=$(grep -rEo "\bunsafe\b *(\{|fn|impl)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    add "| $c | $UNSAFE |"
+done
+add ""
+add "_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._"
+add ""
+
+# === 7. Testy ==================================================================
+add "### Testy"
+add ""
+add "| Crate | #[test] | tests/ | doctest // ' marker |"
+add "|-------|---------|--------|---------------------|"
+for c in $CRATES; do
+    SRC_DIR="crates/$c/src"
+    [ -d "$SRC_DIR" ] || continue
+    TESTS_INLINE=$(grep -rE "^\s*#\[test\]|^\s*#\[tokio::test\]" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    TESTS_DIR="crates/$c/tests"
+    if [ -d "$TESTS_DIR" ]; then
+        TESTS_FILES=$(find "$TESTS_DIR" -name "*.rs" 2>/dev/null | wc -l | tr -d ' ')
+    else
+        TESTS_FILES=0
+    fi
+    # Doctest = '''rust' lub '''no_run' lub '''ignore' w docs.
+    DOCTESTS=$(grep -rE "^/// \`\`\`($|rust|no_run|ignore|compile_fail)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
+    add "| $c | $TESTS_INLINE | $TESTS_FILES | $DOCTESTS |"
+done
+add ""
+
+# === 8. Swallowed errors heurystyki ==========================================
+add "### Swallowed errors (heurystyka — wymagają weryfikacji greppem)"
+SWALLOW_PATTERN='let _ = |Err\(_\) =>|if let Err\(_\)'
+SWALLOW=$(grep -rEo "let _ =|Err\(_\) =>|if let Err\(_\)" --include="*.rs" crates/ 2>/dev/null | wc -l | tr -d ' ')
+add "- heurystyczna liczba: $SWALLOW. Każdy wpis → przejrzeć ręcznie (część bywa legalna: \`let _ = drop(...)\`)."
+add ""
+
+# === 9. Dependency / dead code (cargo-udeps jeśli jest) =======================
+add "### Dead code / nieużywane deps"
+if command -v cargo-udeps >/dev/null 2>&1; then
+    UDEPS_TMP="$(mktemp)"
+    if cargo +nightly udeps --workspace --all-features >"$UDEPS_TMP" 2>&1; then
+        UDEPS_UNUSED=$(grep -c "unused" "$UDEPS_TMP" || echo 0)
+        add "- cargo-udeps: $UDEPS_UNUSED unused (output w \`$UDEPS_TMP\` — przejrzyj)."
+    else
+        add "- cargo-udeps: ❌ exec error (sprawdź toolchain nightly)"
+    fi
+    rm -f "$UDEPS_TMP"
+else
+    add "- cargo-udeps: ⚠️  niezainstalowane (\`cargo install cargo-udeps --locked\` żeby aktywować)."
+fi
+add ""
+
+# === 10. decisions.md sanity =================================================
+add "### Rejestr decyzji (\`.claude/rules/decisions.md\`)"
+if [ -f .claude/rules/decisions.md ]; then
+    ACTIVE_COUNT=$(awk '/^## Decyzje aktywne/,/^## Decyzje wycofane/' .claude/rules/decisions.md | grep -cE "^### [0-9]{4}-[0-9]{2}-[0-9]{2}")
+    WYCOFANE=$(awk '/^## Decyzje wycofane/,0' .claude/rules/decisions.md | grep -cE "^### [0-9]{4}-[0-9]{2}-[0-9]{2}")
+    add "- decyzje aktywne: $ACTIVE_COUNT"
+    add "- decyzje wycofane: $WYCOFANE"
+else
+    add "- decisions.md: **BRAK** — zaadoptuj wg \`claude-toolkit/ADOPT.md\`"
+fi
+add ""
+
+# === 11. Frontend nie omija client (decyzja architektury) =====================
+add "### Inwariant: frontendy używają \`bootcontrol-client\`, nie \`bootcontrol-daemon\`"
+VIOLATIONS=""
+for f in cli tui gui; do
+    if [ -f "crates/$f/Cargo.toml" ]; then
+        if grep -qE "^bootcontrol-daemon\b|^daemon\b.*path.*daemon" "crates/$f/Cargo.toml" 2>/dev/null; then
+            VIOLATIONS+="crates/$f/Cargo.toml "
+        fi
+    fi
+done
+if [ -z "$VIOLATIONS" ]; then
+    add "- ✅ żaden frontend nie importuje daemon"
+else
+    add "- ❌ VIOLATION: $VIOLATIONS (patrz \`rules/decisions.md\` 2026-05-03 \"Frontendy nie omijają client\")"
+fi
+add ""
+
+# === 12. Pre-push hook =======================================================
+add "### Hooki gitowe"
+if [ -x .githooks/pre-push ]; then
+    add "- pre-push: ✅ obecny i executable"
+else
+    add "- pre-push: ❌ brak / nie-executable (\`./scripts/install-hooks.sh\` żeby aktywować)"
+fi
+add ""
+
+# === 13. Data ostatniego audytu =============================================
+add "### Trend audytów"
+if [ -f "$LOG" ]; then
+    LAST_DATE=$(grep -m1 -E "^## Audyt [0-9]{4}-[0-9]{2}-[0-9]{2}" "$LOG" | sed 's/^## Audyt //' || echo "BRAK")
+    TOTAL_AUDITS=$(grep -cE "^## Audyt [0-9]{4}-[0-9]{2}-[0-9]{2}" "$LOG")
+    add "- poprzedni audyt: $LAST_DATE"
+    add "- łącznie audytów: $TOTAL_AUDITS (włącznie z tym)"
+else
+    add "- audit-log.md: BRAK — to pierwszy audyt"
+fi
+add ""
+
+# === 14. Skille / toolkit refresh check =====================================
+add "### Skille (\`.claude/skills/\`)"
+if [ -d .claude/skills ]; then
+    SKILL_COUNT=$(find .claude/skills -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+    add "- skills lokalnie: $SKILL_COUNT"
+else
+    add "- .claude/skills/: BRAK"
+fi
+TOOLKIT="$HOME/DevProjects/claude-toolkit"
+if [ -d "$TOOLKIT" ]; then
+    TOOLKIT_SKILLS=$(find "$TOOLKIT/skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+    add "- skills w toolkit: $TOOLKIT_SKILLS — refresh: \`cd $TOOLKIT && git pull\`, potem skopiuj do \`.claude/skills/\`"
+else
+    add "- toolkit: niezlokalizowany (oczekiwany: \`$TOOLKIT\`)"
+fi
+add ""
+
+# === FOOTER ==================================================================
+add "**Do przeglądu agentem** (warstwa głęboka — patrz \`rules/audit.md\` Krok 2):"
+add "bezpieczeństwo, slop, jakość testów, architektura, drift, skille/MCP. Lista"
+add "P0/P1/P2 dopisywana ręcznie do tej samej sekcji po Krok 2."
+add ""
+
+# === Output i append ==========================================================
+echo "$section"
+
+# Append na górę audit-log.md (po headerze).
+if [ ! -f "$LOG" ]; then
+    printf '# Audit Log — BootControl\n\nHistoria cotygodniowych audytów. Najnowszy na górze.\nPełna procedura: [`.claude/rules/audit.md`](rules/audit.md).\n\n---\n\n' > "$LOG"
+fi
+
+tmp="$(mktemp)"
+# Zachowaj header (do '---'), potem nowa sekcja, potem stare wpisy.
+awk '/^---$/ { print; print ""; getline; exit_header=1; }
+     { if (!exit_header) print }' "$LOG" > "$tmp"
+echo "$section" >> "$tmp"
+awk 'BEGIN { in_header=1 }
+     in_header && /^---$/ { in_header=0; next }
+     !in_header { print }' "$LOG" >> "$tmp"
+mv "$tmp" "$LOG"
+echo ""
+echo "Zapisano sekcję do: $LOG"
