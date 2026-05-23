@@ -49,15 +49,71 @@ else
 fi
 
 step "5/5  E2E tests against a session bus"
-# Match CI exactly: use dbus-run-session to spawn a fresh session bus that
-# only lives for the duration of cargo test. Works whether or not the user
-# already has a session bus from their login (DBUS_SESSION_BUS_ADDRESS).
-if ! command -v dbus-run-session > /dev/null; then
-    echo "ERROR: dbus-run-session not found. Install with: sudo apt install dbus-x11"
-    exit 1
+# Linux: dbus-run-session is the canonical helper — spawns a fresh bus
+# that only lives for the duration of cargo test.
+#
+# macOS: dbus-run-session reuses Homebrew's session.conf which hardcodes
+# `<listen>launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET</listen>`. That
+# integration breaks intermittently when `launchctl getenv
+# DBUS_LAUNCHD_SESSION_BUS_SOCKET` returns empty (common after a
+# Homebrew dbus upgrade or a fresh shell), with the misleading error
+# "EOF reading address from bus daemon". The macOS branch below
+# generates a one-shot session.conf that replaces the launchd listener
+# with `unix:tmpdir=/tmp`, runs an ad-hoc dbus-daemon against it, and
+# cleans up the daemon on exit.
+#
+# Either branch ends up running the same `cargo test -p bootcontrol-e2e`
+# under `BOOTCONTROL_BUS=session` against a one-shot session bus.
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    # Locate Homebrew's session.conf — Apple Silicon uses /opt/homebrew,
+    # Intel macs use /usr/local. Fail loudly if neither has it.
+    SESSION_CONF=""
+    for cand in /opt/homebrew/share/dbus-1/session.conf \
+                /usr/local/share/dbus-1/session.conf; do
+        if [ -f "$cand" ]; then
+            SESSION_CONF="$cand"
+            break
+        fi
+    done
+    if [ -z "$SESSION_CONF" ]; then
+        echo "ERROR: Homebrew dbus session.conf not found. Install with: brew install dbus" >&2
+        exit 1
+    fi
+
+    CI_CONF="$(mktemp -t bootcontrol-ci-session.XXXXXX.conf)"
+    # Replace the launchd listener with a unix-socket listener under /tmp.
+    sed 's|<listen>launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET</listen>|<listen>unix:tmpdir=/tmp</listen>|' \
+        "$SESSION_CONF" > "$CI_CONF"
+
+    # Spawn the daemon in the background and capture its address.
+    # `--print-address` prints to stdout; `--print-pid` to stderr (or fd 2
+    # when no file path given — but Homebrew's dbus uses /dev/null here so
+    # we get the PID via pgrep instead, more portable).
+    DBUS_ADDR=$(dbus-daemon --config-file="$CI_CONF" --print-address --nosyslog --fork 2>&1 | head -1)
+    if [ -z "$DBUS_ADDR" ] || ! echo "$DBUS_ADDR" | grep -q "^unix:"; then
+        echo "ERROR: dbus-daemon (macOS) failed to produce an address. Got: $DBUS_ADDR" >&2
+        rm -f "$CI_CONF"
+        exit 1
+    fi
+
+    # Daemon is forked — find its PID via the socket path so we can kill it
+    # cleanly when the test run finishes.
+    DBUS_SOCK=$(echo "$DBUS_ADDR" | sed -n 's/.*path=\([^,]*\).*/\1/p')
+    DBUS_PID=$(pgrep -f "dbus-daemon.*$CI_CONF" | head -1)
+    trap '[ -n "$DBUS_PID" ] && kill "$DBUS_PID" 2>/dev/null; rm -f "$CI_CONF" "$DBUS_SOCK" 2>/dev/null' EXIT
+
+    BOOTCONTROL_BUS=session DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDR" \
+        cargo test -p bootcontrol-e2e --all-features --test e2e -- --ignored --test-threads=1
+else
+    # Linux (and any other Unix where dbus-run-session works as advertised).
+    if ! command -v dbus-run-session > /dev/null; then
+        echo "ERROR: dbus-run-session not found. Install with: sudo apt install dbus-x11"
+        exit 1
+    fi
+    BOOTCONTROL_BUS=session dbus-run-session -- \
+        cargo test -p bootcontrol-e2e --all-features --test e2e -- --ignored --test-threads=1
 fi
-BOOTCONTROL_BUS=session dbus-run-session -- \
-    cargo test -p bootcontrol-e2e --all-features --test e2e -- --ignored --test-threads=1
 
 echo
 echo "==> all CI steps passed locally"
