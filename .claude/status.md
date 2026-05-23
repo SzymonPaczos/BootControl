@@ -11,20 +11,25 @@ Bieżący stan zepsutych / niekompletnych funkcji BootControl. Co naprawić →
 
 | Funkcja | Stan | Czego brakuje | Źródło |
 |---------|------|---------------|--------|
-| _(brak wpisów — pierwsza tura audytu po adopcji jeszcze nie wykonana)_ | | | |
+| _(brak — wszystkie P0/P1 z audytu 2026-05-23 zamknięte)_ | | | |
 
 ## Priorytety (kolejność prac)
 
-Pełna lista P0/P1/P2 → [`.claude/backlog.md`](backlog.md). Tu top 3-5 *aktualnego
-focus'u* — co właściciel chce naprawić najpierw.
+Pełna lista → [`.claude/backlog.md`](backlog.md). Aktualnie wszystkie P0/P1
+zamknięte; otwarte są:
 
-1. Reconciliacja ROADMAP top vs tabele per-PR (Phase 6/7/8 zakończone w gicie, ROADMAP top jeszcze tego nie odzwierciedla) — backlog P2.
-2. Pierwsza pełna tura cotygodniowego audytu (warstwa 2) po adopcji — wprowadzi prawdziwe P0/P1.
+1. **"Faza A" w ROADMAP** — czeka na decyzję właściciela co to za strumień,
+   jaki ma być back-fill PR-ów #1/#2 i exit criteria. Backlog P2.
+2. **`crates/gui-spike` cleanup** — czeka na decyzję czy zostawić, usunąć,
+   czy archiwizować do `.claude/history/`. Backlog P2.
+3. **Hook `UserPromptSubmit` i `.claude/architecture.md`** — czeka na
+   decyzję właściciela (sekcja "Czeka na decyzję").
 
-## Memory checkpoint
+## Memory checkpoint (2026-05-23)
 
-Wpis `GUI_ANALYSIS.md` w `~/.claude/projects/.../memory/` mówił o gapie daemon
-D-Bus dla systemd-boot/UKI (verified 2026-04-23). **Status na 2026-05-23: gap
-zamknięty** — `crates/daemon/src/interface.rs` ma `ListLoaderEntries`,
-`SetLoaderDefault`, `AddKernelParam`, `ReadKernelCmdline`, `RemoveKernelParam`
-(commits Phase 4 PR9–10). Memory zaktualizowana podczas adopcji.
+Pierwszy pełny audyt po adopcji 2026-05-23: znalezione 2 P0 (Polkit per-intent,
+rpm-ostree sanitize) + 2 P1 (blacklist consolidation, startup policy validation)
++ 4 P2 (audit.sh filter, snapshot literal, docs drift, Faza A). Po follow-up
+commitach wszystkie P0/P1 + P2.1/P2.2/P2.3 zamknięte; P2.4 (Faza A) i nowy
+"gui-spike decision" zostają jako P2 czekające na właściciela. Compliance
+`decisions.md`: 19/19 aktywnych decyzji respektowanych = **100%**.
