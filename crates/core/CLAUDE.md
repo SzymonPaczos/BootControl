@@ -29,6 +29,7 @@ Read [`../../AGENT.md`](../../AGENT.md) §II before editing.
 | `src/prober.rs` | Bootloader autodetection (which manager to instantiate). |
 | `src/boot_manager.rs` | `BootManager` trait — abstraction across GRUB / systemd-boot / UKI. |
 | `src/backends/` | One submodule per concrete `BootManager` implementation. |
+| `src/security.rs` | **Single source of truth for the kernel-cmdline blacklist** (`KERNEL_CMDLINE_BLACKLIST`). Both `daemon::sanitize::check_payload` and `backends::uki::validate_kernel_param` are re-exports of helpers from here. Adding a new dangerous pattern means **one edit** in this file; both call sites pick it up automatically. |
 
 ---
 
