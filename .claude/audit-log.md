@@ -5,6 +5,101 @@ Pełna procedura: [`.claude/rules/audit.md`](rules/audit.md).
 
 ---
 
+## Audyt 2026-05-23 21:27
+
+_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
+
+### Toolchain
+- rustc: `rustc 1.93.0 (254b59607 2026-01-19)`
+- cargo: `cargo 1.93.0 (083ac5135 2025-12-15)`
+
+### Formatowanie
+- cargo fmt: ✅ czysto
+
+### Clippy (workspace, -D warnings)
+- clippy: ✅ 0 findings
+
+### `unwrap` / `expect` / `panic!` w production (poza mod tests i doctestach)
+
+| Crate | unwrap | expect | panic! | Budżet |
+|-------|--------|--------|--------|--------|
+| core | 0 | 1 | 0 | 0/0/0 (strict) |
+| daemon | 0 | 2 | 0 | 0/0/0 (strict) |
+| client | 2 | 0 | 0 | ≤2/≤2/0 |
+| cli | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| tui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| gui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+
+### TODO / FIXME / HACK / XXX w kodzie
+- łącznie wystąpień: **0** (w 0 plikach)
+
+### `unsafe` blocks
+
+| Crate | unsafe blocks |
+|-------|---------------|
+| core | 0 |
+| daemon | 2 |
+| client | 0 |
+| cli | 0 |
+| tui | 0 |
+| gui | 0 |
+
+_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._
+
+### Testy
+
+| Crate | #[test] | tests/ | doctest | min ratchet |
+|-------|---------|--------|---------|-------------|
+| core | 184 | 0 | 61 | 61 ✅ |
+| daemon | 174 | 0 | 36 | 36 ✅ |
+| client | 22 | 0 | 14 | 14 ✅ |
+| cli | 5 | 0 | 4 | 4 ✅ |
+| tui | 36 | 0 | 4 | 4 ✅ |
+| gui | 0 | 2 | 0 | 0 ✅ |
+
+### Swallowed errors (heurystyka — wymagają weryfikacji greppem)
+- heurystyczna liczba: 48. Każdy wpis → przejrzeć ręcznie (część bywa legalna: `let _ = drop(...)`).
+
+### Dead code / nieużywane deps
+- cargo-udeps: ❌ exec error (sprawdź toolchain nightly)
+
+### Rejestr decyzji (`.claude/rules/decisions.md`)
+- decyzje aktywne: 19
+- decyzje wycofane: 0
+
+### Inwariant: frontendy używają `bootcontrol-client`, nie `bootcontrol-daemon`
+- ✅ żaden frontend nie importuje daemon
+
+### Regression guards (zamknięte audyty)
+- P0.1 per-intent Polkit: ✅ wszystkie wywołania mają action argument
+- P0.2 sanitize rpm-ostree: ✅ `kargs_append` waliduje param
+- P1.1 single blacklist: ✅ 1 definicja (`KERNEL_CMDLINE_BLACKLIST` w `core::security`)
+- P1.2 startup policy validation: ✅ `validate_policy_file` w main.rs
+- P2.1 audit.sh filter: ✅ `count_in_production` aktywne
+- P2.2 no fake polkit action ID: ✅ `"org.bootcontrol.test"` nie istnieje
+
+### Faza A stream signal (informational)
+- commitów z "Faza A PR": 1
+- najnowszy: `5dd91fa 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
+
+### Hooki gitowe
+- pre-push: ✅ obecny i executable
+
+### Trend audytów
+- poprzedni audyt: 2026-05-23 21:13
+- łącznie audytów: 2 (włącznie z tym)
+
+### Skille (`.claude/skills/`)
+- skills lokalnie: 1
+- skills w toolkit: 1 — refresh: `cd /Users/szymonpaczos/DevProjects/claude-toolkit && git pull`, potem skopiuj do `.claude/skills/`
+
+**Do przeglądu agentem** (warstwa głęboka — patrz `rules/audit.md` Krok 2):
+bezpieczeństwo, slop, jakość testów, architektura, drift, skille/MCP. Lista
+P0/P1/P2 dopisywana ręcznie do tej samej sekcji po Krok 2.
+
+
+
 ## Audyt 2026-05-23 21:13
 
 _Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._

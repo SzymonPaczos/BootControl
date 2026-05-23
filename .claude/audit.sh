@@ -131,10 +131,23 @@ add "_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/
 add ""
 
 # === 7. Testy ==================================================================
+# Doctest ratchet — minima ustawione w 2026-05-23 follow-up audit po
+# dorobieniu doctestów w client crate. Każde minimum to **podłoga**: nigdy
+# nie wolno zejść poniżej tej wartości bez świadomej decyzji właściciela
+# (AGENT.md §II wymaga `# Examples` na publicznym API). Gdy stan rośnie,
+# zaktualizuj te liczby w **górę** — raz osiągnięty poziom jest podłogą,
+# nie sufitem (audit.md "Krok 4 Ratchet").
+DOCTEST_MIN_core=61
+DOCTEST_MIN_daemon=36
+DOCTEST_MIN_client=14  # ratchet'd up 2026-05-23 follow-up po dorobieniu # Examples
+DOCTEST_MIN_cli=4
+DOCTEST_MIN_tui=4
+DOCTEST_MIN_gui=0  # gui to Slint UI; doctesty na .slint nie istnieją, na .rs sensowne tylko dla logic
 add "### Testy"
 add ""
-add "| Crate | #[test] | tests/ | doctest // ' marker |"
-add "|-------|---------|--------|---------------------|"
+add "| Crate | #[test] | tests/ | doctest | min ratchet |"
+add "|-------|---------|--------|---------|-------------|"
+RATCHET_BREACH=""
 for c in $CRATES; do
     SRC_DIR="crates/$c/src"
     [ -d "$SRC_DIR" ] || continue
@@ -147,9 +160,21 @@ for c in $CRATES; do
     fi
     # Doctest = '''rust' lub '''no_run' lub '''ignore' w docs.
     DOCTESTS=$(grep -rE "^/// \`\`\`($|rust|no_run|ignore|compile_fail)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
-    add "| $c | $TESTS_INLINE | $TESTS_FILES | $DOCTESTS |"
+    MIN_VAR="DOCTEST_MIN_$c"
+    MIN_VAL="${!MIN_VAR:-0}"
+    if [ "$DOCTESTS" -lt "$MIN_VAL" ]; then
+        STATUS="❌ <$MIN_VAL"
+        RATCHET_BREACH+="$c "
+    else
+        STATUS="$MIN_VAL ✅"
+    fi
+    add "| $c | $TESTS_INLINE | $TESTS_FILES | $DOCTESTS | $STATUS |"
 done
 add ""
+if [ -n "$RATCHET_BREACH" ]; then
+    add "**⚠ RATCHET BREACH (doctest)**: $RATCHET_BREACH — patrz \`rules/audit.md\` Krok 4."
+    add ""
+fi
 
 # === 8. Swallowed errors heurystyki ==========================================
 add "### Swallowed errors (heurystyka — wymagają weryfikacji greppem)"
@@ -268,6 +293,24 @@ fi
 if [ -n "$GUARD_FAILS" ]; then
     add ""
     add "**⚠ REGRESJA**: $GUARD_FAILS — patrz \`audit-log.md\` sekcje zamkniętych audytów; nie ignoruj."
+fi
+add ""
+
+# === 11c. Faza A signal — informational =====================================
+# Faza A jest poza ROADMAP (patrz backlog.md P2). Każdy nowy commit z
+# "Faza A PR #N" w treści to sygnał że ROADMAP wymaga back-fill'a.
+add "### Faza A stream signal (informational)"
+if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+    FAZAA_COUNT=$(git log --all --format='%s' 2>/dev/null | grep -cE "Faza A PR" || true)
+    FAZAA_LATEST=$(git log --all --format='%h %ad %s' --date=short 2>/dev/null \
+        | grep -E "Faza A PR" | head -1 || true)
+    add "- commitów z \"Faza A PR\": $FAZAA_COUNT"
+    if [ -n "$FAZAA_LATEST" ]; then
+        add "- najnowszy: \`$FAZAA_LATEST\`"
+    fi
+    add "- jeśli pojawi się PR powyżej tych zarejestrowanych w \`ROADMAP.md\` \"Out-of-roadmap streams\" → back-fill (backlog P2)."
+else
+    add "- (git niedostępny — pomiń)"
 fi
 add ""
 
