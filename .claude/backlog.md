@@ -40,10 +40,6 @@ ROADMAP.md ma sekcję "Out-of-roadmap streams" → "Faza A" z PR #3 (commit `5dd
 Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md, plus dopisać jasny "Goal:" + "Exit criteria:" jak inne Phase'y.
 **Źródło:** pre-adopcja + audit 2026-05-23 P2.4. **Status:** czeka na decyzję właściciela.
 
-### Bundle GUI_V2_SPEC v1 + red-team do `.claude/history/`
-[`docs/GUI_V2_SPEC.md`](../docs/GUI_V2_SPEC.md) (v1, 77kB) i [`docs/red-team/`](../docs/red-team/) (4 raporty, ~200 cytatów `GUI_V2_SPEC.md:LINE`) tworzą jeden pakiet dyskusyjny wchłonięty przez v2. Aktualnie v1 ma banner-deprecation w docs/. Przy następnej rundzie porządkowej: `git mv` pakietu do `.claude/history/2026-05-01-gui-v2-redesign/` jako jednego folderu — wewnątrz linki względne `GUI_V2_SPEC.md:LINE` nadal działają, a `docs/` przestaje hostować materiał historyczny.
-**Źródło:** decyzja 2026-05-23 (rules/decisions.md). **Status:** otwarte, future cleanup.
-
 ## Czeka na decyzję właściciela
 
 ### Hook `UserPromptSubmit` dla maksymalizacji promptów (9.3)

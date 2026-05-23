@@ -130,11 +130,16 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Status:** aktywna.
 **Jak stosować:** Otwarta praca → `backlog.md`. Known-issues → `status.md`. Zamknięta inicjatywa → `history/completed-work.md`. Raport sesji → `history/YYYY-MM-DD-temat.md`. Audyt P0/P1/P2 → `backlog.md` (po akceptacji właściciela). Źródło: `claude-toolkit/conventions/project-state-layout.md`, `claude-toolkit/ADOPT.md`.
 
-### 2026-05-23 — HANDOFF Granite zarchiwizowany w history/; GUI_V2_SPEC.md v1 zachowany w docs/
-**Decyzja:** `docs/handoff/` (HANDOFF.md + tokens.slint + 27 SVG) → `git mv` do `.claude/history/2026-05-04-granite-handoff/` jako pakiet zamkniętej Phase 3.5 (commit `5a2faf2`). `docs/GUI_V2_SPEC.md` (v1) **zostaje w `docs/`** z banner-deprecation — przeniesienie zerwałoby ~200 cytatów `GUI_V2_SPEC.md:LINE` w `docs/red-team/*.md`.
-**Dlaczego:** Granite assets w `docs/handoff/icons/` i `docs/handoff/tokens.slint` są md5-identyczne z `crates/gui/assets/icons/` i `crates/gui/ui/tokens.slint` — `docs/handoff/` to martwy pakiet dostawczy, miejsce w `history/` adekwatne. v1 jest natomiast aktywnie cytowany przez red-team raporty, które są pakietem dyskusyjnym wchłoniętym przez v2 — backlog P2 trzyma future move bundle.
+### 2026-05-23 — HANDOFF Granite + GUI_V2_SPEC v1 + red-team zarchiwizowane w history/
+**Decyzja:** Trzy bundle'y przeniesione do `.claude/history/` jako pakiety zamkniętej pracy:
+- `docs/handoff/` (HANDOFF.md + tokens.slint + 27 SVG) → `.claude/history/2026-05-04-granite-handoff/` (Phase 3.5 Granite redesign, zaimplementowane commitem `5a2faf2`).
+- `docs/GUI_V2_SPEC.md` (v1) + `docs/red-team/` (4 raporty) → `.claude/history/2026-05-01-gui-v2-redesign/` jako jeden folder. Wewnątrz pakietu względne ścieżki `GUI_V2_SPEC.md:LINE` (z red-team) i `red-team/<persona>.md` (z v1) nadal działają — bundle jest samodzielny.
+
+Pierwotny krok 2026-05-23 zostawiał v1 w `docs/` ze względu na ~200 cytatów; follow-up tego samego dnia uznał że bundle migrowany **razem** (v1 + red-team w jednej paczce) zachowuje wewnętrzną integralność cytatów, a docs/ przestaje hostować materiał historyczny.
+
+**Dlaczego:** Granite assets w `docs/handoff/icons/` i `docs/handoff/tokens.slint` są md5-identyczne z `crates/gui/assets/icons/` i `crates/gui/ui/tokens.slint` — `docs/handoff/` to martwy pakiet dostawczy. GUI v1 + red-team to pakiet dyskusyjny w pełni wchłonięty przez v2 (sam v2 zaczyna od `This document supersedes v1`). Trzymanie ich w `docs/` myliło agentów zaczynających sesję — "to żywe spec?" Po migracji `docs/` zawiera tylko żywe dokumenty (v2 spec, UX_BRIEF, UX_MAPPING, threat-model, slint-a11y-findings, CLAUDE_DESIGN_BRIEF).
 **Status:** aktywna.
-**Jak stosować:** Engineering implementuje z `docs/GUI_V2_SPEC_v2.md`. v1 = read-only diffable predecessor, nie edytować. Przy następnej rundzie porządkowej (P2 z `backlog.md`) → spakować v1 + red-team do `.claude/history/2026-05-01-gui-v2-redesign/`.
+**Jak stosować:** Engineering implementuje z `docs/GUI_V2_SPEC_v2.md` (nie tknąć v1). External references w v2 spec i CLAUDE_DESIGN_BRIEF zaktualizowane na nowe ścieżki w history/. Każdy przyszły bundle pakietowanej zamkniętej pracy: `.claude/history/YYYY-MM-DD-<temat>/`.
 
 ---
 

@@ -61,7 +61,7 @@ These were settled across the prior UX pipeline (research → brief → mapping 
 | **IA: sidebar 6+1** (Overview / Boot Entries / Bootloader / Secure Boot / Snapshots / Logs + Settings) | Settled in `docs/UX_MAPPING.md` "Resolved decisions"; spec §3 |
 | **Component public APIs** (properties, callbacks) | Engineering depends on these being stable — visual changes only |
 | **Token-driven everything** (no raw hex outside `tokens.slint`) | Single source of truth; enables high-contrast + future light mode |
-| **WCAG AA minimum** (4.5:1 normal text, 3:1 large, 3:1 UI element) | Launch criterion; see `docs/red-team/a11y.md` for current contrast audit |
+| **WCAG AA minimum** (4.5:1 normal text, 3:1 large, 3:1 UI element) | Launch criterion; see `.claude/history/2026-05-01-gui-v2-redesign/red-team/a11y.md` for the contrast audit captured at v2 lock |
 | **Catppuccin Mocha as ONE valid palette** | High-contrast variant ships; new palette must compose alongside, not replace |
 | **Destructive-action protocol** (`docs/GUI_V2_SPEC_v2.md` §6) | Verb-labeled buttons / type-to-confirm / Cancel-default styling |
 | **Anti-pattern blocklist** (`docs/GUI_V2_SPEC_v2.md` §10) | No modal-on-modal, no raw-bash editor, no in-app password fields, no auto-applying boot toggles |
@@ -221,7 +221,7 @@ Acceptance is signaled by the user. The implementing Claude (running in a separa
 1. [`docs/GUI_V2_SPEC_v2.md`](GUI_V2_SPEC_v2.md) — locked spec; every section number you reference here points there
 2. [`docs/UX_BRIEF.md`](UX_BRIEF.md) — principles and tokens contract
 3. [`docs/UX_MAPPING.md`](UX_MAPPING.md) — what lands where
-4. [`docs/red-team/a11y.md`](red-team/a11y.md) — current WCAG audit, what fails today
+4. [`.claude/history/2026-05-01-gui-v2-redesign/red-team/a11y.md`](../.claude/history/2026-05-01-gui-v2-redesign/red-team/a11y.md) — WCAG audit captured at v2 lock
 5. [`docs/slint-a11y-findings.md`](slint-a11y-findings.md) — Slint 1.14 framework capabilities
 6. [`crates/gui/ui/tokens.slint`](../crates/gui/ui/tokens.slint) — current palette source
 7. [`crates/gui/ui/components/`](../crates/gui/ui/components/) — atoms

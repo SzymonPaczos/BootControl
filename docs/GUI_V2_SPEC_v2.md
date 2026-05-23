@@ -1,6 +1,6 @@
 # BootControl GUI v2 — Implementation Specification (v2, post-red-team)
 
-This document supersedes [`GUI_V2_SPEC.md`](./GUI_V2_SPEC.md) (v1). v1 is preserved unchanged for diffability; engineering implements from v2. v2 absorbs the four red-team reviews under [`docs/red-team/`](./red-team/) and resolves every blocker plus all 8 designer-flagged questions.
+This document supersedes the v1 spec (archived at [`.claude/history/2026-05-01-gui-v2-redesign/GUI_V2_SPEC.md`](../.claude/history/2026-05-01-gui-v2-redesign/GUI_V2_SPEC.md), preserved unchanged for diffability; engineering implements from v2). v2 absorbs the four red-team reviews — now archived alongside v1 in the same history bundle ([`.claude/history/2026-05-01-gui-v2-redesign/red-team/`](../.claude/history/2026-05-01-gui-v2-redesign/red-team/)) — and resolves every blocker plus all 8 designer-flagged questions.
 
 When v2 references v1 by section number ("v1 §3.4"), the underlying wireframe / interaction list is unchanged unless a patch in v2 §10 explicitly replaces it.
 
@@ -41,9 +41,9 @@ PR 0 produced [`docs/slint-a11y-findings.md`](./slint-a11y-findings.md). Q1/Q3/Q
 
 ## 1. Document scope
 
-This is the production spec for the BootControl GUI v2 redesign. Engineering implements top-to-bottom; design proposals happen *before* this spec exists. The v1 spec ([`GUI_V2_SPEC.md`](./GUI_V2_SPEC.md)) is the diffable predecessor — read v1 first if you need a wireframe v2 references rather than re-renders.
+This is the production spec for the BootControl GUI v2 redesign. Engineering implements top-to-bottom; design proposals happen *before* this spec exists. The v1 spec (archived at [`.claude/history/2026-05-01-gui-v2-redesign/GUI_V2_SPEC.md`](../.claude/history/2026-05-01-gui-v2-redesign/GUI_V2_SPEC.md)) is the diffable predecessor — read v1 first if you need a wireframe v2 references rather than re-renders.
 
-Inputs that locked v2: [`UX_BRIEF.md`](./UX_BRIEF.md) (principles), [`UX_MAPPING.md`](./UX_MAPPING.md) (capability mapping + locked decisions of 2026-05-01), and the four red-team reviews under [`docs/red-team/`](./red-team/).
+Inputs that locked v2: [`UX_BRIEF.md`](./UX_BRIEF.md) (principles), [`UX_MAPPING.md`](./UX_MAPPING.md) (capability mapping + locked decisions of 2026-05-01), and the four red-team reviews archived under [`.claude/history/2026-05-01-gui-v2-redesign/red-team/`](../.claude/history/2026-05-01-gui-v2-redesign/red-team/).
 
 This spec covers GUI v2 **functional** scope. Scope cuts: Terminal page (dropped), drag-drop reorder (parked), Windows BootNext (Phase 7), Gothic 2 keymap (backlog).
 
@@ -63,7 +63,7 @@ This spec covers GUI v2 **functional** scope. Scope cuts: Terminal page (dropped
 
 **Verdict.** When `efivarfs::is_setup_mode() == true`, the Overview page AND Secure Boot page each show a persistent `InfoBar --warning` directly under the page header, *above* the hero card. Copy: `"Secure Boot is in Setup Mode — any signed binary can be enrolled. [Why this matters] [Open Secure Boot]"`.
 
-**Why.** v1 placed Setup Mode as the second row inside the Secure Boot status card (`GUI_V2_SPEC.md:90-101`). Sysadmin red-team rated this a brick-class footgun (`docs/red-team/sysadmin.md` Top finding): users walk past Setup Mode while focused on what they came to do. Top-page InfoBar forces the user past the warning before any destructive action is reachable. Sysadmin wins outright; a11y agrees (live region announcement on page load).
+**Why.** v1 placed Setup Mode as the second row inside the Secure Boot status card (`GUI_V2_SPEC.md:90-101`). Sysadmin red-team rated this a brick-class footgun (`.claude/history/2026-05-01-gui-v2-redesign/red-team/sysadmin.md` Top finding): users walk past Setup Mode while focused on what they came to do. Top-page InfoBar forces the user past the warning before any destructive action is reachable. Sysadmin wins outright; a11y agrees (live region announcement on page load).
 
 **Implementation note.** New component `components/setup_mode_banner.slint` reads `secure_boot::is_setup_mode` from D-Bus on every page focus. **PR 0 conclusion (HIGH confidence):** Slint 1.14 has no live-region API (`AccessibleStringProperty` enum has no Polite/Assertive variant; AccessKit Linux adapter sets none). **Implementation:** focus-jiggle workaround inside `components/info_bar.slint` — when banner materialises, briefly shift focus to a hidden `Text` carrying the announcement string + immediately restore focus. Side-channel: optional `org.freedesktop.Notifications` toast for redundancy. Tracked upstream as `docs/slint-upstream-tracking.md` follow-up issue (PR 6+). See `slint-a11y-findings.md` Q3.
 
@@ -107,7 +107,7 @@ When `du -s /var/lib/bootcontrol/snapshots/` exceeds 1 GB, render `InfoBar --inf
 
 **Verdict.** No `Ctrl+S` shortcut anywhere in the GUI. Apply requires either an explicit click on the action footer's primary button OR `Ctrl+Shift+Return` while focus is on the staged-changes summary or the action footer.
 
-**Why.** Beginner: text-editor muscle memory makes `Ctrl+S` feel like "save my work harmlessly", but here it's a privileged write through polkit. A11y: `Ctrl+S` collides with Orca's "stop reading" / GNOME global Save shortcuts. Power-user defended `Ctrl+S` as efficient but conceded in their own report (`docs/red-team/power-user.md` §6) that it's not non-negotiable. Two personas blocking + one yielding = drop. `Ctrl+Shift+Return` is heavy enough to feel like a privileged action and short enough for power users.
+**Why.** Beginner: text-editor muscle memory makes `Ctrl+S` feel like "save my work harmlessly", but here it's a privileged write through polkit. A11y: `Ctrl+S` collides with Orca's "stop reading" / GNOME global Save shortcuts. Power-user defended `Ctrl+S` as efficient but conceded in their own report (`.claude/history/2026-05-01-gui-v2-redesign/red-team/power-user.md` §6) that it's not non-negotiable. Two personas blocking + one yielding = drop. `Ctrl+Shift+Return` is heavy enough to feel like a privileged action and short enough for power users.
 
 **Implementation note.** v1 §8 `Ctrl+S` row removed; new row `Ctrl+Shift+Return → Activate primary action footer button` added. Footer primary button has `accessible-keybinding: "Ctrl+Shift+Return"`. **PR 0 conclusion (HIGH for code, MED for X11/Wayland parity):** `event.text == Key.Return && event.modifiers.shift` is the documented idiom; cross-backend parity confirmed in winit but not platform-tested. Runtime confirmation: `cargo run -p bootcontrol-gui-spike --bin q6_shift_return` on both X11 and Wayland (see `slint-a11y-findings.md` Q6). Non-blocking for PR 1.
 
@@ -439,7 +439,7 @@ v1 §4 wireframe stands. Patches:
 
 v1 §5 sequence stands. Additions:
 
-- NEW STATE: `etag-conflict`. Branch off `staged` when a periodic ETag re-read (every 2 s while the page has staged changes) finds the on-disk ETag differs from the ETag at edit-start. Renders `etag_conflict_card.slint`: `"Another process changed /etc/default/grub. Your staged change may stomp it. [Diff against new state] [Discard your changes] [Force apply]"`. Power-user demand from `docs/red-team/power-user.md` §4.
+- NEW STATE: `etag-conflict`. Branch off `staged` when a periodic ETag re-read (every 2 s while the page has staged changes) finds the on-disk ETag differs from the ETag at edit-start. Renders `etag_conflict_card.slint`: `"Another process changed /etc/default/grub. Your staged change may stomp it. [Diff against new state] [Discard your changes] [Force apply]"`. Power-user demand from `.claude/history/2026-05-01-gui-v2-redesign/red-team/power-user.md` §4.
 - NEW STATE: `aborting`. Branch off `applying` when user clicks `[Abort job]`. Daemon sends SIGTERM, waits 5 s, then SIGKILL. Transition target: `failed` with reason `aborted_by_user`. (sysadmin B8)
 - NEW EVENT: live-region announcement on every state transition. Template: `"State: <name>. <one-line context>."` (a11y)
 
@@ -694,7 +694,7 @@ Outside this spec — these other files MUST be patched for consistency:
 The v2 spec is implementable when:
 
 - ☑ PR 0 results documented in `docs/slint-a11y-findings.md`; every `⚠ FRAMEWORK ASSUMPTION` from v2.0 of this doc is now resolved with a citation. Q2/Q4/Q6 still pending Linux runtime in `crates/gui-spike/` (non-blocking for PR 1).
-- ☐ Every red-team blocker from `docs/red-team/*.md` has a citable patch in this v2 spec.
+- ☐ Every red-team blocker from `.claude/history/2026-05-01-gui-v2-redesign/red-team/*.md` has a citable patch in this v2 spec.
 - ☐ All 8 v1-§10 questions have a verdict with named persona-winner.
 - ☐ Every cross-document inconsistency flagged in §19 is resolved (or explicitly punted with issue link).
 - ☐ Engineer can implement PR 0 reading only this spec + the Slint docs.
