@@ -6,66 +6,21 @@
 //!
 //! # Security
 //!
-//! [`validate_kernel_param`] mirrors the blacklist in
-//! `crates/daemon/src/sanitize.rs`. Both lists **must be kept in sync**.
-//! Any new blacklisted pattern must be added to both locations.
+//! [`validate_kernel_param`] is now a re-export of
+//! [`crate::security::validate_kernel_param_str`] — the kernel cmdline
+//! blacklist lives in a single place ([`crate::security::KERNEL_CMDLINE_BLACKLIST`]).
+//! Adding a new dangerous pattern requires only one edit.
 
 #![deny(missing_docs)]
 
 use crate::error::BootControlError;
 
-/// Blacklisted kernel parameter substrings.
+/// Validate a single kernel parameter against the shared security blacklist.
 ///
-/// Mirrors `BLACKLISTED_PATTERNS` in `crates/daemon/src/sanitize.rs`.
-/// Both lists must be kept in sync — any addition here must also be added
-/// there and vice versa.
-const BLACKLISTED_PARAMS: &[&str] = &[
-    "init=",
-    "selinux=0",
-    "apparmor=0",
-    "systemd.unit=",
-    "rd.break",
-    "single",
-    "emergency",
-];
-
-/// Validate a single kernel parameter against the security blacklist.
-///
-/// This function mirrors `crates/daemon::sanitize::check_payload` for the
-/// kernel cmdline context. If a parameter contains any blacklisted substring,
-/// the operation is rejected.
-///
-/// # Arguments
-///
-/// * `param` — A single kernel parameter (e.g. `"quiet"`, `"root=/dev/sda1"`).
-///
-/// # Errors
-///
-/// Returns [`BootControlError::SecurityPolicyViolation`] if `param` contains
-/// any substring from the security blacklist.
-///
-/// # Examples
-///
-/// ```
-/// use bootcontrol_core::backends::uki::validate_kernel_param;
-///
-/// assert!(validate_kernel_param("quiet").is_ok());
-/// assert!(validate_kernel_param("root=/dev/sda1").is_ok());
-/// assert!(validate_kernel_param("selinux=0").is_err());
-/// assert!(validate_kernel_param("init=/bin/bash").is_err());
-/// ```
-pub fn validate_kernel_param(param: &str) -> Result<(), BootControlError> {
-    for &pattern in BLACKLISTED_PARAMS {
-        if param.contains(pattern) {
-            return Err(BootControlError::SecurityPolicyViolation {
-                reason: format!(
-                    "kernel parameter '{param}' contains blacklisted pattern '{pattern}'"
-                ),
-            });
-        }
-    }
-    Ok(())
-}
+/// Thin re-export of [`crate::security::validate_kernel_param_str`] so that
+/// existing callers (`uki_manager`, `rpm_ostree`) keep their import paths.
+/// The blacklist lives in [`crate::security::KERNEL_CMDLINE_BLACKLIST`].
+pub use crate::security::validate_kernel_param_str as validate_kernel_param;
 
 /// Parse `/etc/kernel/cmdline` content into a list of individual parameters.
 ///
@@ -216,7 +171,10 @@ mod tests {
 
     #[test]
     fn validate_blocks_all_blacklisted_patterns() {
-        for &pattern in BLACKLISTED_PARAMS {
+        // Single source of truth: pull the list from `crate::security` and
+        // verify every entry is rejected here. If `KERNEL_CMDLINE_BLACKLIST`
+        // grows a new pattern, this test automatically covers it.
+        for &pattern in crate::security::KERNEL_CMDLINE_BLACKLIST {
             let result = validate_kernel_param(pattern);
             assert!(
                 result.is_err(),

@@ -1,7 +1,9 @@
 //! Payload sanitization for GRUB configuration write operations.
 //!
-//! This module enforces the security blacklist that prevents an unprivileged
-//! user from smuggling dangerous kernel parameters through the D-Bus interface.
+//! Re-exports from [`bootcontrol_core::security`] (single source of truth for
+//! the kernel cmdline blacklist). This module exists so daemon-internal
+//! callers keep their `crate::sanitize::*` import paths; all logic lives in
+//! `core::security`.
 //!
 //! # Threat model
 //!
@@ -9,78 +11,26 @@
 //! a key or value containing kernel parameters that disable security
 //! subsystems at boot time (e.g. `selinux=0`, `apparmor=0`, `init=/bin/bash`).
 //! Even though Polkit authorizes the requesting user, we must refuse payloads
-//! that would weaken system security.
-//!
-//! The blacklist is a named compile-time constant, not inline strings, so that
-//! auditors can find and review it from a single location.
+//! that would weaken system security. See [`bootcontrol_core::security`] for
+//! the canonical blacklist and rationale.
 
-use bootcontrol_core::error::BootControlError;
-
-/// Blacklisted substrings for GRUB key and value payloads.
-///
-/// Any key or value that **contains** one of these substrings (case-sensitive)
-/// is rejected with [`BootControlError::SecurityPolicyViolation`] before any
-/// file write is attempted.
-///
-/// The list is intentionally conservative: it blocks the most dangerous
-/// kernel parameters while avoiding false positives on legitimate values.
-pub const BLACKLISTED_PATTERNS: &[&str] = &[
-    "init=",
-    "selinux=0",
-    "apparmor=0",
-    "systemd.unit=",
-    "rd.break",
-    "single",
-    "emergency",
-];
+/// Blacklisted substrings for GRUB key and value payloads. Single source of
+/// truth: [`bootcontrol_core::security::KERNEL_CMDLINE_BLACKLIST`].
+pub use bootcontrol_core::security::KERNEL_CMDLINE_BLACKLIST as BLACKLISTED_PATTERNS;
 
 /// Verify that a GRUB key-value pair does not violate the security policy.
-///
-/// Both `key` and `value` are checked against [`BLACKLISTED_PATTERNS`]. The
-/// check is case-sensitive and substring-based: if either string contains any
-/// blacklisted pattern as a substring, the operation is rejected.
-///
-/// # Arguments
-///
-/// * `key`   — The GRUB configuration key to write (e.g. `"GRUB_CMDLINE_LINUX_DEFAULT"`).
-/// * `value` — The value to assign to the key (e.g. `"quiet splash"`).
-///
-/// # Errors
-///
-/// Returns [`BootControlError::SecurityPolicyViolation`] if `key` or `value`
-/// contains any substring from [`BLACKLISTED_PATTERNS`].
-///
-/// # Examples
-///
-/// ```
-/// use bootcontrold::sanitize::check_payload;
-///
-/// // Safe values are accepted.
-/// assert!(check_payload("GRUB_TIMEOUT", "5").is_ok());
-/// assert!(check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "quiet splash").is_ok());
-///
-/// // Dangerous values are rejected.
-/// assert!(check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "init=/bin/bash").is_err());
-/// assert!(check_payload("GRUB_CMDLINE_LINUX_DEFAULT", "selinux=0").is_err());
-/// ```
-pub fn check_payload(key: &str, value: &str) -> Result<(), BootControlError> {
-    for &pattern in BLACKLISTED_PATTERNS {
-        if key.contains(pattern) {
-            return Err(BootControlError::SecurityPolicyViolation {
-                reason: format!("key '{key}' contains blacklisted pattern '{pattern}'"),
-            });
-        }
-        if value.contains(pattern) {
-            return Err(BootControlError::SecurityPolicyViolation {
-                reason: format!("value for key '{key}' contains blacklisted pattern '{pattern}'"),
-            });
-        }
-    }
-    Ok(())
-}
+/// Thin re-export of [`bootcontrol_core::security::validate_grub_payload`] so
+/// daemon callers keep their existing import paths.
+pub use bootcontrol_core::security::validate_grub_payload as check_payload;
 
 #[cfg(test)]
 mod tests {
+    // Test suite preserved verbatim from the pre-consolidation sanitize.rs —
+    // the public surface (`check_payload`, `BLACKLISTED_PATTERNS`) is now a
+    // re-export of `bootcontrol_core::security`, and these tests still pass
+    // because the canonical implementation behind the re-export emits
+    // identical error messages. Treating them as regression coverage for
+    // the daemon-side import path.
     use super::*;
     use bootcontrol_core::error::BootControlError;
 

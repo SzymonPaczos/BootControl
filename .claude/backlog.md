@@ -23,9 +23,7 @@ _(brak otwartych — P0.1 i P0.2 z audytu 2026-05-23 zamknięte w tej samej rund
 
 ## P1 — ważne
 
-### Konsolidacja blacklisty `BLACKLISTED_PATTERNS` (sanitize.rs ↔ validate_kernel_param)
-[`crates/daemon/src/sanitize.rs:27`](../crates/daemon/src/sanitize.rs#L27) (`BLACKLISTED_PATTERNS`) i [`crates/core/src/backends/uki.rs:22`](../crates/core/src/backends/uki.rs#L22) (`BLACKLISTED_PARAMS`) to dwie niezależne kopie. Sam komentarz w uki.rs:9 mówi *"must be kept in sync"*. Konsolidacja: nowy moduł `bootcontrol_core::security` ze stałą + obie funkcje sanityzujące delegate do single source. Po naprawie: ratchet — w `audit.sh` dorzucić check że obie listy mają identyczną zawartość (lub że jest tylko jedna lista globalnie).
-**Źródło:** audyt 2026-05-23 P1.1. **Status:** otwarte.
+_(brak otwartych — P1.1 zamknięte follow-up commitem 2026-05-23, patrz `audit-log.md`)_
 
 ## P2 — porządkowe
 
