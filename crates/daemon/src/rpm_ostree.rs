@@ -24,7 +24,9 @@
 use std::process::Command;
 
 use bootcontrol_core::{
-    backends::uki::parse_cmdline, error::BootControlError, hash::compute_etag_str,
+    backends::uki::{parse_cmdline, validate_kernel_param},
+    error::BootControlError,
+    hash::compute_etag_str,
 };
 use tracing::{info, warn};
 
@@ -87,12 +89,20 @@ fn etag_check(expected: &str, current: &str) -> Result<(), BootControlError> {
 /// and the caller must re-read and retry. Idempotency is delegated to
 /// `rpm-ostree` itself (it tolerates appending an already-present token).
 ///
+/// `param` is validated against the kernel cmdline blacklist
+/// ([`validate_kernel_param`]) before any process is spawned. Matches the
+/// contract enforced for UKI cmdline writes; without this check
+/// `AddKernelParam` on rpm-ostree hosts would smuggle `init=`/`selinux=0`
+/// past the daemon (the rpm-ostree CLI itself has no such blacklist).
+///
 /// # Errors
 ///
+/// - [`BootControlError::SecurityPolicyViolation`] — `param` is blacklisted.
 /// - [`BootControlError::StateMismatch`] — `expected_etag` is stale.
 /// - [`BootControlError::ToolNotFound`] — `rpm-ostree` not on `$PATH`.
 /// - [`BootControlError::EspScanFailed`] — the command failed.
 pub fn kargs_append(param: &str, expected_etag: &str) -> Result<(), BootControlError> {
+    validate_kernel_param(param)?;
     let (_, current_etag) = kargs_read()?;
     etag_check(expected_etag, &current_etag)?;
 
@@ -255,6 +265,40 @@ mod tests {
                 other => panic!("expected EspScanFailed, got {other:?}"),
             }
         });
+    }
+
+    #[test]
+    fn kargs_append_rejects_blacklisted_init() {
+        // Without sanitisation, `AddKernelParam("init=/bin/sh")` on
+        // rpm-ostree hosts would yield a root shell after the next boot.
+        // `validate_kernel_param` is called BEFORE any process spawn, so this
+        // test does not need a stub binary on PATH.
+        let result = kargs_append("init=/bin/sh", "any-etag");
+        assert!(
+            matches!(
+                result,
+                Err(BootControlError::SecurityPolicyViolation { .. })
+            ),
+            "expected SecurityPolicyViolation, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn kargs_append_rejects_blacklisted_selinux_zero() {
+        let result = kargs_append("selinux=0", "any-etag");
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
+    }
+
+    #[test]
+    fn kargs_append_rejects_blacklisted_apparmor_zero() {
+        let result = kargs_append("apparmor=0", "any-etag");
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 
     #[test]

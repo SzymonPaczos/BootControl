@@ -44,7 +44,7 @@ This package contains:
   - The bootcontrold daemon binary
   - systemd unit and socket files for socket activation
   - D-Bus system bus policy (org.bootcontrol.Manager)
-  - Polkit action policy (org.bootcontrol.manage)
+  - Polkit action policy (six per-intent actions: rewrite-grub, write-bootloader, enroll-mok, generate-keys, replace-pk, restore-snapshot)
 
 # ---------------------------------------------------------------------------
 # %prep

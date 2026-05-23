@@ -37,7 +37,7 @@ Steps 1, 2, 4, 8, 11 are non-negotiable. Steps 3, 7, 10 are required for the fil
    - `initramfs/` — dracut / mkinitcpio / kernel-install drivers
 3. **Error mapping** → every new error variant in `bootcontrol-core::error::BootControlError` needs a corresponding D-Bus name in [`src/dbus_error.rs`](./src/dbus_error.rs) using the namespace `org.bootcontrol.Error.<Variant>`. The frontend matches on the **name**, never the message string.
 4. **Test** → integration test in the same manager file using `tempfile::TempDir`. End-to-end test in [`../../tests/e2e/`](../../tests/e2e/) if the change crosses the D-Bus boundary.
-5. **Polkit action** → if the method represents a new authorization scope, add it to [`../../packaging/polkit/org.bootcontrol.policy`](../../packaging/polkit/org.bootcontrol.policy). Most methods reuse `org.bootcontrol.manage`.
+5. **Polkit action** → every D-Bus method that mutates state must call `authorize_with_polkit(uid, action)` with one of the per-intent Action IDs declared in [`crate::polkit::actions`](./src/polkit.rs) (mirror of [`../../packaging/polkit/org.bootcontrol.policy`](../../packaging/polkit/org.bootcontrol.policy) — six actions: `rewrite-grub`, `write-bootloader`, `enroll-mok`, `generate-keys`, `replace-pk`, `restore-snapshot`). The legacy single-action `org.bootcontrol.manage` is rejected by both the policy file and `authorize_with_polkit` (defensive contract). Adding a new authorization scope means: (a) new constant in `polkit::actions`, (b) new `<action id="...">` in the policy XML, (c) sync the `REQUIRED_ACTIONS` list in [`policy_check.rs`](./src/policy_check.rs) so the startup validation accepts the new file.
 
 ---
 

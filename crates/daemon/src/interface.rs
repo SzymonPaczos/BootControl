@@ -41,7 +41,7 @@ use crate::{
     dbus_error::{snapshot_to_daemon_error, to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
     immutable_distro::{enforce_writable_distro, probe_immutable_distro},
-    polkit::authorize_with_polkit,
+    polkit::{actions, authorize_with_polkit},
     rpm_ostree, sanitize,
     secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
@@ -483,10 +483,12 @@ impl GrubManager {
         info!(caller_uid = %caller_uid, key = %key, "Resolved caller UID for Polkit");
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, key = %key, "Polkit denied");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::REWRITE_GRUB)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, key = %key, "Polkit denied");
+                to_daemon_error(e)
+            })?;
 
         // ── Step 3: Payload sanitization ────────────────────────────────────
         sanitize::check_payload(&key, &value).map_err(|e| {
@@ -510,7 +512,7 @@ impl GrubManager {
             snapshot_id: None,
             exit_code: None,
             caller_uid,
-            polkit_action: "org.bootcontrol.write-bootloader",
+            polkit_action: "org.bootcontrol.rewrite-grub",
             job_id: job_id.clone(),
             stderr_tail: String::new(),
         });
@@ -526,7 +528,7 @@ impl GrubManager {
         let snap_info = snapshot::create(snapshot::SnapshotRequest {
             root: &self.snapshot_root,
             op: "set_grub_value",
-            polkit_action: "org.bootcontrol.write-bootloader",
+            polkit_action: "org.bootcontrol.rewrite-grub",
             caller_uid,
             etag_before: &etag,
             files: std::slice::from_ref(&self.grub_path),
@@ -547,7 +549,7 @@ impl GrubManager {
             snapshot_id: Some(snap_info.id.clone()),
             exit_code: None,
             caller_uid,
-            polkit_action: "org.bootcontrol.write-bootloader",
+            polkit_action: "org.bootcontrol.rewrite-grub",
             job_id: job_id.clone(),
             stderr_tail: String::new(),
         });
@@ -580,7 +582,7 @@ impl GrubManager {
             snapshot_id: Some(snap_info.id),
             exit_code: Some(exit_code),
             caller_uid,
-            polkit_action: "org.bootcontrol.write-bootloader",
+            polkit_action: "org.bootcontrol.rewrite-grub",
             job_id,
             stderr_tail,
         });
@@ -691,10 +693,12 @@ impl GrubManager {
         };
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, "Polkit denied for RebuildGrubConfig");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::REWRITE_GRUB)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, "Polkit denied for RebuildGrubConfig");
+                to_daemon_error(e)
+            })?;
 
         // ── Step 2: Run grub-mkconfig ───────────────────────────────────────
         grub_rebuild::run_grub_mkconfig(&self.grub_cfg_path).map_err(to_daemon_error)
@@ -762,10 +766,12 @@ impl GrubManager {
         info!(caller_uid = %caller_uid, "Resolved caller UID for BackupNvram");
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, "Polkit denied for BackupNvram");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::ENROLL_MOK)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, "Polkit denied for BackupNvram");
+                to_daemon_error(e)
+            })?;
 
         // ── Step 3: Resolve target directory ────────────────────────────────
         let resolved_target = if target_dir.is_empty() {
@@ -805,7 +811,7 @@ impl GrubManager {
     /// `/var/lib/bootcontrol/keys/mok.crt`), then generates a MokManager
     /// enrollment request so the key is trusted on the next reboot.
     ///
-    /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    /// Requires Polkit authorization (`org.bootcontrol.enroll-mok`).
     ///
     /// ## D-Bus signature
     ///
@@ -858,10 +864,12 @@ impl GrubManager {
         info!(caller_uid = %caller_uid, uki_path = %uki_path, "Resolved caller UID for Polkit");
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, uki_path = %uki_path, "Polkit denied");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::ENROLL_MOK)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, uki_path = %uki_path, "Polkit denied");
+                to_daemon_error(e)
+            })?;
 
         // ── Step 3: Instantiate the signer ──────────────────────────────────
         let signer = SbsignMokSigner {
@@ -901,7 +909,7 @@ impl GrubManager {
     ///
     /// Returns a JSON array of generated file paths.
     /// If `output_dir` is empty, defaults to `/var/lib/bootcontrol/paranoia-keys`.
-    /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    /// Requires Polkit authorization (`org.bootcontrol.generate-keys`).
     #[cfg(feature = "experimental_paranoia")]
     async fn generate_paranoia_keyset(
         &self,
@@ -936,10 +944,12 @@ impl GrubManager {
         };
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, "Polkit denied for GenerateParanoiaKeyset");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::GENERATE_KEYS)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, "Polkit denied for GenerateParanoiaKeyset");
+                to_daemon_error(e)
+            })?;
 
         // ── Step 3: Resolve target directory ────────────────────────────────
         let target = if output_dir.is_empty() {
@@ -980,7 +990,7 @@ impl GrubManager {
     /// Merge custom db cert with Microsoft UEFI CA signatures.
     ///
     /// Returns path to the merged `.auth` file.
-    /// Requires Polkit authorization (`org.bootcontrol.manage`).
+    /// Requires Polkit authorization (`org.bootcontrol.replace-pk`).
     #[cfg(feature = "experimental_paranoia")]
     async fn merge_paranoia_with_microsoft(
         &self,
@@ -1015,10 +1025,12 @@ impl GrubManager {
         };
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, "Polkit denied for MergeParanoiaWithMicrosoft");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::REPLACE_PK)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, "Polkit denied for MergeParanoiaWithMicrosoft");
+                to_daemon_error(e)
+            })?;
 
         // ── Step 3: Resolve target directory ────────────────────────────────
         let target = if output_dir.is_empty() {
@@ -1153,7 +1165,7 @@ impl GrubManager {
         // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
         enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "SetLoaderDefault").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::WRITE_BOOTLOADER)
             .await
             .map_err(to_daemon_error)?;
         systemd_boot_manager::set_loader_default(&self.loader_conf_path, &id, &etag)
@@ -1187,7 +1199,7 @@ impl GrubManager {
         info!(id = %id, new_title = %new_title, "D-Bus: RenameLoaderEntry");
         enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "RenameLoaderEntry").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::WRITE_BOOTLOADER)
             .await
             .map_err(to_daemon_error)?;
         systemd_boot_manager::rename_loader_entry(&self.loader_entries_dir, &id, &new_title, &etag)
@@ -1275,7 +1287,7 @@ impl GrubManager {
         match probe_immutable_distro() {
             Some(ImmutableDistro::RpmOstree) => {
                 let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
-                authorize_with_polkit(caller_uid)
+                authorize_with_polkit(caller_uid, actions::REWRITE_GRUB)
                     .await
                     .map_err(to_daemon_error)?;
                 return rpm_ostree::kargs_append(&param, &etag).map_err(to_daemon_error);
@@ -1295,7 +1307,7 @@ impl GrubManager {
         }
 
         let caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::REWRITE_GRUB)
             .await
             .map_err(to_daemon_error)?;
         uki_manager::add_kernel_param(&self.kernel_cmdline_path, &param, &etag)
@@ -1334,7 +1346,7 @@ impl GrubManager {
         match probe_immutable_distro() {
             Some(ImmutableDistro::RpmOstree) => {
                 let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
-                authorize_with_polkit(caller_uid)
+                authorize_with_polkit(caller_uid, actions::REWRITE_GRUB)
                     .await
                     .map_err(to_daemon_error)?;
                 return rpm_ostree::kargs_delete(&param, &etag).map_err(to_daemon_error);
@@ -1354,7 +1366,7 @@ impl GrubManager {
         }
 
         let caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::REWRITE_GRUB)
             .await
             .map_err(to_daemon_error)?;
         uki_manager::remove_kernel_param(&self.kernel_cmdline_path, &param, &etag)
@@ -1452,10 +1464,12 @@ impl GrubManager {
         enforce_writable_distro().map_err(to_daemon_error)?;
 
         let caller_uid = resolve_uid(&header, connection, "RestoreSnapshot").await?;
-        authorize_with_polkit(caller_uid).await.map_err(|e| {
-            warn!(caller_uid = %caller_uid, id = %id, "Polkit denied for RestoreSnapshot");
-            to_daemon_error(e)
-        })?;
+        authorize_with_polkit(caller_uid, actions::RESTORE_SNAPSHOT)
+            .await
+            .map_err(|e| {
+                warn!(caller_uid = %caller_uid, id = %id, "Polkit denied for RestoreSnapshot");
+                to_daemon_error(e)
+            })?;
 
         let job_id = new_job_id();
         let target_paths = vec![self.snapshot_root.join(&id).display().to_string()];
@@ -1566,7 +1580,7 @@ impl GrubManager {
         info!(new_order = ?new_order, "D-Bus: SetBootOrder");
         enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "SetBootOrder").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::WRITE_BOOTLOADER)
             .await
             .map_err(to_daemon_error)?;
         let reader = crate::uefi_vars_linux::EfivarFsReader::new();
@@ -1611,7 +1625,7 @@ impl GrubManager {
         info!(index = index, "D-Bus: SetBootNext");
         enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "SetBootNext").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::WRITE_BOOTLOADER)
             .await
             .map_err(to_daemon_error)?;
         let reader = crate::uefi_vars_linux::EfivarFsReader::new();
@@ -1629,7 +1643,7 @@ impl GrubManager {
         info!("D-Bus: ClearBootNext");
         enforce_writable_distro().map_err(to_daemon_error)?;
         let caller_uid = resolve_uid(&header, connection, "ClearBootNext").await?;
-        authorize_with_polkit(caller_uid)
+        authorize_with_polkit(caller_uid, actions::WRITE_BOOTLOADER)
             .await
             .map_err(to_daemon_error)?;
         let reader = crate::uefi_vars_linux::EfivarFsReader::new();

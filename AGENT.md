@@ -157,4 +157,4 @@ Naming in Unix systems is an API. Renaming a binary changes system call signatur
 | systemd socket unit | `bootcontrold.socket` | Socket activation entry point |
 | D-Bus interface | `org.bootcontrol.Manager` | |
 | D-Bus error namespace | `org.bootcontrol.Error.<Variant>` | e.g. `org.bootcontrol.Error.StateMismatch` |
-| Polkit Action ID | `org.bootcontrol.manage` | Displayed in password prompt: *"BootControl requires authorization to modify boot configuration"* |
+| Polkit Action IDs | 6 per-intent (`rewrite-grub`, `write-bootloader`, `enroll-mok`, `generate-keys`, `replace-pk`, `restore-snapshot`) | Each carries its own prompt and reversibility class. Single source of truth: [`packaging/polkit/org.bootcontrol.policy`](./packaging/polkit/org.bootcontrol.policy) + [`crates/daemon/src/polkit.rs`](./crates/daemon/src/polkit.rs) `actions` module. Legacy `org.bootcontrol.manage` is deprecated and refused by daemon startup validation. |

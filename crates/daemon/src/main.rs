@@ -46,9 +46,11 @@ use std::path::PathBuf;
 #[cfg(target_os = "linux")]
 use bootcontrold::interface::GrubManager;
 #[cfg(target_os = "linux")]
+use bootcontrold::policy_check::{validate_policy_file, DEFAULT_POLICY_PATH};
+#[cfg(target_os = "linux")]
 use bootcontrold::prober::{build_backend, probe_system};
 #[cfg(target_os = "linux")]
-use tracing::info;
+use tracing::{error, info};
 #[cfg(target_os = "linux")]
 use zbus::connection;
 
@@ -134,6 +136,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         failsafe_path = %failsafe_path.display(),
         "bootcontrold starting"
     );
+
+    // ── 1b. Validate polkit policy file (production only) ────────────────────
+    // On session bus (E2E tests) the daemon never reaches system Polkit,
+    // so skipping the check keeps tests free of system-wide install requirements.
+    // On the system bus a stale / legacy / incomplete policy file is a startup
+    // failure — see `policy_check.rs` for the contract.
+    if std::env::var("BOOTCONTROL_BUS").as_deref() != Ok("session") {
+        let policy_path = std::path::Path::new(DEFAULT_POLICY_PATH);
+        validate_policy_file(policy_path).map_err(|e| {
+            error!(
+                policy_path = %policy_path.display(),
+                error = %e,
+                "polkit policy validation failed — refusing to start"
+            );
+            Box::<dyn std::error::Error>::from(e.to_string())
+        })?;
+        info!(
+            policy_path = %policy_path.display(),
+            "polkit policy file accepted (all six per-intent actions declared)"
+        );
+    }
 
     // ── 2. Detect bootloader and build backend ───────────────────────────────
     let detected = probe_system();
