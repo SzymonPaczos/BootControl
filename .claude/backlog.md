@@ -19,11 +19,13 @@ Kontekst w 2-4 liniach — co i dlaczego.
 
 ## P0 — krytyczne
 
-_(brak — pierwszy pełny audyt po adopcji jeszcze nie wykonany)_
+_(brak otwartych — P0.1 i P0.2 z audytu 2026-05-23 zamknięte w tej samej rundzie, patrz `audit-log.md` sekcja "Status naprawień")_
 
 ## P1 — ważne
 
-_(brak — pierwszy pełny audyt po adopcji jeszcze nie wykonany)_
+### Konsolidacja blacklisty `BLACKLISTED_PATTERNS` (sanitize.rs ↔ validate_kernel_param)
+[`crates/daemon/src/sanitize.rs:27`](../crates/daemon/src/sanitize.rs#L27) (`BLACKLISTED_PATTERNS`) i [`crates/core/src/backends/uki.rs:22`](../crates/core/src/backends/uki.rs#L22) (`BLACKLISTED_PARAMS`) to dwie niezależne kopie. Sam komentarz w uki.rs:9 mówi *"must be kept in sync"*. Konsolidacja: nowy moduł `bootcontrol_core::security` ze stałą + obie funkcje sanityzujące delegate do single source. Po naprawie: ratchet — w `audit.sh` dorzucić check że obie listy mają identyczną zawartość (lub że jest tylko jedna lista globalnie).
+**Źródło:** audyt 2026-05-23 P1.1. **Status:** otwarte.
 
 ## P2 — porządkowe
 
@@ -50,6 +52,10 @@ W [`ROADMAP.md`](../ROADMAP.md) Phase 0–5 + 3.5 mają nagłówek `✅ Complete
 ### ABOUT.md — sprawdzić czy ma sens
 Plik [`ABOUT.md`](../ABOUT.md) (195B, 1 paragraf) wygląda na zalążek nieukończony. Albo rozbudować, albo skasować i fold do README.md.
 **Źródło:** pre-adopcja, inwentaryzacja top-level docs. **Status:** otwarte, niski priorytet.
+
+### `snapshot.rs:398` literal `"org.bootcontrol.test"` poza policy file
+[`crates/daemon/src/snapshot.rs:398`](../crates/daemon/src/snapshot.rs#L398) używa string `"org.bootcontrol.test"` jako `polkit_action` field. Nieobecne w policy. Wygląda na test fixture (`#[cfg(test)]` mod). Albo przenieść do `const TEST_POLKIT_ACTION` w `mod tests`, albo dorzucić do policy.
+**Źródło:** audyt 2026-05-23 P2.2. **Status:** otwarte (kosmetyka).
 
 ## Czeka na decyzję właściciela
 
