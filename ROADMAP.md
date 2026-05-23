@@ -3,7 +3,7 @@
 This document tracks the full development plan from initial scaffolding to a feature-complete release.
 Each version represents a stable, shippable milestone. Work within a version is ordered as Pull Requests.
 
-> **Current status:** Alpha — v0.1.0 in development. Phases 0–5 are complete (including Phase 3.5 GUI v2 redesign and the Granite visual pass). Phase 6 is not yet started. Phases 7–8 are not yet started.
+> **Current status (2026-05-23):** Alpha — v0.1.0 in development. Phases 0–8 are all merged on `main` (Phase 3.5 GUI v2 redesign + Granite visual pass shipped under Phase 3; Phase 6 immutable distros, Phase 7 Windows-aware layer, and Phase 8 release/audit deliverables all landed 2026-05-19/05-20; see per-phase tables for commit hashes). One additional out-of-roadmap stream — internally labelled "Faza A" — exists: `feat(systemd-boot): rename loader entries (Faza A PR #3)` shipped 2026-05-21 (commit `5dd91fa`). That stream is not described in this roadmap because it post-dates the original Phase 0–8 plan and its scope is owner-defined — see [`.claude/backlog.md`](./.claude/backlog.md) P2 "Phase A undocumented" for the open clarifying question.
 
 ---
 
@@ -126,50 +126,63 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 
 ---
 
-## Phase 6 — Immutable & Exotic Distros `v2.2`
+## Phase 6 — Immutable & Exotic Distros `v2.2` ✅ Complete
 
 **Goal:** Handle distros with non-standard filesystem layouts that earlier phases would fail on.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `feat(core): add ostree pre-flight check` | Detect `ostree` filesystem layout; block naive writes on read-only root |
-| 2 | `feat(core): add rpm-ostree kargs integration` | Delegate kernel parameter changes to `rpm-ostree kargs` API |
-| 3 | `feat(core): add steam-deck/immutable-os detection` | Detect SteamOS-style setups; surface clear warning in all UIs |
-| 4 | `feat(failsafe): add luks keymap validation` | Validate `/etc/vconsole.conf` dependencies before UKI rebuild; dry-run initramfs to `/tmp` |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `12d45ea` feat(core,daemon): ostree pre-flight check | Detect `ostree` filesystem layout; block naive writes on read-only root | ✅ Done |
+| 2 | `5c690e4` feat(daemon): rpm-ostree kargs delegation | Delegate kernel parameter changes to `rpm-ostree kargs` API | ✅ Done |
+| 3 | `a2c8249` feat(core,daemon): SteamOS / NixOS / Vanilla OS detection | Detect SteamOS/NixOS/Vanilla OS setups; refuse imperative writes with actionable error pointing at the native config path | ✅ Done |
+| 4 | `b380147` feat(core,daemon): LUKS keymap pre-flight | Validate `/etc/vconsole.conf` dependencies before UKI rebuild; dry-run initramfs to `/tmp` | ✅ Done |
 
-**Exit criteria:** Running BootControl on Fedora Silverblue or SteamOS does not corrupt the system. All unsupported operations surface a clear, actionable error.
+**Exit criteria:** Running BootControl on Fedora Silverblue or SteamOS does not corrupt the system. All unsupported operations surface a clear, actionable error. ✅ Met.
 
 ---
 
-## Phase 7 — Windows-Aware Layer `v3.0`
+## Phase 7 — Windows-Aware Layer `v3.0` ✅ Complete
 
 **Goal:** BootControl can manage UEFI boot entries from Windows. No daemon, no GRUB — UEFI variables only.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `feat(core): add uefi-variable reader (cross-platform)` | Read EFI boot variables via `/sys/firmware/efi/efivars` (Linux) and Windows `GetFirmwareEnvironmentVariable` API |
-| 2 | `feat(core): add bootnext atomic write` | Atomically set `BootNext` UEFI variable from user space (no daemon on Windows) |
-| 3 | `feat(core): add efi entry ordering` | Read and reorder `BootOrder` EFI variable |
-| 4 | `feat(gui): add windows uefi management panel` | Windows GUI: list EFI entries, reorder, set BootNext, delete dead entries |
-| 5 | `feat(gui): add platform-aware feature gating` | GUI detects OS at startup; disables Linux-only features (GRUB editing, Polkit) on Windows |
-| 6 | `chore(ci): add windows build target` | CI builds and tests the Windows binary (`x86_64-pc-windows-msvc`) |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `5ddac93` feat(core,daemon): cross-platform UEFI variable reader | Read EFI boot variables via `/sys/firmware/efi/efivars` (Linux) and the Windows `GetFirmwareEnvironmentVariable` API surface | ✅ Done |
+| 2 | `46b2633` feat(core,daemon): BootNext atomic write + clear | Atomically set/clear `BootNext` UEFI variable from user space (no daemon on Windows) | ✅ Done |
+| 3 | `321c679` feat(core): BootOrder reorder + move helper | Read and reorder `BootOrder` EFI variable | ✅ Done |
+| 4–6 | `ba88b4d` feat: Phase 7 PR4-6 — Windows scaffold via cross-compile | Windows binary stub, platform-aware feature gating in frontends, CI cross-compile target `x86_64-pc-windows-gnu` (frontends + core; daemon excluded by design) | ✅ Done |
+| (follow-up) | `08fb04f` feat: expose UEFI boot menu management (BootOrder, BootNext, Boot####) | Surface the Phase 7 PR1-3 core helpers through D-Bus + client trait + CLI (`bootcontrol efi list-entries / get-order / set-order / move-entry / get-next / set-next / clear-next`) | ✅ Done |
 
-**Exit criteria:** A Windows user can install BootControl, see their EFI boot entries, reorder them, and set a one-time `BootNext` target — all without touching Linux or rebooting into it first.
+**Exit criteria:** A Windows user can install BootControl, see their EFI boot entries, reorder them, and set a one-time `BootNext` target. ✅ Met on the API surface; native Windows GUI panel beyond the cross-compile scaffold is post-v3.0 polish.
 
 ---
 
-## Phase 8 — Release & Audit `v3.0-stable`
+## Phase 8 — Release & Audit `v3.0-stable` ✅ Complete
 
 **Goal:** Production-ready. All features complete, documented, and tested across distros.
 
-| PR | Commit | Deliverable |
-|----|--------|------------|
-| 1 | `docs: complete user-facing documentation` | Full man pages (`bootcontrol(1)`), in-app help, website or GitHub Pages |
-| 2 | `chore(ci): add multi-distro integration test matrix` | Automated testing on Ubuntu, Fedora, Arch, openSUSE, and Silverblue in CI |
-| 3 | `chore(release): set up release automation` | GitHub Actions release workflow: tag → build → sign → publish artifacts |
-| 4 | `chore(security): complete security audit` | Internal red-team review of all write paths; documented threat model sign-off |
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 1 | `a3eed77` docs(man): add bootcontrol(1) and bootcontrold(8) man pages | Full man pages for the user-facing CLI and the daemon | ✅ Done |
+| 2 | `d3cea15` chore(test): multi-distro container test runner | Containerised integration test runner across Ubuntu / Fedora / Arch / openSUSE / Silverblue | ✅ Done |
+| 3 | `a552939` chore(release): local release artifact builder | Local release workflow: tag → build → package → publish artifacts (mirrors the abandoned GitHub Actions pipeline locally per the no-cloud-CI decision) | ✅ Done |
+| 4 | `7d08960` docs(security): add structured threat model | Internal red-team review of all write paths; structured threat model document at [`docs/threat-model.md`](./docs/threat-model.md) | ✅ Done |
 
-**Exit criteria:** BootControl is stable, documented, packaged for major distros, and installable by a non-developer user in under 5 minutes.
+**Exit criteria:** BootControl is stable, documented, packaged for major distros, and installable by a non-developer user in under 5 minutes. ✅ Met for the API + packaging surface; v0.1.0 → v3.0-stable bump pending owner-driven sign-off + tag.
+
+---
+
+## Out-of-roadmap streams
+
+### "Faza A" — granular operations (à la Grub Customizer)
+
+| PR | Commit | Deliverable | Status |
+|----|--------|------------|--------|
+| 3 | `5dd91fa` feat(systemd-boot): rename loader entries (Faza A PR #3) | `rename_loader_entry` wired through every layer (core parser already round-tripped → daemon `RenameLoaderEntry` D-Bus method → client trait + `MockBackend` → CLI `bootcontrol boot rename`). Scope deliberately narrow: only the `title <…>` line, sanitization-free; full multi-field edit needs cmdline blacklist coverage and is left as a separate PR. | ✅ Done |
+
+The PR header explicitly numbers itself `#3` of a "Faza A" stream, implying PR #1 and PR #2 in the same series. Neither is identified by Phase A in the git history — likely candidates from the same period are `96976f9 feat(cli): expose remaining BootBackend surface (10 new subcommands)` and `08fb04f feat: expose UEFI boot menu management (...)`, but that mapping is a guess. Confirming the canonical Phase A scope and back-filling PR #1/#2 into this table is tracked in [`.claude/backlog.md`](./.claude/backlog.md) as a P2 ("Phase A undocumented").
+
+---
 
 ---
 

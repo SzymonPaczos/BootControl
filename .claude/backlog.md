@@ -27,13 +27,22 @@ _(brak otwartych — P1.1 zamknięte follow-up commitem 2026-05-23, patrz `audit
 
 ## P2 — porządkowe
 
-### ROADMAP top vs tabele per-PR — drift
-Top sekcji w [`ROADMAP.md`](../ROADMAP.md):1-7 mówi *"Phase 6 is not yet started. Phases 7–8 are not yet started"*, ale tabele wewnątrz mają PR-y z `Status: ✅ Done` (Phase 6 PR1–4, Phase 7 PR1–6, Phase 8 PR1–4). Drift = nowy agent zaczynający sesję dostaje sprzeczne sygnały. Trzeba zaktualizować nagłówek + dodać agregaty "✅ Complete" / "🚧 In progress" do Phase 6/7/8 albo cofnąć tabele do stanu zgodnego z top.
-**Źródło:** pre-adopcja, diff `git log` vs `ROADMAP.md`. **Status:** otwarte.
+<!-- ROADMAP drift closed 2026-05-23 follow-up: top header now reflects
+     Phases 0–8 ✅ Complete with the right commit hashes, plus a
+     dedicated "Out-of-roadmap streams" section for Faza A. -->
 
-### "Faza A PR #3" niewidoczna w ROADMAP
-Commit `5dd91fa feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)` nie pasuje do żadnej Phase w [`ROADMAP.md`](../ROADMAP.md). Wygląda na nowy strumień prac ("Faza A"). Albo dopisać sekcję do ROADMAP, albo wyjaśnić w commit message / przesunąć do istniejącej Phase.
-**Źródło:** pre-adopcja, `git log --grep="Faza A"`. **Status:** czeka na decyzję właściciela co to za faza.
+
+### "Faza A" — undocumented stream, PR #1/#2 mapping unclear
+ROADMAP.md teraz ma sekcję "Out-of-roadmap streams" → "Faza A" z PR #3 (commit `5dd91fa`). Otwarte pytania właścicielskie:
+1. Czy "Faza A" to canonical name dla strumienia "granular operations à la Grub Customizer"?
+2. PR #3 implikuje istnienie PR #1 i PR #2. Czy to:
+   - `96976f9 feat(cli): expose remaining BootBackend surface (10 new subcommands)` — może PR #1?
+   - `08fb04f feat: expose UEFI boot menu management (BootOrder, BootNext, Boot####)` — może PR #2? (Ale to wygląda na Phase 7 follow-up)
+   - czy PR #1/#2 jeszcze nie były i są planowane?
+3. Jeśli Faza A jest aktywnym strumieniem, jaki jest jego zakres (lista następnych PR-ów)?
+
+Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md, plus dopisać jasny "Goal:" + "Exit criteria:" jak inne Phase'y.
+**Źródło:** pre-adopcja + audit 2026-05-23 P2.4. **Status:** czeka na decyzję właściciela.
 
 ### AGENT.md §VI vs ARCHITECTURE §II — Polkit Action ID drift
 [`AGENT.md`](../AGENT.md):160 wymienia jako single `org.bootcontrol.manage`, ale [`ARCHITECTURE.md`](../ARCHITECTURE.md):51 i [`docs/GUI_V2_SPEC_v2.md`](../docs/GUI_V2_SPEC_v2.md) §7 mają **5 per-intent actions** (`rewrite-grub`, `write-bootloader`, `enroll-mok`, `generate-keys`, `replace-pk`) i `manage` deprecated. Zsynchronizować AGENT.md z architekturą — usunąć wpis `manage` z tabeli §VI albo dodać przypis "deprecated, see ARCHITECTURE.md §II".
@@ -43,9 +52,10 @@ Commit `5dd91fa feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)` 
 [`docs/GUI_V2_SPEC.md`](../docs/GUI_V2_SPEC.md) (v1, 77kB) i [`docs/red-team/`](../docs/red-team/) (4 raporty, ~200 cytatów `GUI_V2_SPEC.md:LINE`) tworzą jeden pakiet dyskusyjny wchłonięty przez v2. Aktualnie v1 ma banner-deprecation w docs/. Przy następnej rundzie porządkowej: `git mv` pakietu do `.claude/history/2026-05-01-gui-v2-redesign/` jako jednego folderu — wewnątrz linki względne `GUI_V2_SPEC.md:LINE` nadal działają, a `docs/` przestaje hostować materiał historyczny.
 **Źródło:** decyzja 2026-05-23 (rules/decisions.md). **Status:** otwarte, future cleanup.
 
-### Phase 6/7/8 brak agregatu statusu na poziomie Phase
-W [`ROADMAP.md`](../ROADMAP.md) Phase 0–5 + 3.5 mają nagłówek `✅ Complete`. Phase 6/7/8 nagłówki bez markeru, mimo że tabele wewnątrz mają PR-y `Status: ✅ Done`. Dopisać `✅ Complete` / `🚧 In progress` po nazwie wersji w nagłówku każdej Phase, spójnie.
-**Źródło:** pre-adopcja, czytanie ROADMAP linijka po linijce. **Status:** otwarte.
+<!-- Phase 6/7/8 nagłówki closed 2026-05-23 follow-up:
+     wszystkie trzy Phase mają teraz ` ✅ Complete` w nagłówku
+     i pełne tabele PR-ów z commit hashami. -->
+
 
 ### ABOUT.md — sprawdzić czy ma sens
 Plik [`ABOUT.md`](../ABOUT.md) (195B, 1 paragraf) wygląda na zalążek nieukończony. Albo rozbudować, albo skasować i fold do README.md.
