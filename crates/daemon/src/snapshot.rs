@@ -392,10 +392,14 @@ mod tests {
     }
 
     fn req<'a>(root: &'a Path, op: &'a str, files: &'a [PathBuf]) -> SnapshotRequest<'a> {
+        // Use a real per-intent action from polkit::actions so test fixtures
+        // never carry a fake `org.bootcontrol.test` ID that has no counterpart
+        // in packaging/polkit/org.bootcontrol.policy. Snapshot tests
+        // simulate the GRUB rewrite path, so REWRITE_GRUB is the natural pick.
         SnapshotRequest {
             root,
             op,
-            polkit_action: "org.bootcontrol.test",
+            polkit_action: crate::polkit::actions::REWRITE_GRUB,
             caller_uid: 1000,
             etag_before: "deadbeef",
             files,

@@ -51,9 +51,10 @@ W [`ROADMAP.md`](../ROADMAP.md) Phase 0–5 + 3.5 mają nagłówek `✅ Complete
 Plik [`ABOUT.md`](../ABOUT.md) (195B, 1 paragraf) wygląda na zalążek nieukończony. Albo rozbudować, albo skasować i fold do README.md.
 **Źródło:** pre-adopcja, inwentaryzacja top-level docs. **Status:** otwarte, niski priorytet.
 
-### `snapshot.rs:398` literal `"org.bootcontrol.test"` poza policy file
-[`crates/daemon/src/snapshot.rs:398`](../crates/daemon/src/snapshot.rs#L398) używa string `"org.bootcontrol.test"` jako `polkit_action` field. Nieobecne w policy. Wygląda na test fixture (`#[cfg(test)]` mod). Albo przenieść do `const TEST_POLKIT_ACTION` w `mod tests`, albo dorzucić do policy.
-**Źródło:** audyt 2026-05-23 P2.2. **Status:** otwarte (kosmetyka).
+<!-- P2.2 closed 2026-05-23: snapshot test fixture now uses
+     polkit::actions::REWRITE_GRUB (real per-intent ID from policy file)
+     instead of fake "org.bootcontrol.test" literal -->
+
 
 ## Czeka na decyzję właściciela
 
