@@ -142,15 +142,22 @@ BOOTCONTROL_DEMO=1 cargo run -p bootcontrol -- get GRUB_TIMEOUT
 ### Run tests
 
 There is **no cloud CI** for this repo — every check runs locally and is
-gated by a pre-push git hook. After cloning, opt the hook in:
+gated by two git hooks in [`.githooks/`](./.githooks/):
+
+- **pre-commit** — fast fmt + clippy gate on every `git commit` (~10 s).
+- **pre-push** — full [`scripts/ci-local.sh`](./scripts/ci-local.sh)
+  on every `git push` (fmt + clippy + workspace tests + Windows
+  cross-compile + E2E session-bus tests).
+
+After cloning, opt the hooks in:
 
 ```bash
-./scripts/install-hooks.sh    # one-time per clone
-./scripts/ci-local.sh         # runs fmt + clippy + unit tests + E2E session-bus tests
+./scripts/install-hooks.sh    # one-time per clone — wires both hooks
+./scripts/ci-local.sh         # runs the full pre-push pipeline on demand
 ```
 
-`git push` is rejected if `ci-local.sh` fails. Use `git push --no-verify`
-to bypass on WIP branches.
+`git commit` / `git push` is rejected if the respective hook fails. Use
+`--no-verify` on the corresponding git command to bypass on WIP branches.
 
 Cross-distro check (requires `podman` or `docker` on the host):
 

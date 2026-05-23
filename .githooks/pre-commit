@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Pre-commit hook: fast static checks before each commit.
+#
+# Gates `git commit` on cargo fmt (must be clean) and cargo clippy
+# (must be zero warnings with `-D warnings`). Both are workspace-wide
+# but skip `--all-features`, so the cycle time is ~5–10 s incremental
+# / ~30 s cold. The slower full pipeline (`scripts/ci-local.sh`) still
+# runs in pre-push — pre-commit is the shorter feedback loop that
+# catches obvious mistakes before they have to be pushed.
+#
+# Bypass (use sparingly — e.g. work-in-progress commit you know is dirty):
+#   git commit --no-verify
+#
+# Install once per clone via `./scripts/install-hooks.sh` (same flow as
+# pre-push); this hook is picked up automatically once core.hooksPath
+# points at .githooks/.
+
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# Cargo on the user PATH; reuse the same source as ci-local.sh so a
+# fresh shell still works.
+if [ -f "$HOME/.cargo/env" ]; then
+    # shellcheck disable=SC1091
+    source "$HOME/.cargo/env"
+fi
+
+if ! command -v cargo > /dev/null; then
+    echo "pre-commit: cargo not found on PATH. Install rustup or skip with --no-verify." >&2
+    exit 1
+fi
+
+step() {
+    echo "==> $*"
+}
+
+step "1/2  cargo fmt --all -- --check"
+if ! cargo fmt --all -- --check; then
+    echo >&2
+    echo "pre-commit: cargo fmt is dirty. Run 'cargo fmt --all' and re-commit." >&2
+    exit 1
+fi
+
+# `--all-targets` covers lib + bins + tests + examples + benches. Skipping
+# `--all-features` keeps the hook fast for the common path; the full
+# `--all-features` pass runs in pre-push via ci-local.sh.
+step "2/2  cargo clippy --workspace --all-targets -- -D warnings"
+if ! cargo clippy --workspace --all-targets -- -D warnings; then
+    echo >&2
+    echo "pre-commit: clippy emitted warnings (treated as errors). Fix them and re-commit." >&2
+    exit 1
+fi
+
+echo
+echo "pre-commit: fmt + clippy clean."
+exit 0

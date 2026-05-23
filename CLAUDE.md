@@ -46,14 +46,22 @@ Frontends never bypass `client` to reach the daemon. The daemon never imports fr
 ## Canonical commands
 
 There is **no cloud CI** — all checks run locally. The full pipeline lives
-in [`scripts/ci-local.sh`](./scripts/ci-local.sh) and is enforced by a
-pre-push git hook ([`.githooks/pre-push`](./.githooks/pre-push)). New
-clones must opt into the hook once:
+in [`scripts/ci-local.sh`](./scripts/ci-local.sh) and is enforced by two
+git hooks shipped in [`.githooks/`](./.githooks/):
+
+| Hook | Triggers on | Runs | Cycle time |
+|------|-------------|------|------------|
+| [`pre-commit`](./.githooks/pre-commit) | `git commit` | `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` (no `--all-features`) | ~10 s cold / few s incremental |
+| [`pre-push`](./.githooks/pre-push) | `git push` | `scripts/ci-local.sh` (fmt + clippy `--all-features` + workspace tests + Windows cross-compile + E2E session bus) | ~2–5 min |
+
+New clones must opt the hooks in once:
 
 ```bash
 ./scripts/install-hooks.sh   # one-time, per clone — sets core.hooksPath
 ./scripts/ci-local.sh        # run on demand; pre-push runs it automatically
 ```
+
+Bypass either hook with `--no-verify` on the corresponding git command — use sparingly.
 
 Individual canonical commands (also what `ci-local.sh` invokes):
 
