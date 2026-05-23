@@ -1,3 +1,39 @@
+//! D-Bus adapter + `MockBackend` for the BootControl daemon.
+//!
+//! Frontends (`crates/cli`, `crates/tui`, `crates/gui`) talk to this crate
+//! and never touch `bootcontrold` directly — that boundary is enforced by
+//! `audit.sh` and one of the active decisions in
+//! `.claude/rules/decisions.md` (2026-05-03 "Frontendy nie omijają
+//! client"). The crate exports three layers:
+//!
+//! - **Wire DTOs** ([`LoaderEntryDto`], [`EfiBootEntryDto`],
+//!   [`SnapshotInfoDto`]) — owned by the client so the JSON-over-D-Bus
+//!   shape is one place, serde-round-trippable, no `core` leakage.
+//! - **[`BootBackend`] trait** — async, object-safe via `async_trait`.
+//!   Concrete implementations live in this crate ([`DbusBackend`],
+//!   [`MockBackend`]) so frontends only `Arc<dyn BootBackend>`.
+//! - **Connection helpers** ([`connect_bus`], [`resolve_backend`],
+//!   [`dbus_error_message`]) — the three free functions every frontend
+//!   needs at startup.
+//!
+//! # Examples
+//!
+//! End-to-end client usage with [`MockBackend`] (no daemon, no bus —
+//! demonstrates the wiring used by Demo Mode and every doctest below):
+//!
+//! ```
+//! use bootcontrol_client::{BootBackend, MockBackend};
+//!
+//! # async fn run() -> zbus::Result<()> {
+//! let backend = MockBackend;
+//! let (config, etag) = backend.read_config().await?;
+//! assert!(config.contains_key("GRUB_TIMEOUT"));
+//! assert!(!etag.is_empty());
+//! # Ok(())
+//! # }
+//! # tokio::runtime::Runtime::new().unwrap().block_on(run()).unwrap();
+//! ```
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -11,6 +47,29 @@ use zbus::{proxy, Connection};
 ///
 /// `id` is the filename stem (e.g. `"arch"` for `arch.conf`).
 /// `etag` is the SHA-256 of that specific file.
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_client::LoaderEntryDto;
+///
+/// let entry = LoaderEntryDto {
+///     id: "arch".to_string(),
+///     title: Some("Arch Linux".to_string()),
+///     linux: Some("/vmlinuz-linux".to_string()),
+///     initrd: Some("/initramfs-linux.img".to_string()),
+///     options: Some("root=/dev/sda1 rw".to_string()),
+///     machine_id: None,
+///     etag: "deadbeef".to_string(),
+///     is_default: true,
+/// };
+///
+/// // DTO is serde-round-trippable so it can cross the D-Bus boundary
+/// // as a JSON-encoded `s` argument.
+/// let json = serde_json::to_string(&entry).unwrap();
+/// let back: LoaderEntryDto = serde_json::from_str(&json).unwrap();
+/// assert_eq!(entry, back);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LoaderEntryDto {
     /// Filename stem (e.g. `"arch"`).
@@ -42,6 +101,24 @@ pub struct LoaderEntryDto {
 /// DTO so the wire format is owned by the client crate (the daemon
 /// serialises a `Vec<EfiBootEntryDto>` to JSON and ships it as a single
 /// string D-Bus method return; the client deserialises the same shape).
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_client::EfiBootEntryDto;
+///
+/// let entry = EfiBootEntryDto {
+///     index: 0x0001,
+///     active: true,
+///     hidden: false,
+///     description: "Windows Boot Manager".to_string(),
+/// };
+///
+/// // Round-trip through JSON the way the daemon ships it on the wire.
+/// let json = serde_json::to_string(&entry).unwrap();
+/// let back: EfiBootEntryDto = serde_json::from_str(&json).unwrap();
+/// assert_eq!(entry, back);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EfiBootEntryDto {
     /// Hex index from the variable name (e.g. `1` for `Boot0001`).
@@ -55,6 +132,34 @@ pub struct EfiBootEntryDto {
     pub description: String,
 }
 
+/// A snapshot row as returned by `ListSnapshots`.
+///
+/// Mirrors the on-disk manifest summary fields. The full manifest stays
+/// in `/var/lib/bootcontrol/snapshots/<id>/manifest.json` and is read by
+/// the daemon only when a snapshot is actually restored.
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_client::SnapshotInfoDto;
+///
+/// let info = SnapshotInfoDto {
+///     id: "2026-04-30T130211Z-set_grub_value".to_string(),
+///     op: "set_grub_value".to_string(),
+///     ts: "2026-04-30T13:02:11Z".to_string(),
+///     audit_job_id: "deadbeef-...".to_string(),
+/// };
+///
+/// let json = serde_json::to_string(&info).unwrap();
+/// let back: SnapshotInfoDto = serde_json::from_str(&json).unwrap();
+/// assert_eq!(info, back);
+///
+/// // `audit_job_id` defaults to "" for snapshots created before the field
+/// // was introduced — see `#[serde(default)]` on the field.
+/// let legacy_json = r#"{"id":"x","op":"y","ts":"z"}"#;
+/// let legacy: SnapshotInfoDto = serde_json::from_str(legacy_json).unwrap();
+/// assert_eq!(legacy.audit_job_id, "");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SnapshotInfoDto {
     /// Filesystem-safe snapshot id (e.g. `2026-04-30T130211Z-set_grub_value`).
@@ -184,7 +289,30 @@ pub trait Manager {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Abstract interface for BootControl operations.
-/// This allows us to swap between a real D-Bus connection and mock data (Demo Mode).
+///
+/// Object-safe via [`async_trait`], so frontends carry an
+/// `Arc<dyn BootBackend>` and never spell out the concrete type. The two
+/// implementations shipped by this crate are [`DbusBackend`] (production —
+/// proxies every call through `org.bootcontrol.Manager`) and
+/// [`MockBackend`] (Demo Mode — returns plausible static data).
+///
+/// Frontends pick one via [`resolve_backend`] at startup; tests
+/// instantiate [`MockBackend`] directly.
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_client::{BootBackend, MockBackend};
+///
+/// # async fn run() -> zbus::Result<()> {
+/// let backend: &dyn BootBackend = &MockBackend;
+/// let backend_name = backend.get_active_backend().await?;
+/// // MockBackend identifies itself so frontends can render "Demo Mode" hints.
+/// assert!(backend_name.contains("mock"));
+/// # Ok(())
+/// # }
+/// # tokio::runtime::Runtime::new().unwrap().block_on(run()).unwrap();
+/// ```
 #[async_trait]
 pub trait BootBackend: Send + Sync {
     // ── GRUB ──────────────────────────────────────────────────────────────────
@@ -628,6 +756,30 @@ impl BootBackend for MockBackend {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Connect to the appropriate D-Bus bus based on environment or platform.
+///
+/// Picks the **session bus** when `BOOTCONTROL_BUS=session` is set
+/// (used by E2E tests and the `dbus-run-session` CI helper), otherwise
+/// connects to the **system bus** (production layout where `bootcontrold`
+/// listens on the system D-Bus).
+///
+/// # Errors
+///
+/// Surfaces the underlying [`zbus::Error`] from the bus connection attempt
+/// — typically `Connection::system().await` failures (bus not running,
+/// permission denied, missing address env var).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use bootcontrol_client::connect_bus;
+/// # async fn run() -> zbus::Result<()> {
+/// // Real usage requires a live D-Bus session; flagged `no_run` so doctests
+/// // still compile and link inside `cargo test --doc` on hosts without one.
+/// let conn = connect_bus().await?;
+/// drop(conn);
+/// # Ok(())
+/// # }
+/// ```
 pub async fn connect_bus() -> zbus::Result<Connection> {
     match std::env::var("BOOTCONTROL_BUS").as_deref() {
         Ok("session") => Connection::session().await,
@@ -635,7 +787,33 @@ pub async fn connect_bus() -> zbus::Result<Connection> {
     }
 }
 
-/// Resolve the correct backend based on environment variables and platform.
+/// Resolve the correct [`BootBackend`] implementation for the current host.
+///
+/// Decision matrix:
+///
+/// | `BOOTCONTROL_DEMO` set | host OS  | result            |
+/// |------------------------|----------|-------------------|
+/// | yes                    | any      | [`MockBackend`]   |
+/// | no                     | non-Linux| [`MockBackend`]   |
+/// | no                     | Linux    | [`DbusBackend`] if bus connection succeeds, else [`MockBackend`] (graceful fallback for macOS dev / no-daemon environments) |
+///
+/// Never panics, never returns `Result` — the worst case is a silent
+/// downgrade to `MockBackend` so frontends always have *something* to
+/// render. The fallback path on `connect_bus` failure is intentional
+/// (Demo Mode behaviour on Linux without the daemon installed).
+///
+/// # Examples
+///
+/// ```no_run
+/// # use bootcontrol_client::resolve_backend;
+/// # async fn run() {
+/// // `BOOTCONTROL_DEMO=1` forces MockBackend regardless of platform.
+/// std::env::set_var("BOOTCONTROL_DEMO", "1");
+/// let backend = resolve_backend().await;
+/// // Use `backend.read_config().await` like any other BootBackend.
+/// let _ = backend;
+/// # }
+/// ```
 pub async fn resolve_backend() -> std::sync::Arc<dyn BootBackend> {
     let is_demo = std::env::var("BOOTCONTROL_DEMO").is_ok();
     let target_os = std::env::consts::OS;
@@ -651,6 +829,28 @@ pub async fn resolve_backend() -> std::sync::Arc<dyn BootBackend> {
 }
 
 /// Extract a human-readable string from a [`zbus::Error`].
+///
+/// For [`zbus::Error::MethodError`] this strips the
+/// `org.bootcontrol.Error.` namespace prefix so the UI shows the short
+/// variant name (`StateMismatch` instead of
+/// `org.bootcontrol.Error.StateMismatch`) and appends the detail string
+/// when it is non-empty. For any other variant of `zbus::Error` it falls
+/// back to the default `Display` impl.
+///
+/// This is the **only** place frontends should turn a `zbus::Error` into a
+/// user-facing string — the daemon contract is that the error name is the
+/// machine-readable part and the detail is human-readable, never the other
+/// way around (see `ARCHITECTURE.md` §II "D-Bus Error Convention").
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_client::dbus_error_message;
+///
+/// // Plain zbus errors round-trip through their Display impl.
+/// let err = zbus::Error::Address("not a valid bus".into());
+/// assert!(dbus_error_message(&err).contains("not a valid bus"));
+/// ```
 pub fn dbus_error_message(e: &zbus::Error) -> String {
     if let zbus::Error::MethodError(name, detail, _) = e {
         let short_name = name
