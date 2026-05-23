@@ -62,18 +62,38 @@ fi
 add ""
 
 # === 4. unwrap/expect/panic budgets per crate =================================
-add "### \`unwrap\` / \`expect\` / \`panic!\` w production (poza testami)"
+# Zlicza wystąpienia TYLKO w kodzie produkcyjnym: pomija linie po pierwszym
+# `^#[cfg(test)]` / `^mod tests` w pliku (inline mod tests) i pomija linie
+# zaczynające się `^/// ` (doctesty — wykonywane przez `cargo test --doc`,
+# więc to też test code per decyzji "Doctests are integration tests").
+add "### \`unwrap\` / \`expect\` / \`panic!\` w production (poza mod tests i doctestach)"
 add ""
 add "| Crate | unwrap | expect | panic! | Budżet |"
 add "|-------|--------|--------|--------|--------|"
+count_in_production() {
+    # $1 = ERE pattern, $2 = src_dir
+    local pattern="$1"; local src_dir="$2"; local total=0; local n
+    for f in $(find "$src_dir" -name "*.rs" 2>/dev/null); do
+        local boundary
+        boundary=$(grep -nE "^#\[cfg\(test\)\]|^mod tests\b" "$f" 2>/dev/null | head -1 | cut -d: -f1)
+        if [ -z "$boundary" ]; then
+            boundary=$(($(wc -l < "$f") + 1))
+        fi
+        # Linie < boundary (production scope) z pominięciem doctest comments
+        n=$(awk -v b="$boundary" 'NR < b && $0 !~ /^[[:space:]]*\/\/\//' "$f" 2>/dev/null \
+            | grep -cE "$pattern" 2>/dev/null || echo 0)
+        total=$((total + n))
+    done
+    echo "$total"
+}
 for c in $CRATES; do
     SRC_DIR="crates/$c/src"
     [ -d "$SRC_DIR" ] || continue
-    # Tylko src/, bez tests/. Wyklucz pliki .rs w katalogach tests/.
-    UNWRAP=$(grep -rEho "\.unwrap\(\)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
-    EXPECT=$(grep -rEho "\.expect\(" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
-    PANIC=$(grep -rEho "panic!\(" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
-    # Budżety per decisions.md (2026-05-03 unwrap banned). Core/daemon strict, frontend mniej rygorystyczne.
+    UNWRAP=$(count_in_production "\.unwrap\(\)" "$SRC_DIR")
+    EXPECT=$(count_in_production "\.expect\(" "$SRC_DIR")
+    PANIC=$(count_in_production "panic!\(" "$SRC_DIR")
+    # Budżety per decisions.md (2026-05-03 unwrap banned). Core/daemon strict,
+    # frontend mniej rygorystyczne. Doctesty i mod tests już odfiltrowane.
     case "$c" in
         core|daemon) BUDGET="0/0/0 (strict)" ;;
         client) BUDGET="≤2/≤2/0" ;;
