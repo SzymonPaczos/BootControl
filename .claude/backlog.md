@@ -28,6 +28,17 @@ _(brak otwartych)_
 
 ## P2 — porządkowe
 
+### `crates/gui-spike` — historyczny verification crate, kandydat na archiwizację
+[`crates/gui-spike/`](../crates/gui-spike/) został utworzony jako Phase 3.5 PR 0 ([commit `ef0aec2`](https://github.com/SzymonPaczos/BootControl/commit/ef0aec2) — *"chore(gui): slint a11y framework verification spike (PR 0)"*). Crate sam siebie deklaruje *"This crate is not shipped — it exists only to answer 'does Slint do X?' before PR 1 begins."* Wyniki zapisane w [`docs/slint-a11y-findings.md`](../docs/slint-a11y-findings.md); Phase 3.5 dawno zamknięta.
+
+Status obecny: 7 binarek (q1_modal_dialog…q7_global_override) wciąż wbudowywanych jako część workspace (`cargo build --workspace` go kompiluje), nikt z `crates/` go nie importuje. Każde `cargo test --workspace` doliczają jego 0 testów. Wybór właściciela:
+- (a) Zostawić jako żywy pomocniczy crate na wypadek przyszłych Slint a11y pytań — bez zmiany.
+- (b) `git rm -r crates/gui-spike` + usunięcie z `[workspace] members` w `Cargo.toml`. Treść zachowana w gicie; `docs/slint-a11y-findings.md` referuje wyniki, nie sam kod.
+- (c) `git mv crates/gui-spike` → `.claude/history/2026-05-03-slint-a11y-spike/` + usunięcie z workspace. Kod archiwowany razem z findings.
+
+**Źródło:** inwentaryzacja 2026-05-23 po cleanup'ie GUI v1+red-team bundle. **Status:** czeka na decyzję właściciela.
+
+
 ### "Faza A" — undocumented stream, PR #1/#2 mapping unclear
 ROADMAP.md ma sekcję "Out-of-roadmap streams" → "Faza A" z PR #3 (commit `5dd91fa`). Otwarte pytania właścicielskie:
 1. Czy "Faza A" to canonical name dla strumienia "granular operations à la Grub Customizer"?
