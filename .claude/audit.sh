@@ -12,7 +12,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 LOG="$REPO_ROOT/.claude/audit-log.md"
-DATE="$(date '+%Y-%m-%d')"
+# Timestamp z minutą — żeby kilka runów tego samego dnia nie kolidowało
+# (każdy wpis ma unikalny nagłówek, log zachowuje chronologię).
+DATE="$(date '+%Y-%m-%d %H:%M')"
 section=""
 add() { section+="$1"$'\n'; }
 
@@ -72,6 +74,8 @@ add "| Crate | unwrap | expect | panic! | Budżet |"
 add "|-------|--------|--------|--------|--------|"
 count_in_production() {
     # $1 = ERE pattern, $2 = src_dir
+    # Używa `grep -E | wc -l` zamiast `grep -cE`, bo grep -c exit 1 na zero
+    # match w połączeniu z `set -o pipefail` daje multi-line garbage w $().
     local pattern="$1"; local src_dir="$2"; local total=0; local n
     for f in $(find "$src_dir" -name "*.rs" 2>/dev/null); do
         local boundary
@@ -81,8 +85,8 @@ count_in_production() {
         fi
         # Linie < boundary (production scope) z pominięciem doctest comments
         n=$(awk -v b="$boundary" 'NR < b && $0 !~ /^[[:space:]]*\/\/\//' "$f" 2>/dev/null \
-            | grep -cE "$pattern" 2>/dev/null || echo 0)
-        total=$((total + n))
+            | grep -E "$pattern" 2>/dev/null | wc -l | tr -d ' ')
+        total=$((total + ${n:-0}))
     done
     echo "$total"
 }
@@ -199,6 +203,74 @@ else
 fi
 add ""
 
+# === 11b. Regression guards — zamknięte audyty z 2026-05-23 ==================
+# Każda pozycja: greppem wykrywa dokładny pattern który był naprawiony.
+# Wpadka = regresja → audyt P0/P1 odbity.
+add "### Regression guards (zamknięte audyty)"
+GUARD_FAILS=""
+
+# P0.1 — żaden authorize_with_polkit nie może być wywołany bez `actions::`.
+NAKED_POLKIT=$(grep -rEn "authorize_with_polkit\(caller_uid\)\b[^,]" crates/daemon/src 2>/dev/null \
+    | grep -v "#\[" | wc -l | tr -d ' ')
+if [ "$NAKED_POLKIT" -eq 0 ]; then
+    add "- P0.1 per-intent Polkit: ✅ wszystkie wywołania mają action argument"
+else
+    add "- P0.1 per-intent Polkit: ❌ $NAKED_POLKIT naked \`authorize_with_polkit(uid)\` — regresja!"
+    GUARD_FAILS+="P0.1 "
+fi
+
+# P0.2 — rpm_ostree::kargs_append musi wywołać validate_kernel_param przed kargs_read.
+if [ -f crates/daemon/src/rpm_ostree.rs ]; then
+    if awk '/pub fn kargs_append/,/^}/' crates/daemon/src/rpm_ostree.rs \
+            | grep -q "validate_kernel_param"; then
+        add "- P0.2 sanitize rpm-ostree: ✅ \`kargs_append\` waliduje param"
+    else
+        add "- P0.2 sanitize rpm-ostree: ❌ \`kargs_append\` bez \`validate_kernel_param\` — regresja!"
+        GUARD_FAILS+="P0.2 "
+    fi
+fi
+
+# P1.1 — single blacklist: definicja KERNEL_CMDLINE_BLACKLIST tylko w core::security.
+BLACKLIST_DEFS=$(grep -rEln "(const|let)\s+(BLACKLISTED_PATTERNS|BLACKLISTED_PARAMS|KERNEL_CMDLINE_BLACKLIST)\s*:\s*&\[" crates/ 2>/dev/null \
+    | wc -l | tr -d ' ')
+if [ "$BLACKLIST_DEFS" -le 1 ]; then
+    add "- P1.1 single blacklist: ✅ $BLACKLIST_DEFS definicja (\`KERNEL_CMDLINE_BLACKLIST\` w \`core::security\`)"
+else
+    add "- P1.1 single blacklist: ❌ $BLACKLIST_DEFS definicji blacklisty — regresja, konsolidacja zniknęła!"
+    GUARD_FAILS+="P1.1 "
+fi
+
+# P1.2 — policy_check zaserwowany w main.rs przed serve_at.
+if grep -q "validate_policy_file" crates/daemon/src/main.rs 2>/dev/null; then
+    add "- P1.2 startup policy validation: ✅ \`validate_policy_file\` w main.rs"
+else
+    add "- P1.2 startup policy validation: ❌ brak \`validate_policy_file\` w main.rs — regresja!"
+    GUARD_FAILS+="P1.2 "
+fi
+
+# P2.1 — audit.sh `count_in_production` filtruje mod tests/doctesty.
+if grep -q "count_in_production" "$REPO_ROOT/.claude/audit.sh" 2>/dev/null; then
+    add "- P2.1 audit.sh filter: ✅ \`count_in_production\` aktywne"
+else
+    add "- P2.1 audit.sh filter: ❌ brak helper'a filtrującego — regresja!"
+    GUARD_FAILS+="P2.1 "
+fi
+
+# P2.2 — fake \"org.bootcontrol.test\" nie wraca jako literal poza policy/actions.
+FAKE_TEST_ACTION=$(grep -rEn '"org\.bootcontrol\.test"' crates/ 2>/dev/null | wc -l | tr -d ' ')
+if [ "$FAKE_TEST_ACTION" -eq 0 ]; then
+    add "- P2.2 no fake polkit action ID: ✅ \`\"org.bootcontrol.test\"\` nie istnieje"
+else
+    add "- P2.2 no fake polkit action ID: ❌ $FAKE_TEST_ACTION wystąpień — regresja!"
+    GUARD_FAILS+="P2.2 "
+fi
+
+if [ -n "$GUARD_FAILS" ]; then
+    add ""
+    add "**⚠ REGRESJA**: $GUARD_FAILS — patrz \`audit-log.md\` sekcje zamkniętych audytów; nie ignoruj."
+fi
+add ""
+
 # === 12. Pre-push hook =======================================================
 add "### Hooki gitowe"
 if [ -x .githooks/pre-push ]; then
@@ -252,13 +324,16 @@ if [ ! -f "$LOG" ]; then
 fi
 
 tmp="$(mktemp)"
-# Zachowaj header (do '---'), potem nowa sekcja, potem stare wpisy.
-awk '/^---$/ { print; print ""; getline; exit_header=1; }
-     { if (!exit_header) print }' "$LOG" > "$tmp"
+# Zachowaj header (do *pierwszej* `---`), potem nową sekcję, potem stare wpisy.
+# Kluczowe: tylko **pierwsza** `^---$` to koniec headera; każda kolejna to
+# wewnętrzny separator sekcji audytu — nie wolno go traktować jak header end.
+sed -n '1,/^---$/p' "$LOG" > "$tmp"
+echo "" >> "$tmp"
 echo "$section" >> "$tmp"
-awk 'BEGIN { in_header=1 }
-     in_header && /^---$/ { in_header=0; next }
-     !in_header { print }' "$LOG" >> "$tmp"
+# Wszystko PO pierwszej `---` w oryginalnym LOG (stare audyty).
+awk 'BEGIN{after_first=0}
+     after_first { print }
+     !after_first && /^---$/ { after_first=1 }' "$LOG" >> "$tmp"
 mv "$tmp" "$LOG"
 echo ""
 echo "Zapisano sekcję do: $LOG"
