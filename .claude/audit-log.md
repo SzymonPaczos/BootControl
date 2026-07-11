@@ -5,6 +5,209 @@ Pełna procedura: [`.claude/rules/audit.md`](rules/audit.md).
 
 ---
 
+## Audyt 2026-07-12 01:07
+
+_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
+
+### Toolchain
+- rustc: `rustc 1.93.0 (254b59607 2026-01-19)`
+- cargo: `cargo 1.93.0 (083ac5135 2025-12-15)`
+
+### Formatowanie
+- cargo fmt: ✅ czysto
+
+### Clippy (workspace, -D warnings)
+- clippy: ✅ 0 findings
+
+### `unwrap` / `expect` / `panic!` w production (poza mod tests i doctestach)
+
+| Crate | unwrap | expect | panic! | Budżet |
+|-------|--------|--------|--------|--------|
+| core | 0 | 1 | 0 | 0/0/0 (strict) |
+| daemon | 0 | 2 | 0 | 0/0/0 (strict) |
+| client | 2 | 0 | 0 | ≤2/≤2/0 |
+| cli | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| tui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| gui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+
+### TODO / FIXME / HACK / XXX w kodzie
+- łącznie wystąpień: **0** (w 0 plikach)
+
+### `unsafe` blocks
+
+| Crate | unsafe blocks |
+|-------|---------------|
+| core | 0 |
+| daemon | 2 |
+| client | 0 |
+| cli | 0 |
+| tui | 0 |
+| gui | 0 |
+
+_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._
+
+### Testy
+
+| Crate | #[test] | tests/ | doctest | min ratchet |
+|-------|---------|--------|---------|-------------|
+| core | 184 | 0 | 93 | 93 ✅ |
+| daemon | 174 | 0 | 85 | 85 ✅ |
+| client | 22 | 0 | 14 | 14 ✅ |
+| cli | 5 | 0 | 4 | 4 ✅ |
+| tui | 36 | 0 | 30 | 30 ✅ |
+| gui | 0 | 2 | 0 | 0 ✅ |
+
+### Swallowed errors (heurystyka — wymagają weryfikacji greppem)
+- heurystyczna liczba: 48. Każdy wpis → przejrzeć ręcznie (część bywa legalna: `let _ = drop(...)`).
+
+### Dead code / nieużywane deps
+- cargo-udeps: ❌ exec error (sprawdź toolchain nightly)
+
+### Rejestr decyzji (`.claude/rules/decisions.md`)
+- decyzje aktywne: 22
+- decyzje wycofane: 0
+
+### Inwariant: frontendy używają `bootcontrol-client`, nie `bootcontrol-daemon`
+- ✅ żaden frontend nie importuje daemon
+
+### Regression guards (zamknięte audyty)
+- P0.1 per-intent Polkit: ✅ wszystkie wywołania mają action argument
+- P0.2 sanitize rpm-ostree: ✅ `kargs_append` waliduje param
+- P1.1 single blacklist: ✅ 1 definicja (`KERNEL_CMDLINE_BLACKLIST` w `core::security`)
+- P1.2 startup policy validation: ✅ `validate_policy_file` w main.rs
+- P2.1 audit.sh filter: ✅ `count_in_production` aktywne
+- P2.2 no fake polkit action ID: ✅ `"org.bootcontrol.test"` nie istnieje
+
+### Faza A stream signal (informational)
+- commitów z "Faza A PR": 2
+- najnowszy: `e64dde8 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
+
+### Hooki gitowe
+- pre-push: ✅ obecny i executable
+
+### Trend audytów
+- poprzedni audyt: 2026-05-23 21:50
+- łącznie audytów: 5 (włącznie z tym)
+
+### Skille (`.claude/skills/`)
+- skills lokalnie: 1
+- skills w toolkit: 1 — refresh: `cd /Users/szymonpaczos/DevProjects/claude-toolkit && git pull`, potem skopiuj do `.claude/skills/`
+
+### Nagłówek dowodowy
+
+```text
+AUDITED_REVISION: aaa151a61f3fc2c8fc9102b3086d1c821ef8bc69
+DIFF_RANGE_OR_SCOPE: 770cf19..aaa151a (delta adopcji 2026-07-12) + standing surface (pierwszy Security Reviewer + Red Team run)
+PREVIOUS_AUDIT: 2026-05-23 21:50
+TOOLS: cargo 1.93.0, clippy 0 findings, .claude/audit.sh, git-filter-repo a40bce54; Security Reviewer + Red Team (Explore, read-only)
+EXCLUSIONS_OR_NA: SAST/CodeQL=n/a (brak konfiguracji), .github/workflows=n/a (brak cloud CI — decyzja 2026-05-20), grub-customizer/ i target/ wyłączone
+THREAT_MODEL_VERSION: ARCHITECTURE.md §II + docs/ threat-model (2026-05)
+SECURITY_REVIEW: PASS (2 NOTE, bez ścieżki eskalacji uprawnień)
+RED_TEAM: FINDINGS (1×MEDIUM, 2×LOW, 1 doc-drift) — pierwszy run
+BACKLOG_WRITE: recorded (P1: control-plane gate; P2: audit-evidence gate, cargo --locked+deny, polkit "5→6" drift, CLAUDE.md ROADMAP+fixture drift)
+```
+
+### Warstwa głęboka (osąd agenta)
+
+Kod Rust praktycznie niezmieniony od 2026-05-23 (1 commit doctestowy). Delta
+2026-07-12 to wyłącznie infra `.claude/` + hooki gitowe. Wszystkie 4 zamknięte
+findingi z 2026-05-23 (P0.1/P0.2/P1.1/P1.2) potwierdzone jako nadal intact.
+
+- **Bezpieczeństwo (Security Reviewer, verdict PASS):** 14 metod mutujących w
+  `interface.rs` — każda Polkit per-intent przed operacją dyskową, ETag+flock,
+  atomic rename; blacklista kernel cmdline pojedyncza (`core::security`); SB
+  offline (grep reqwest/curl/hyper czysty); 2 unsafe z komentarzem SAFETY:;
+  brak sekretów w repo. Dwa NOTE (bez przekroczenia granicy uprawnień):
+  - **NOTE-1:** `BackupNvram` (`interface.rs:734`→`nvram.rs:103`) pisze do
+    caller-supplied `target_dir` bez `O_NOFOLLOW`/`O_EXCL` — root podąża za
+    podłożonym symlinkiem `PK-<guid>.efivar` i truncuje cel. Treść NIE jest
+    kontrolowana przez atakującego (bajty własnego PK/KEK hosta), a wołający
+    ma `auth_admin` (root-equiv) → DoS, nie escalation. Fix: confine do
+    `/var/lib/bootcontrol/certs` + canonicalize, albo `O_EXCL|O_NOFOLLOW`.
+  - **NOTE-2:** komentarz w `packaging/polkit/org.bootcontrol.policy:7` mówi
+    „Five per-intent actions", plik deklaruje **6** (doszła `restore-snapshot`).
+    Zgodne z duchem decyzji 2026-05-03 (per-intent), ale komentarz + decyzja
+    w `decisions.md` nieaktualne. Bez wpływu runtime (enforced list w kodzie).
+- **Proces / multi-agent (Red Team, verdict FINDINGS):**
+  - **MEDIUM (F1):** pliki control-plane (`.githooks/`, `ci-local.sh`,
+    `audit.sh`, `.claude/agents/`, `settings*.json`, `rules/`, `AGENTS.md`,
+    `packaging/polkit/`) nie mają mechanicznego strażnika — jedyną granicą
+    jest proza w `multi-agent-delivery.md §6`. Builder (jedyna rola z Write)
+    może cicho osłabić gate w commicie zbundlowanym z feature; hooki działają
+    z working tree, więc samoosłabiający edit `pre-push` działa na tym samym
+    pushu. **Obniżone z HIGH:** `Write` NIE jest allowlistowany w
+    commitowanym `settings.json` → zapis normalnie generuje prompt (gate
+    ludzki). Fix: `git diff --name-only` × protected-paths w pre-push (WARN +
+    wymóg osobnego commitu) + `permissions.deny` path-scope.
+  - **LOW (F2):** gate świeżości audytu sprawdza istnienie stringu-daty, nie
+    fakt Security Review — dziś `audit.sh` stempluje datę bez LLM. Można
+    „zazielenić" jednolinijkowym editem. Fix: wymóg `AUDITED_REVISION: <SHA>`
+    osiągalnego + `SECURITY_REVIEW:` w najnowszym wpisie.
+  - **LOW (F3):** `ci-local.sh` bez `--locked`, brak `cargo deny/audit`.
+    Ograniczone: Cargo.lock committed, zero git-deps, tylko crates.io.
+  - Wektory czyste (NO EXPLOIT): prompt injection w docs, fixture/parser
+    (pure `&str`, argv bez powłoki), command injection w hookach, supply
+    chain (lockfile committed), allowlisty (read-only role bez Bash/Write;
+    `settings.local.json` gitignored), poison backlog (zapis ≠ zgoda,
+    egzekwowane review).
+- **Slop:** brak. `MockBackend` w Demo Mode jawnie oznaczony; brak
+  `unimplemented!()`/`todo!()` w ścieżkach oznaczonych „Done".
+- **Jedna derywacja (#13):** frontendy czytają `is_default`/`tries_left` z DTO
+  `client` (`lib.rs:90`), nie przeliczają per-widok — czysto (spot-check
+  cli/tui/gui).
+- **Architektura / drift (P2):**
+  - `CLAUDE.md:8` — nota „ROADMAP top desynchronizowany… patrz backlog P2
+    'ROADMAP top vs tabele per-PR — drift'" jest **nieaktualna**: ROADMAP top
+    naprawiony 2026-05-23 (Phases 0–8 ✅), a wskazywany P2 nie istnieje już
+    w backlogu.
+  - `CLAUDE.md:106` + `.claudeignore:7` — odsyłają do nieistniejącego
+    `tests/e2e/fixtures/`; realny fixture to `tests/fixtures/dummy.efi` (RT
+    task 4).
+  - `ci-local.sh:2` — „Mirror of `.github/workflows/rust.yml`", workflow nie
+    istnieje (usunięty 2026-05-20).
+- **Delivery:** 4 lokalne branche z 2026-05-19 niezmergowane; `git cherry`
+  pokazuje 3 jako patch-equivalent z main (`-` = do skasowania:
+  `fix/core-doc-overindented-list-item`, `fix/daemon-tests-etxtbsy-aarch64`,
+  `fix/e2e-compile-errors`), `chore/cargo-fmt-workspace` (`+`) wymaga
+  przeglądu. Wiek ~54 dni > cel „krótkie branche".
+- **Vuln response:** brak prywatnego runbooka disclosure — dopuszczalne dla
+  prywatnego repo w alfie, ale warto dodać. Inbox.
+- **Provenance:** commity delty niosą pełne `Intent`/`Task-Ref`/`Gates`;
+  atrybucja AI = 0 po rewrite (D-006 respektowane). **Miesięczne pytanie
+  o politykę oznaczania AI:** due 2026-08-12.
+- **cargo-udeps:** exec error drugi audyt z rzędu (toolchain nightly) —
+  dead-code detection zdegradowany, weryfikacja greppem zamiast tego.
+
+### P0 — krytyczne
+_(brak)_
+
+### P1 — ważne
+1. **Control-plane gate** — brak mechanicznego strażnika plików gate/agent/
+   policy; Builder może cicho osłabić gate. Źródło: Red Team 2026-07-12 F1.
+   → backlog P1.
+
+### P2 — porządkowe
+1. **Audit-evidence gate** — świeżość audytu wiązać z SHA + SECURITY_REVIEW,
+   nie samą datą. RT F2. → backlog P2.
+2. **`cargo --locked` + `cargo deny/audit`** w `ci-local.sh`. RT F3. → backlog P2.
+3. **Polkit „5→6" drift** — komentarz `.policy:7` + decyzja `decisions.md`
+   (2026-05-03 Polkit) mówią „5 akcji", kod ma 6 (`restore-snapshot`). SR
+   NOTE-2. → backlog P2.
+4. **NOTE-1 symlink hardening** `BackupNvram` — confine target_dir. SR NOTE-1.
+   → backlog P2 (defense-in-depth, nie escalation).
+5. **Doc drift**: `CLAUDE.md:8` stale ROADMAP note; `CLAUDE.md:106` +
+   `.claudeignore:7` zły path fixtures; `ci-local.sh:2` nieistniejący workflow.
+   → backlog P2.
+6. **cargo-udeps** exec error — naprawić nightly albo usunąć krok z `audit.sh`.
+   → backlog P2/Inbox.
+
+### Do decyzji właściciela (niezależne od audytu, przeniesione)
+- Miesięczne pytanie D-006 (polityka atrybucji AI) — następne due 2026-08-12.
+- Prywatny runbook disclosure (vuln response) — Inbox.
+
+
+
 ## Audyt 2026-05-23 21:50
 
 _Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
