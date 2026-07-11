@@ -261,7 +261,7 @@ sudo rm /usr/share/polkit-1/actions/org.bootcontrol.policy
 
 ---
 
-## Testing Conventions (from `AGENT.md`)
+## Testing Conventions (from `AGENTS.md`)
 
 - **No `unwrap()` in test helpers** — all fallible operations use `?` and propagate via `anyhow::Result`
 - **`tempfile` for all filesystem tests** — never write to `/etc/default/grub` from tests

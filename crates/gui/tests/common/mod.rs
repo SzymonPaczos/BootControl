@@ -12,7 +12,7 @@
 //! `shutdown_daemon` was not called (guard against test panics leaving zombie
 //! processes).
 //!
-//! # Design constraints (from AGENT.md)
+//! # Design constraints (from AGENTS.md)
 //!
 //! - No `unwrap()` or `expect()` anywhere — all fallible operations use `?`.
 //! - Temp files outlive the daemon process (owned by `DaemonHandle`).

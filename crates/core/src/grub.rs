@@ -41,7 +41,7 @@
 //!
 //! ## Preserving comments
 //!
-//! AGENT.md mandates that user comments survive every parser round-trip
+//! AGENTS.md mandates that user comments survive every parser round-trip
 //! unchanged. The [`GrubConfig`] type stores all lines verbatim and only
 //! exposes value-level access through its API. A future serialiser will
 //! reconstruct the original text from the stored lines.

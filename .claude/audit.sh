@@ -134,7 +134,7 @@ add ""
 # Doctest ratchet — minima ustawione w 2026-05-23 follow-up audit po
 # dorobieniu doctestów w client crate. Każde minimum to **podłoga**: nigdy
 # nie wolno zejść poniżej tej wartości bez świadomej decyzji właściciela
-# (AGENT.md §II wymaga `# Examples` na publicznym API). Gdy stan rośnie,
+# (AGENTS.md §II wymaga `# Examples` na publicznym API). Gdy stan rośnie,
 # zaktualizuj te liczby w **górę** — raz osiągnięty poziom jest podłogą,
 # nie sufitem (audit.md "Krok 4 Ratchet").
 # Floors set to current observed values after the 2026-05-23 follow-up

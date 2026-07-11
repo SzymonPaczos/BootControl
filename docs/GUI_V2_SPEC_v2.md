@@ -14,7 +14,7 @@ PR 0 produced [`docs/slint-a11y-findings.md`](./slint-a11y-findings.md). Q1/Q3/Q
 |---|---|---|---|
 | Drop "Enter cancels"; add `Ctrl+Return` to activate focused destructive | AT-SPI/Slint default-button collision; keyboard contract violation | a11y, power-user | v1 §4 line ~790, §8 |
 | Setup Mode → top-page `InfoBar --warning` on Overview & Secure Boot | Brick-prevention beats card-card subtlety | sysadmin | v1 §3.1, §3.4 |
-| Split PR 5 into daemon (PR 5) + GUI (PR 6) per AGENT.md §III | Audit clarity; one PR per roadmap item | sysadmin | v1 §9 |
+| Split PR 5 into daemon (PR 5) + GUI (PR 6) per AGENTS.md §III | Audit clarity; one PR per roadmap item | sysadmin | v1 §9 |
 | Strict Mode: 1 disclosure + type-to-confirm + runtime policy gate | Avoid focus-trap nesting; runtime policy must restrict packaged builds | sysadmin, a11y | v1 §3.4 |
 | Snapshot retention: "last 50 OR last 30 days, whichever is larger" + disk-pressure InfoBar | Keep-all-forever is forensic value vs disk reality | sysadmin | v1 §3.5 |
 | Client-side sanitiser kept, CI parity test mandatory; daemon re-validates | UX speed + defence in depth | power-user, sysadmin | v1 §3.3 line ~891 |
@@ -73,7 +73,7 @@ This spec covers GUI v2 **functional** scope. Scope cuts: Terminal page (dropped
 - **PR 5** — daemon-side D-Bus methods (`list_snapshots`, `restore_snapshot`, `read_secure_boot_state`, `list_grub_entries`, `reorder_entry`, `rename_entry`, `toggle_entry_hidden`, `delete_entry`) plus their integration tests in `tests/e2e/`. No GUI changes.
 - **PR 6** — GUI pages consuming them (Overview hero, Snapshots page, Logs page, Boot Entries GRUB path, onboarding card, Settings page).
 
-**Why.** v1 §9 line 867 acknowledged this bundles "seven new D-Bus methods *and* the GUI that consumes them" against AGENT.md §III "one PR per roadmap item". Sysadmin demanded split for audit clarity. Argument prevails: a daemon PR alone with E2E tests is reviewable on its own merits; GUI then layers on top against a stable API.
+**Why.** v1 §9 line 867 acknowledged this bundles "seven new D-Bus methods *and* the GUI that consumes them" against AGENTS.md §III "one PR per roadmap item". Sysadmin demanded split for audit clarity. Argument prevails: a daemon PR alone with E2E tests is reviewable on its own merits; GUI then layers on top against a stable API.
 
 **Implementation note.** PR 5 may temporarily land methods that have no in-tree consumer — flagged in commit body. CI fails on `cargo clippy --all-features -- -D dead_code`? No — these are public D-Bus methods, not dead code. They have tests.
 
@@ -625,7 +625,7 @@ Files: new `pages/{overview,snapshots,logs,settings}.slint`; new `components/{on
 
 Final pass. Files: `tokens.slint` high-contrast override; `appwindow.slint` env-var detection; per-component `accessible-*` audit. Tests: a11y smoke (`AT-SPI` introspection script).
 
-Each PR is one roadmap item. `feat(gui):` / `feat(daemon):` per AGENT.md §III. PR 5 explicitly lands D-Bus methods that the GUI doesn't yet consume — flagged in commit body.
+Each PR is one roadmap item. `feat(gui):` / `feat(daemon):` per AGENTS.md §III. PR 5 explicitly lands D-Bus methods that the GUI doesn't yet consume — flagged in commit body.
 
 ---
 

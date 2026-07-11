@@ -2,7 +2,7 @@
 
 The privileged backend. Runs as root via socket activation, serves `org.bootcontrol.Manager` on D-Bus, terminates after `IdleTimeoutSec=60`. Largest crate (~6.2k LOC) and the most security-critical.
 
-Read [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`../../AGENT.md`](../../AGENT.md) before editing this crate.
+Read [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`../../AGENTS.md`](../../AGENTS.md) before editing this crate.
 
 ---
 

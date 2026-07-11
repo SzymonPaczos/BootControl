@@ -38,12 +38,12 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Decyzja:** Identyfikatory są API. Zamrożone i niezmieniane po pierwszym packagingu: binary `bootcontrol`, daemon `bootcontrold`, service `bootcontrold.service`, socket `bootcontrold.socket`, D-Bus interface `org.bootcontrol.Manager`, error namespace `org.bootcontrol.Error.<Variant>`.
 **Dlaczego:** Zmiana nazwy binarki łamie system call signatures i istniejące instalacje. POSIX daemon convention — suffix `d`.
 **Status:** aktywna.
-**Jak stosować:** Nigdy nie renaming. Jeśli pojawi się drugi binary — nowy identyfikator, nie zmiana istniejącego. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`AGENT.md`](../../AGENT.md) §VI.
+**Jak stosować:** Nigdy nie renaming. Jeśli pojawi się drugi binary — nowy identyfikator, nie zmiana istniejącego. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`AGENTS.md`](../../AGENTS.md) §VI.
 
 ### 2026-05-03 — Polkit Actions: 5 per-intent
 **Decyzja:** Daemon eksponuje 5 osobnych Polkit Action IDs zamiast jednej `manage`: `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`. Legacy `org.bootcontrol.manage` deprecated.
 **Dlaczego:** Single-action `manage` autoryzuje wszystko jednym hasłem — niezgodne z principle of least privilege. Per-intent pozwala adminowi zezwolić użytkownikowi na rewrite GRUB-a bez zgody na PK replacement.
-**Status:** aktywna (reconciliation z legacy w toku — patrz `backlog.md` P2 "AGENT.md §V drift").
+**Status:** aktywna (reconciliation z legacy w toku — patrz `backlog.md` P2 "AGENTS.md §V drift").
 **Jak stosować:** Nowy write-path w daemonie wymaga osobnego Action ID per intent. Polkit `.policy` w `packaging/` wymienia wszystkie 5. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7.
 
 ### 2026-05-03 — Stateless daemon, ETag + flock concurrency
@@ -68,13 +68,13 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Decyzja:** Żaden production code nie powstaje przed testem. Wszystkie parsery tekstowe = pure functions `&str -> Result<T, BootControlError>`, zero I/O. Każdy code path modyfikujący pliki ma integration test z `tempfile` (mocked filesystem).
 **Dlaczego:** Boot manager kasujący system użytkownika nie jest debugowalny przez "let's add a test later". Pure parsers = `cargo test --workspace --doc` jako CI integralny.
 **Status:** aktywna.
-**Jak stosować:** PR bez testu odrzucony. Parser przyjmujący `&Path` zamiast `&str` = błąd projektowy. Doctests są wykonywanymi unit testami, nie ilustracją. Źródło: [`AGENT.md`](../../AGENT.md) §II.
+**Jak stosować:** PR bez testu odrzucony. Parser przyjmujący `&Path` zamiast `&str` = błąd projektowy. Doctests są wykonywanymi unit testami, nie ilustracją. Źródło: [`AGENTS.md`](../../AGENTS.md) §II.
 
 ### 2026-05-03 — `unwrap()`/`expect()` zakazane w production code
 **Decyzja:** Wszystkie funkcje produkcyjne propagują `Result<T, BootControlError>` aż do D-Bus interface. `unwrap()`/`expect()`/`panic!()` dopuszczalne tylko w testach i `build.rs`.
 **Dlaczego:** Panic w daemonie = abort root processu w trakcie pisania do `/boot`. Failsafe (BootCounting) ratuje sytuację, ale nie powinno się polegać na nim w wyniku unwrap.
 **Status:** aktywna.
-**Jak stosować:** Audyt sprawdza `grep -rn "unwrap\|expect" crates/*/src` — budżet per crate ustalony w `audit.sh`. `core/` i `daemon/` najściślej. Źródło: [`AGENT.md`](../../AGENT.md) §II.
+**Jak stosować:** Audyt sprawdza `grep -rn "unwrap\|expect" crates/*/src` — budżet per crate ustalony w `audit.sh`. `core/` i `daemon/` najściślej. Źródło: [`AGENTS.md`](../../AGENTS.md) §II.
 
 ### 2026-05-03 — User comments w configach muszą przeżyć
 **Decyzja:** Każda operacja parser-mutate-write na `/etc/default/grub` (i innych usercontrolled configach) zachowuje komentarze użytkownika **bajtowo identyczne**.
@@ -86,7 +86,7 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Decyzja:** `dracut`, `kernel-install`, `mkinitcpio` są **równymi priorytetowo** driverami w Phase 4. mkinitcpio nie jest afterthought.
 **Dlaczego:** Arch Linux = największy early-adopter segment dla migracji z GRUB. Driver detection przy starcie daemona, brak hardcoded priority.
 **Status:** aktywna.
-**Jak stosować:** Nowy initramfs driver implementuje ten sam trait + `binary_path` detection. Brak fallback chain "spróbuj dracut, potem mkinitcpio". Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §III, [`AGENT.md`](../../AGENT.md) §V.
+**Jak stosować:** Nowy initramfs driver implementuje ten sam trait + `binary_path` detection. Brak fallback chain "spróbuj dracut, potem mkinitcpio". Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §III, [`AGENTS.md`](../../AGENTS.md) §V.
 
 ### 2026-05-03 — Secure Boot: zero network, zero hardcoded certs
 **Decyzja:** Paranoia Mode generuje custom PK/KEK i merguje z **lokalnie wyekstrahowanymi** sygnaturami Microsoft z `/sys/firmware/efi/efivars/` (backup do `/var/lib/bootcontrol/certs/` przed `SetupMode=0`). Brak fetchowania certyfikatów z internetu, brak bundlowania w binarce.
@@ -110,7 +110,7 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Decyzja:** Commit message format: `type(scope): short lowercase description`. Dozwolone types: `feat`, `fix`, `test`, `refactor`, `chore`, `docs`. Zakazane: `update`, `fix bug`, `changes`, `wip` (i casual variations). Każdy PR = dokładnie jeden item z [`ROADMAP.md`](../../ROADMAP.md) — bez bundlowania.
 **Dlaczego:** Auto-generowalny Changelog. Audit clarity — łatwy bisect przy regresji. Bundle = blokuje selective revert.
 **Status:** aktywna.
-**Jak stosować:** Pre-push hook może wymuszać format (do dodania w przyszłości — patrz `backlog.md`). Źródło: [`AGENT.md`](../../AGENT.md) §III.
+**Jak stosować:** Pre-push hook może wymuszać format (do dodania w przyszłości — patrz `backlog.md`). Źródło: [`AGENTS.md`](../../AGENTS.md) §III.
 
 ### 2026-05-20 — Brak cloud CI, lokalny pre-push hook jako gate
 **Decyzja:** Cały pipeline jakościowy żyje w [`scripts/ci-local.sh`](../../scripts/ci-local.sh) i jest wymuszany przez [`.githooks/pre-push`](../../.githooks/pre-push). Brak GitHub Actions / GitLab CI / etc.

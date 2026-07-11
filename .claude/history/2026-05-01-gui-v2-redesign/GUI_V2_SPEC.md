@@ -802,7 +802,7 @@ The shortcut sheet is a non-modal `PopupWindow` (`?` to open, `Esc` to close) so
 
 ## 9. Migration plan — 5 PRs from current single-file GUI
 
-Each PR is ≤ 1 day. Each ships independently green — `cargo fmt`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace`. Conventional Commits per [`AGENT.md`](../AGENT.md) §III.
+Each PR is ≤ 1 day. Each ships independently green — `cargo fmt`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace`. Conventional Commits per [`AGENTS.md`](../AGENTS.md) §III.
 
 ### PR 1 — `feat(gui): extract token system, refactor existing UI to use it`
 
@@ -884,7 +884,7 @@ Specific design choices in this spec that I want attacked, not generic "is this 
 
 2. **Setup Mode surfacing on Overview.** I put it inside the `Secure Boot` status card as the second row ("Setup Mode No"), so it's only visible if you're already looking at security. Alternative: a top-of-page `InfoBar --warning` whenever Setup Mode = Yes, *even on the Overview page*. The InfoBar route forces the user to decide before doing anything else; the in-card route lets the user ignore it and shoot themselves later. Which trade-off is right?
 
-3. **Backend-gap methods landing in the same PR as the GUI that consumes them.** PR 5 ships seven new D-Bus methods *and* the Snapshots/Logs UI in one go. AGENT.md §III bans bundling phases — but here the GUI cannot demo without the daemon side. Option A: split into PR 5a (daemon) + PR 5b (GUI), accepting a flag-gated half-merge. Option B: keep bundled under a single roadmap item and call out the exception in the commit body. Which violates AGENT.md *less*?
+3. **Backend-gap methods landing in the same PR as the GUI that consumes them.** PR 5 ships seven new D-Bus methods *and* the Snapshots/Logs UI in one go. AGENTS.md §III bans bundling phases — but here the GUI cannot demo without the daemon side. Option A: split into PR 5a (daemon) + PR 5b (GUI), accepting a flag-gated half-merge. Option B: keep bundled under a single roadmap item and call out the exception in the commit body. Which violates AGENTS.md *less*?
 
 4. **Secure Boot Strict Mode `[Erase enrolled keys]` button.** I placed it inside the Strict-mode disclosure (`experimental_paranoia` flag). Alternative: it's a destructive enough op (irreversibly puts the system in Setup Mode) that it should be on its own page or at minimum behind a *second* disclosure inside Strict Mode. Question: is one disclosure + type-to-confirm enough, or do we need two clicks of disclosure before the button is even visible?
 

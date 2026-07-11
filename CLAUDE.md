@@ -4,7 +4,7 @@ This file is loaded automatically by Claude Code. It is a thin shim that points 
 
 1. [`README.md`](./README.md) — project overview, scope, install
 2. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — approved technical decisions + threat model
-3. [`AGENT.md`](./AGENT.md) — coding rules, TDD requirements, commit convention (mandatory)
+3. [`AGENTS.md`](./AGENTS.md) — coding rules, TDD requirements, commit convention (mandatory)
 4. [`ROADMAP.md`](./ROADMAP.md) — strategic phases. **Note (2026-05-23):** ROADMAP top sekcji jest desynchronizowany z gitem — Phase 6/7 PRs i część Phase 8 są zmergowane mimo "not yet started" w nagłówku. Patrz [`.claude/backlog.md`](./.claude/backlog.md) P2 "ROADMAP top vs tabele per-PR — drift". Granularne TODO/otwarta praca **nie żyje w ROADMAP** — żyje w [`.claude/backlog.md`](./.claude/backlog.md).
 
 Out-of-order reads cause hallucinations at interface definition time. No exceptions.
@@ -103,4 +103,4 @@ Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows Phase 7 
 
 ## Commit & PR convention
 
-Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`, `docs:`). One PR per roadmap item — never bundle phases. Banned types: `update`, `wip`, `changes`. See [`AGENT.md`](./AGENT.md) §III.
+Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`, `docs:`). One PR per roadmap item — never bundle phases. Banned types: `update`, `wip`, `changes`. See [`AGENTS.md`](./AGENTS.md) §III.

@@ -2,7 +2,7 @@
 
 Pure logic for BootControl: parsers, hashing, ETag computation, the `BootManager` / `BootBackend` traits, and the error type. **No I/O. No `tokio`. No D-Bus.** Anything that touches the filesystem, the network, or system services belongs in `crates/daemon`.
 
-Read [`../../AGENT.md`](../../AGENT.md) §II before editing.
+Read [`../../AGENTS.md`](../../AGENTS.md) §II before editing.
 
 ---
 
@@ -12,7 +12,7 @@ Read [`../../AGENT.md`](../../AGENT.md) §II before editing.
 2. **User-comment preservation** — comments and blank lines in `/etc/default/grub` (e.g., `# my custom setting`) must survive every mutator **byte-for-byte**. Every new mutator needs a `roundtrip_preserves_comments` test using a fixture that contains comments above, between, and below keys.
 3. **ETag = SHA-256 hex of the entire file bytes.** Single source of truth: [`src/hash.rs`](./src/hash.rs). Do not reimplement hashing or "shortcut" the ETag — the daemon trusts only this function.
 4. **No `unwrap()` / `expect()` outside tests.** Return `BootControlError`. Add a new variant if needed and map it in `crates/daemon/src/dbus_error.rs`.
-5. **Doctests are integration tests.** Every public function needs a `# Examples` block that compiles and passes — `cargo test --workspace --doc`. See AGENT.md §II "Code Documentation" for the required Rustdoc shape.
+5. **Doctests are integration tests.** Every public function needs a `# Examples` block that compiles and passes — `cargo test --workspace --doc`. See AGENTS.md §II "Code Documentation" for the required Rustdoc shape.
 
 ---
 

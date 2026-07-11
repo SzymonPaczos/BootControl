@@ -135,7 +135,7 @@ Acceptance: `InfoBar --warning` "UEFI Secure Boot is in Setup Mode. Any key can 
 
 **Designer position:** Option A (split into PR 5a daemon + PR 5b GUI) or Option B (bundled, exception called out).
 
-**My position:** **Option A. AGENT.md §III "one PR per roadmap item" wins. Forced bundling sets a precedent that any sufficiently-coupled change can opt out of the rule.**
+**My position:** **Option A. AGENTS.md §III "one PR per roadmap item" wins. Forced bundling sets a precedent that any sufficiently-coupled change can opt out of the rule.**
 
 PR 5b (the GUI) is the consumer; it can land first behind a feature flag (`gui_v2_pages` Cargo feature, defaulting OFF in v1.x), reading from `MockBackend` for the gap methods. PR 5a (the daemon) lands second; the feature flag flips on in a third PR that's a one-line `default-features = ["gui_v2_pages"]` change. Three PRs, all reviewable, all individually revertable.
 

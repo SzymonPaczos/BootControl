@@ -22,7 +22,7 @@
 //! BOOTCONTROL_BUS=session cargo test --test e2e -- --ignored --nocapture
 //! ```
 //!
-//! # Design constraints (from AGENT.md)
+//! # Design constraints (from AGENTS.md)
 //!
 //! - Every test is `#[ignore]` by default — `cargo test --workspace` stays fast.
 //! - No `unwrap()` in helper code — all errors propagate via `?`.

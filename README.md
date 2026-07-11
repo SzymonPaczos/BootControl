@@ -100,7 +100,7 @@ bootcontrol/
 ├── tests/e2e/      # Full end-to-end tests (session-bus + polkit-mock)
 ├── packaging/      # D-Bus policy, Polkit action, systemd units
 ├── ARCHITECTURE.md # Deep technical design & threat model
-├── AGENT.md        # Contribution rules for AI agents and developers
+├── AGENTS.md        # Contribution rules for AI agents and developers
 ├── ROADMAP.md      # Development roadmap with phase status
 ├── TESTING.md      # Testing guide for contributors
 └── README.md       # You are here
@@ -230,7 +230,7 @@ sudo systemctl enable --now bootcontrold.socket
 Read these documents before writing any code:
 
 1. **[`ROADMAP.md`](./ROADMAP.md)** — full development plan, phase by phase, with completion status
-2. **[`AGENT.md`](./AGENT.md)** — coding rules, commit convention, TDD requirements
+2. **[`AGENTS.md`](./AGENTS.md)** — coding rules, commit convention, TDD requirements
 3. **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** — design decisions, threat model, security architecture
 4. **[`TESTING.md`](./TESTING.md)** — how to run tests, E2E setup, polkit-mock workflow
 

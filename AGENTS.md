@@ -1,4 +1,4 @@
-# AGENT.md — BootControl Contribution Rules
+# AGENTS.md — BootControl Contribution Rules
 
 > **For AI agents using Claude Code:** entry-point is [`CLAUDE.md`](./CLAUDE.md) (auto-loaded). It points back to this file.
 
@@ -8,7 +8,7 @@ The rules below are hard requirements. Code that does not comply will be rejecte
 > **MANDATORY BOOTSTRAP SEQUENCE:** Before generating the first line of code, read and integrate the following files in this exact order:
 > 1. `README.md` — project overview and scope
 > 2. `ARCHITECTURE.md` — all approved technical decisions
-> 3. `AGENT.md` — these rules (you are reading this now)
+> 3. `AGENTS.md` — these rules (you are reading this now)
 > 4. `ROADMAP.md` — phased implementation plan
 >
 > Reading them out of order causes hallucinations at interface definition time. No exceptions.
