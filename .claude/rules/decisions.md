@@ -114,15 +114,15 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 
 ### 2026-05-20 — Brak cloud CI, lokalny pre-push hook jako gate
 **Decyzja:** Cały pipeline jakościowy żyje w [`scripts/ci-local.sh`](../../scripts/ci-local.sh) i jest wymuszany przez [`.githooks/pre-push`](../../.githooks/pre-push). Brak GitHub Actions / GitLab CI / etc.
-**Dlaczego:** Commit `b03b3df chore(ci): move CI/CD off GitHub Actions to a local pre-push git hook` — koszt zero, brak zależności od cloud, brak vendor lock-in, ci-local.sh wykonuje się szybciej niż remote runner. Trade-off: dewelopery muszą zainstalować hook (`./scripts/install-hooks.sh`).
+**Dlaczego:** Commit `8681f47 chore(ci): move CI/CD off GitHub Actions to a local pre-push git hook` — koszt zero, brak zależności od cloud, brak vendor lock-in, ci-local.sh wykonuje się szybciej niż remote runner. Trade-off: dewelopery muszą zainstalować hook (`./scripts/install-hooks.sh`).
 **Status:** aktywna.
 **Jak stosować:** Każdy nowy clone potrzebuje `./scripts/install-hooks.sh` — wpisać do README onboarding. `cargo build --workspace`, `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --workspace --all-features`, `cargo test --doc` — wszystko w ci-local.sh.
 
 ### 2026-05-20 — Warnings = errors workspace-level
-**Decyzja:** Commit `af9fb2c` zastąpił per-crate `#![deny(warnings)]` ustawieniem na poziomie workspace (`-D warnings` w `Cargo.toml` lub `RUSTFLAGS`).
+**Decyzja:** Commit `991d21e` zastąpił per-crate `#![deny(warnings)]` ustawieniem na poziomie workspace (`-D warnings` w `Cargo.toml` lub `RUSTFLAGS`).
 **Dlaczego:** Per-crate deny był łatwy do ominięcia (`#![allow(warnings)]` w nowym crate, świeży dev nie zauważy). Workspace-level = jeden punkt, niemożliwy do ominięcia przez przeoczenie.
 **Status:** aktywna.
-**Jak stosować:** Nowy warning = build fail. Nie dodawaj `#![allow(...)]` na poziomie crate — zaadresuj root cause albo wprowadź wąski `#[allow(...)]` z komentarzem dlaczego. Źródło: commit `af9fb2c`.
+**Jak stosować:** Nowy warning = build fail. Nie dodawaj `#![allow(...)]` na poziomie crate — zaadresuj root cause albo wprowadź wąski `#[allow(...)]` z komentarzem dlaczego. Źródło: commit `991d21e`.
 
 ### 2026-05-23 — Adopcja układu plików stanu wg cyklu życia (9.9)
 **Decyzja:** Przyjmujemy konwencję `claude-toolkit/conventions/project-state-layout.md`. `.claude/backlog.md` = jedyne źródło otwartej pracy. `.claude/rules/` = tylko trwałe instrukcje (decyzje, audit rules). Stan przejściowy (`status.md`, `backlog.md`) poza `rules/`. Historia w `.claude/history/` (append-only `completed-work.md` + raporty sesji z datą w nazwie — to jedyne pliki gdzie data w nazwie jest OK). Zero plików z datą w nazwie dla żywych dokumentów. ROADMAP = strategia (duże fazy); granularne TODO → `backlog.md`.
@@ -132,7 +132,7 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 
 ### 2026-05-23 — HANDOFF Granite + GUI_V2_SPEC v1 + red-team zarchiwizowane w history/
 **Decyzja:** Trzy bundle'y przeniesione do `.claude/history/` jako pakiety zamkniętej pracy:
-- `docs/handoff/` (HANDOFF.md + tokens.slint + 27 SVG) → `.claude/history/2026-05-04-granite-handoff/` (Phase 3.5 Granite redesign, zaimplementowane commitem `5a2faf2`).
+- `docs/handoff/` (HANDOFF.md + tokens.slint + 27 SVG) → `.claude/history/2026-05-04-granite-handoff/` (Phase 3.5 Granite redesign, zaimplementowane commitem `80fa4dd`).
 - `docs/GUI_V2_SPEC.md` (v1) + `docs/red-team/` (4 raporty) → `.claude/history/2026-05-01-gui-v2-redesign/` jako jeden folder. Wewnątrz pakietu względne ścieżki `GUI_V2_SPEC.md:LINE` (z red-team) i `red-team/<persona>.md` (z v1) nadal działają — bundle jest samodzielny.
 
 Pierwotny krok 2026-05-23 zostawiał v1 w `docs/` ze względu na ~200 cytatów; follow-up tego samego dnia uznał że bundle migrowany **razem** (v1 + red-team w jednej paczce) zachowuje wewnętrzną integralność cytatów, a docs/ przestaje hostować materiał historyczny.

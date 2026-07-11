@@ -80,7 +80,7 @@ _Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit
 
 ### Faza A stream signal (informational)
 - commitów z "Faza A PR": 1
-- najnowszy: `5dd91fa 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- najnowszy: `e64dde8 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
 - jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
 
 ### Hooki gitowe
@@ -177,7 +177,7 @@ _Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit
 
 ### Faza A stream signal (informational)
 - commitów z "Faza A PR": 1
-- najnowszy: `5dd91fa 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- najnowszy: `e64dde8 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
 - jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
 
 ### Hooki gitowe
@@ -272,7 +272,7 @@ _Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit
 
 ### Faza A stream signal (informational)
 - commitów z "Faza A PR": 1
-- najnowszy: `5dd91fa 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- najnowszy: `e64dde8 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
 - jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
 
 ### Hooki gitowe
@@ -595,7 +595,7 @@ Po naprawie P0.1 zaktualizować:
 
 #### P2.4 — "Faza A" nieobecna w ROADMAP
 
-Commit `5dd91fa "feat(systemd-boot): rename loader entries (Faza A PR #3)"` to nowy strumień prac (granularne operacje à la Grub Customizer). ROADMAP nie wymienia "Phase A" — istniejący P2 w backlogu. Po decyzji właściciela: dopisać sekcję "Phase A — Granular Operations" do `ROADMAP.md` (porównaj z Backlog "Future Ideas").
+Commit `e64dde8 "feat(systemd-boot): rename loader entries (Faza A PR #3)"` to nowy strumień prac (granularne operacje à la Grub Customizer). ROADMAP nie wymienia "Phase A" — istniejący P2 w backlogu. Po decyzji właściciela: dopisać sekcję "Phase A — Granular Operations" do `ROADMAP.md` (porównaj z Backlog "Future Ideas").
 
 ---
 

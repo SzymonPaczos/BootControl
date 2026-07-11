@@ -91,7 +91,7 @@ cargo test --workspace --features bootcontrold/experimental_paranoia
 
 ## Platform
 
-Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows Phase 7 scaffold landed (commits `5ddac93`–`ba88b4d`) — UEFI variable read/write i cross-compile target gotowe, GUI panel jeszcze nie. Aktualna lista otwartych Windows-aware items → [`.claude/backlog.md`](./.claude/backlog.md).
+Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows Phase 7 scaffold landed (commits `45e9f89`–`e2f70ca`) — UEFI variable read/write i cross-compile target gotowe, GUI panel jeszcze nie. Aktualna lista otwartych Windows-aware items → [`.claude/backlog.md`](./.claude/backlog.md).
 
 ---
 
