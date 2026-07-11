@@ -48,3 +48,39 @@ Uwaga o narzędziach: rola jest read-only. Jeśli projekt chce dać jej `Bash`
 do skanerów/testów, wolno to zrobić WYŁĄCZNIE z allowlistą komend
 diagnostycznych (zgodnie z `multi-agent-delivery.md` §1) — nigdy z
 mutacjami, sekretami ani dostępem do produkcji.
+
+## Co sprawdzać w tym projekcie (BootControl)
+
+Kontekst: privileged daemon (root) piszący do `/boot` i `/etc/default/grub`,
+sterowany przez D-Bus z user-space. Model zagrożeń: `docs/` (threat-model) +
+`ARCHITECTURE.md` §II. Trust boundary = D-Bus interface w
+`crates/daemon/src/interface.rs`.
+
+- **Sanityzacja kernel cmdline:** jedyne źródło = `core::security::KERNEL_CMDLINE_BLACKLIST`;
+  helpery `daemon::sanitize::check_payload` i `backends::uki::validate_kernel_param`
+  re-eksportują. Każdy nowy D-Bus write-path MUSI re-walidować payload w
+  daemonie — walidacja w GUI/CLI to wygoda, nie obrona. Druga definicja
+  blacklisty gdziekolwiek = finding (konsolidacja to zamknięte P1.1).
+- **Polkit per-intent:** 5 action IDs (`org.bootcontrol.{rewrite-grub,
+  write-bootloader,enroll-mok,generate-keys,replace-pk}`). Każda mutująca
+  metoda w `interface.rs` woła CheckAuthorization z WŁAŚCIWYM action ID
+  *przed* operacją dyskową. Nowa metoda bez per-intent check = CRITICAL.
+- **ETag + flock:** każda mutacja waliduje ETag przed dotknięciem dysku;
+  zapis = `.tmp` → `fsync()` → atomic `rename()` pod `flock(LOCK_EX|LOCK_NB)`.
+  Pominięcie ETag/flock w nowym write-path = HIGH.
+- **Pre-flight sub-arch:** `/etc/os-release` check (NixOS refuse, ostree
+  delegacja do `rpm-ostree kargs` — parametry przechodzą przez sanitizer,
+  multi-Linux ESP restrict). Nowy write-path bez pre-flight = HIGH.
+- **Secure Boot offline:** żadnego `reqwest`/`curl`/`hyper` w SB code paths;
+  certyfikaty tylko z `/sys/firmware/efi/efivars/`. Sieć w firmware-level
+  operacji = CRITICAL.
+- **Sekrety:** brak `*.key`/`*.pem`/MOK private w repo; backup certów do
+  `/var/lib/bootcontrol/certs/` nigdy do gita.
+- **Rust hygiene jako defense:** `unwrap`/`expect`/`panic!` w production
+  `core`/`daemon` = złamanie aktywnej decyzji (budżet 0); `unsafe` bez
+  komentarza `SAFETY:` = finding.
+- **Granice crate'ów:** frontendy (cli/tui/gui) mówią z daemonem wyłącznie
+  przez `bootcontrol-client`; import `bootcontrol-daemon` we froncie = HIGH.
+- **Zamknięte, nie zgłaszaj ponownie bez nowego dowodu** (audyt 2026-05-23):
+  per-intent Polkit (P0.1), sanitize `kargs_append` dla rpm-ostree (P0.2),
+  pojedyncza blacklista (P1.1), walidacja policy file na starcie (P1.2).
