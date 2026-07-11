@@ -141,6 +141,24 @@ Pierwotny krok 2026-05-23 zostawiał v1 w `docs/` ze względu na ~200 cytatów; 
 **Status:** aktywna.
 **Jak stosować:** Engineering implementuje z `docs/GUI_V2_SPEC_v2.md` (nie tknąć v1). External references w v2 spec i CLAUDE_DESIGN_BRIEF zaktualizowane na nowe ścieżki w history/. Każdy przyszły bundle pakietowanej zamkniętej pracy: `.claude/history/YYYY-MM-DD-<temat>/`.
 
+### 2026-07-12 — Adopcja delty toolkitu 2026-07-11 (evidence-based delivery)
+**Decyzja:** Przyjmujemy pakiet toolkitu z 2026-07-11 (decyzje D-001..D-008 + konwencje delivery). Skopiowane mastery: `rules/{ci-cd,rules-as-gates,change-provenance,multi-agent-delivery}.md`, pełny zespół agentów `.claude/agents/{coordinator,scout,builder,reviewer,security-reviewer,red-team}.md`, `templates/{gitmessage.txt,review-record.md}`, upgrade `skills/weekly-audit` (osobny commit). Rulebook przemianowany `AGENT.md` → `AGENTS.md` (kanoniczna nazwa cross-tool; CLAUDE.md pozostaje cienkim shimem). Nowe zasady stanu: **najpierw zapisz, potem kontynuuj** (każde odkryte zadanie poza scope natychmiast do `backlog.md`; niejasny priorytet → sekcja `Inbox`), dłuższe specyfikacje → `.claude/task-briefs/<task-id>.md` z dokładnie jednym linkiem z backlogu; po zamknięciu brief → `history/task-briefs/`.
+**Dlaczego:** Adopcja 2026-05-23 objęła stan projektu (9.9) i audyt; toolkit doszedł 2026-07-11 do evidence-based delivery (Security Reviewer w każdym audycie, nagłówek dowodowy raportu, provenance commitów, rules-as-gates). Bez delty audyt raportowałby `DEGRADED` (brak `security-reviewer.md`), a projekt dryfowałby od wspólnych konwencji.
+**Status:** aktywna.
+**Jak stosować:** Pominięte jako nieaplikowalne (brak powierzchni produkcyjnej/deploy): `production-operations.md`, `progressive-delivery.md`, `templates/delivery-log.md` — wrócić do nich gdy pojawi się packaging/release pipeline. Upgrade masterów zawsze osobnym, reviewowanym commitem — nigdy w trakcie read-only audytu. Commity niosą trailery `Intent`/`Task-Ref`/`Gates` (etap raportowy per D-002 — patrz hook `commit-msg`).
+
+### 2026-07-12 — D-006: bez atrybucji AI w commitach + rewrite historii
+**Decyzja:** BootControl przyjmuje toolkitowe D-006 — commity **bez** stopek `Co-Authored-By` AI i bez pola `AI-Contribution`; provenance = `Intent`/`Task-Ref`/`Gates`. Dodatkowo właściciel zdecydował o rewrite historii: `git filter-repo` 2026-07-12 usunął 20 stopek AI z 98 commitów (wszystkie `noreply@anthropic.com`); **ludzkie** stopki co-authorstwa (25× `s.paczos@pm.me`) nietknięte. Referencje SHA w dokumentach zremapowane wg commit-map (43 tokeny).
+**Dlaczego:** Spójność z decyzją toolkitu D-006 (2026-07-11) i rewrite'em CrossDesk 2026-07-07. Właściciel na obecnym etapie nie chce śladu współtworzenia AI w historii.
+**Status:** aktywna.
+**Jak stosować:** Agent nie dodaje stopek AI „z przyzwyczajenia" — hook `commit-msg` dokumentuje zakaz. Cotygodniowy audyt **raz w miesiącu** ponawia pytanie właściciela o politykę oznaczania; każdą odpowiedź (także „nie") dopisuje tu z datą. Backup sprzed rewrite'u: bundle w scratchpadzie sesji 2026-07-12 (tymczasowy); po force-push origin stare SHA przestają istnieć publicznie.
+
+### 2026-07-12 — Preflight świeżości audytu w pre-push (mechanizm D-007)
+**Decyzja:** Rozszerzenie decyzji 2026-05-20 (local-first CI): egzekucję cyklu audytowego przejmuje **preflight w `.githooks/pre-push`** — data najnowszego wpisu `## Audyt YYYY-MM-DD` w `audit-log.md` starsza niż 7 dni = push zablokowany (escape: `--no-verify`, tylko za jawną zgodą właściciela). Pasywny reminder w CLAUDE.md zostaje jako sygnał na start sesji, ale to hook jest gate'em.
+**Dlaczego:** D-007 wymaga wyboru mechanizmu per projekt, a ADOPT wprost mówi, że akapit bez sprawdzania daty nie spełnia wymagania — co potwierdziła praktyka: audyt 2026-05-23 przeleżał 50 dni mimo remindera. Pełna ceremonia świadomie (D-004).
+**Status:** aktywna.
+**Jak stosować:** Zabezpieczenia tracone względem hosted CI (wymóg D-007, do świadomej akceptacji): brak gate'ów na zmianach botów/PR-ów zewnętrznych, brak czystego środowiska buildów, brak required checks po stronie serwera — wszystko opiera się na hookach zainstalowanych per clone (`./scripts/install-hooks.sh`). Nowy clone bez hooków nie jest chroniony.
+
 ---
 
 ## Decyzje wycofane

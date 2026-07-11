@@ -4,8 +4,24 @@ Cel: **jakość rośnie monotonicznie. Audyt wykrywa → naprawiamy → ratchet 
 → trend mierzy.** Audyt sam niczego nie naprawia — kończy się listą P0/P1/P2
 i czeka na decyzję właściciela.
 
-Cykl: cotygodniowo (lub gdy `CLAUDE.md` reminder wykryje >7 dni od ostatniego
-wpisu w [`.claude/audit-log.md`](../audit-log.md)).
+Cykl: cotygodniowo — egzekwowany preflightem w [`.githooks/pre-push`](../../.githooks/pre-push)
+(>7 dni od ostatniego wpisu w [`.claude/audit-log.md`](../audit-log.md) = push
+zablokowany; decyzja 2026-07-12). Reminder w `CLAUDE.md` to sygnał na start
+sesji, hook jest gate'em.
+
+## Krok 0 — SAST i workflowy
+
+Projekt nie ma skonfigurowanego SAST-a ani `.github/workflows/` (brak cloud
+CI — decyzja 2026-05-20). W raporcie zapisuj te pozycje jako **`n/a`, nigdy
+jako „zero findings"**. Jeśli kiedyś dojdzie SAST/workflow — pełna checklista
+w [`skills/weekly-audit/SKILL.md`](../skills/weekly-audit/SKILL.md) Krok 0.
+
+**Wymóg tygodniowy:** każdy audyt uruchamia niezależnego, read-only
+[`agents/security-reviewer.md`](../agents/security-reviewer.md) — verdict
+(`PASS`/`FAIL`/`ACCEPTED_RISK`/`BLOCKED`) wchodzi do raportu. Jeśli minął
+miesiąc od ostatniego Red Teamu albo zmienił się auth/secrets/deploy/model
+zagrożeń — uruchom też [`agents/red-team.md`](../agents/red-team.md).
+Security Reviewer nie naprawia własnych findings.
 
 ## Krok 1 — Warstwa statyczna (skrypt, ~2 min)
 
@@ -97,13 +113,32 @@ Dopisz sekcję na górze [`.claude/audit-log.md`](../audit-log.md). Format:
 ...
 ```
 
+Raport zawiera obowiązkowo nagłówek dowodowy (bez zakresu, SHA i dowodów
+raport nie może zakończyć się `PASS`):
+
+```text
+AUDITED_REVISION: <full SHA>
+DIFF_RANGE_OR_SCOPE: <...>
+PREVIOUS_AUDIT: <date/ref>
+TOOLS: <commands + versions>
+EXCLUSIONS_OR_NA: <reasoned list>
+SECURITY_REVIEW: PASS | FAIL | ACCEPTED_RISK <decision-id> | BLOCKED
+RED_TEAM: PASS | FINDINGS | NOT_DUE <last-run-date>
+BACKLOG_WRITE: recorded <task refs> | none
+```
+
 **Definicje priorytetów:**
 
 - **P0 — krytyczne.** Luki bezpieczeństwa (Polkit bypass, brak sanityzacji, sekrety w repo). Utrata integralności danych (race condition w write-path, brak flock, ETag skip). Kod kłamiący użytkownika (UI mówi "Saved" gdy operacja failed, "Failsafe armed" gdy BootCounting nie ustawiony). **Złamanie aktywnej `decisions.md` w obszarze bezpieczeństwa.**
 - **P1 — ważne.** Dług blokujący rozwój (architektura która utrudni kolejny PR). Swallowed errors (`Err(_) => ()`). Brak testów krytycznych ścieżek (każdy nowy parser bez round-trip test). `unwrap()` w `core`/`daemon`. **Złamanie aktywnej `decisions.md` w obszarze architektury.**
 - **P2 — porządkowe.** Dead code potwierdzony greppem. Drift dokumentacji (`ROADMAP.md` mówi "not yet started" dla zakończonej Phase). Kosmetyka. Odstępstwa od układu 9.9 (plik z datą w nazwie dla żywego dokumentu, stan przejściowy w `rules/`). Nieaktualne wpisy w memory.
 
-Przedstaw listę właścicielowi. **Nie wpisuj jeszcze do `backlog.md`** — właściciel decyduje co naprawiamy. Audyt zasila backlog dopiero po akceptacji.
+Przedstaw listę właścicielowi. Każdy P0/P1/P2 i follow-up Security/Red Team
+**od razu** deduplikuj i zapisz do [`backlog.md`](../backlog.md) (niejasny
+priorytet → `Inbox`) — nie czekaj, aż właściciel poprosi o zapis. **Zapisanie
+nie uruchamia naprawy** — co implementujemy, decyduje właściciel.
+_(Zmiana 2026-07-12: wcześniej backlog zasilany dopiero po akceptacji;
+nowa konwencja toolkitu = zapis natychmiast, implementacja po decyzji.)_
 
 ## Krok 4 — Ratchet (po naprawie, nie w trakcie audytu)
 
@@ -114,10 +149,20 @@ Gdy P0/P1 naprawione — **natychmiast zamroź** poziom:
 
 Raz osiągnięty poziom = podłoga, nie sufit. Dług nie ma jak się odłożyć.
 
+## Krok 5 — Porównanie masterów (osobna zmiana, nie część audytu)
+
+Porównaj kopie skilli, agentów i konwencji z lokalnym `claude-toolkit`
+(diff, bez `git pull` i bez nadpisywania w trakcie audytu). Różnice → wpis
+do `backlog.md`; zatwierdzony upgrade wykonuje osobny, reviewowany commit.
+To chroni projekt przed automatycznym wstrzyknięciem zmienionych instrukcji
+z toolkitu.
+
 ## Czego NIE robić podczas audytu
 
 - Nie naprawiaj niczego z własnej inicjatywy.
-- Nie commituj poza `audit-log.md` (raport audytu).
+- Nie commituj poza `audit-log.md` (raport audytu) i wpisami do `backlog.md`.
+- Nie nadpisuj masterów (skille/agenci/konwencje) w trakcie audytu — różnice
+  raportuj do backlogu (Krok 5).
 - Nie pomijaj `decisions.md` — zgodność z aktywnymi decyzjami jest twarda.
 - Nie raportuj dead code bez weryfikacji greppem (`grep -rl X crates/`).
 - Pytania informacyjne właściciela ("co znalazłeś w X?") — odpowiadaj wprost; zadania wykonawcze ("napraw to") — pełna specyfikacja + zielone światło.

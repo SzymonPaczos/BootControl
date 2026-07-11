@@ -51,6 +51,14 @@ ROADMAP.md ma sekcję "Out-of-roadmap streams" → "Faza A" z PR #3 (commit `e64
 Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md, plus dopisać jasny "Goal:" + "Exit criteria:" jak inne Phase'y.
 **Źródło:** pre-adopcja + audit 2026-05-23 P2.4. **Status:** czeka na decyzję właściciela.
 
+## Inbox — niejasny priorytet
+
+_Zasada „najpierw zapisz, potem kontynuuj": zadania odkryte w rozmowie/audycie/review
+lądują tu natychmiast, gdy priorytet nie jest oczywisty. Triage do P0/P1/P2 robi
+właściciel._
+
+_(brak)_
+
 ## Czeka na decyzję właściciela
 
 ### Hook `UserPromptSubmit` dla maksymalizacji promptów (9.3)

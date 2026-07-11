@@ -21,10 +21,14 @@ Out-of-order reads cause hallucinations at interface definition time. No excepti
 | [`.claude/rules/audit.md`](./.claude/rules/audit.md) | procedura cotygodniowego audytu (warstwa statyczna + osąd agenta) | nigdy (trwała instrukcja) |
 | [`.claude/audit-log.md`](./.claude/audit-log.md) | historia audytów, najnowszy na górze | nigdy (append-only) |
 | [`.claude/history/`](./.claude/history/) | zamknięte raporty sesji, ukończone pakiety dostawcze | nigdy (archiwum) |
+| [`.claude/agents/`](./.claude/agents/) | definicje ról (security-reviewer, red-team, coordinator, scout, builder, reviewer) | nigdy (trwałe; upgrade masterów = osobny commit) |
+| `.claude/task-briefs/` | dłuższe specyfikacje otwartych zadań — dokładnie jeden link z backlogu; katalog tworzony gdy potrzebny | gdy zadanie zamknięte → `history/task-briefs/` |
 
-Układ wg konwencji `claude-toolkit/conventions/project-state-layout.md` (adopcja 2026-05-23, decyzja w `decisions.md`).
+Układ wg konwencji `claude-toolkit/conventions/project-state-layout.md` (adopcja 2026-05-23, delta evidence-based delivery 2026-07-12 — decyzje w `decisions.md`).
 
-**Reminder audytu:** na starcie sesji sprawdź datę pierwszego wpisu `## Audyt YYYY-MM-DD` w [`.claude/audit-log.md`](./.claude/audit-log.md). Jeśli >7 dni od dziś — zaproponuj uruchomienie audytu (skill: `weekly-audit`, lub `bash .claude/audit.sh` ręcznie).
+**Najpierw zapisz, potem kontynuuj:** każde nietrywialne zadanie odkryte poza bieżącym scope trafia **natychmiast** do `backlog.md` (niejasny priorytet → sekcja `Inbox`). Zapisanie nie jest zgodą na implementację.
+
+**Reminder audytu:** na starcie sesji sprawdź datę pierwszego wpisu `## Audyt YYYY-MM-DD` w [`.claude/audit-log.md`](./.claude/audit-log.md). Jeśli >7 dni od dziś — zaproponuj uruchomienie audytu (skill: `weekly-audit`, lub `bash .claude/audit.sh` ręcznie). Od 2026-07-12 pilnuje tego też preflight w [`pre-push`](./.githooks/pre-push) — przeterminowany audyt blokuje push.
 
 ---
 
