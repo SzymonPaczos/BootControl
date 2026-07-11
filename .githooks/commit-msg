@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Commit-msg hook: Conventional Commit subject (blocking) + provenance
+# trailers (report-only WARN, change-provenance.md §5 / toolkit D-002).
+#
+# Allowed types are the project's list from .claude/rules/decisions.md
+# ("Conventional Commits, jedna PR na roadmap item"): feat fix test
+# refactor chore docs — narrower than the toolkit default on purpose.
+#
+# AI attribution (Co-Authored-By / AI-Contribution) is intentionally NOT
+# added to commits — decision D-006, adopted for BootControl 2026-07-12.
+set -euo pipefail
+
+MSG_FILE="$1"
+SUBJECT="$(head -n 1 "$MSG_FILE")"
+
+case "$SUBJECT" in
+  Merge\ *|Revert\ *|fixup!*|squash!*) exit 0 ;;
+esac
+
+if ! printf '%s\n' "$SUBJECT" | grep -qE '^(feat|fix|docs|test|refactor|chore)(\([^)]+\))?!?: .+'; then
+  echo "ERROR: subject is not a Conventional Commit (allowed types: feat fix docs test refactor chore)" >&2
+  exit 1
+fi
+
+# Report stage (D-002): missing provenance fields WARN, never block.
+# Ratchet WARN->ERROR needs a separate owner decision after a trial period.
+warned=0
+for field in Intent Task-Ref Gates; do
+  value="$(sed -nE "s/^${field}:[[:space:]]*(.*)$/\1/p" "$MSG_FILE" | head -n 1)"
+  if [ -z "$value" ] || [[ "$value" == *'<'*'>'* ]] \
+    || printf '%s\n' "$value" | grep -qiE '^(TODO|TBD|PLACEHOLDER)([[:space:]]|$)'; then
+    echo "WARN: missing or placeholder '${field}:' — template: .claude/templates/gitmessage.txt" >&2
+    warned=1
+  fi
+done
+
+if [ "$warned" -eq 1 ]; then
+  echo "WARN: commit accepted without full provenance (report stage) — see .claude/rules/change-provenance.md" >&2
+fi
+exit 0

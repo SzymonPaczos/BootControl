@@ -46,13 +46,14 @@ Frontends never bypass `client` to reach the daemon. The daemon never imports fr
 ## Canonical commands
 
 There is **no cloud CI** — all checks run locally. The full pipeline lives
-in [`scripts/ci-local.sh`](./scripts/ci-local.sh) and is enforced by two
+in [`scripts/ci-local.sh`](./scripts/ci-local.sh) and is enforced by three
 git hooks shipped in [`.githooks/`](./.githooks/):
 
 | Hook | Triggers on | Runs | Cycle time |
 |------|-------------|------|------------|
 | [`pre-commit`](./.githooks/pre-commit) | `git commit` | `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` (no `--all-features`) | ~10 s cold / few s incremental |
-| [`pre-push`](./.githooks/pre-push) | `git push` | `scripts/ci-local.sh` (fmt + clippy `--all-features` + workspace tests + Windows cross-compile + E2E session bus) | ~2–5 min |
+| [`commit-msg`](./.githooks/commit-msg) | `git commit` | Conventional Commit subject (blocking) + `Intent`/`Task-Ref`/`Gates` provenance (WARN-only, report stage) | instant |
+| [`pre-push`](./.githooks/pre-push) | `git push` | audit-freshness preflight (>7 days since last `audit-log.md` entry = block) + `scripts/ci-local.sh` (fmt + clippy `--all-features` + workspace tests + Windows cross-compile + E2E session bus) | ~2–5 min |
 
 New clones must opt the hooks in once:
 

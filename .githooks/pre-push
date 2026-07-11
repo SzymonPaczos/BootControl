@@ -26,6 +26,28 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 SCRIPT="$ROOT/scripts/ci-local.sh"
 
+# --- Audit freshness preflight (D-007 local-first, adopted 2026-07-12) ---
+# The weekly audit must not silently lapse: a passive reminder paragraph
+# does not satisfy the convention, an actual date check does. Full
+# ceremony on purpose (toolkit D-004) — bypass with --no-verify.
+AUDIT_LOG="$ROOT/.claude/audit-log.md"
+LAST_AUDIT="$(grep -oEm1 '^## Audyt [0-9]{4}-[0-9]{2}-[0-9]{2}' "$AUDIT_LOG" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)"
+if [ -z "$LAST_AUDIT" ]; then
+    echo "pre-push: no '## Audyt YYYY-MM-DD' entry found in .claude/audit-log.md" >&2
+    echo "Run the weekly audit (skill: weekly-audit, or bash .claude/audit.sh) before pushing." >&2
+    exit 1
+fi
+# BSD date (macOS) first, GNU date (Linux) as fallback.
+LAST_EPOCH="$(date -j -f '%Y-%m-%d' "$LAST_AUDIT" +%s 2>/dev/null || date -d "$LAST_AUDIT" +%s)"
+AGE_DAYS=$(( ( $(date +%s) - LAST_EPOCH ) / 86400 ))
+if [ "$AGE_DAYS" -gt 7 ]; then
+    echo "pre-push: last audit ($LAST_AUDIT) is $AGE_DAYS days old (>7)." >&2
+    echo "Run the weekly audit (skill: weekly-audit, or bash .claude/audit.sh)," >&2
+    echo "or push with --no-verify if the owner explicitly waived this cycle." >&2
+    exit 1
+fi
+echo "pre-push: audit freshness OK (last audit $LAST_AUDIT, ${AGE_DAYS}d ago)"
+
 if [ ! -x "$SCRIPT" ]; then
     echo "pre-push: $SCRIPT is missing or not executable" >&2
     echo "Did you delete scripts/ci-local.sh? Restore it before pushing." >&2
