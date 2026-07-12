@@ -3,10 +3,6 @@
 // Top-level AppWindow router. PR 6 expands routing from 3 to 7 pages
 // (Overview / Boot Entries / Bootloader / Secure Boot / Snapshots / Logs /
 // Settings) per docs/GUI_V2_SPEC_v2.md §3 IA.
-//
-// Off-sidebar route: active_tab == 7 → SecurityLabPage (legacy Strict Mode
-// content). PR 7 surfaces this as a Strict Mode disclosure on Secure Boot
-// per Q4 verdict; PR 6 leaves the file in pages/ as the source of truth.
 
 import { Tokens } from "tokens.slint";
 import { GrubEntry, DiffLine, PreflightCheck } from "types.slint";
@@ -22,7 +18,6 @@ import { SecureBootPage } from "pages/secure_boot.slint";
 import { SnapshotsPage, SnapshotRow } from "pages/snapshots.slint";
 import { LogsPage, LogRow } from "pages/logs.slint";
 import { SettingsPage } from "pages/settings.slint";
-import { SecurityLabPage } from "pages/security_lab.slint";
 
 // Re-export structs and globals so Rust generated bindings expose them.
 export { GrubEntry, DiffLine, PreflightCheck, SnapshotRow, LogRow }
@@ -121,7 +116,6 @@ export component AppWindow inherits Window {
     in property <string> loading_message: "Processing...";
     in property <string> secure_boot_status: "Unknown";
     in property <string> mok_status: "Unknown";
-    in-out property <bool> paranoia_confirmed: false;
 
     // ── Confirmation Sheet state (PR 4) ──────────────────────────────────────
     in-out property <bool> show_confirmation: false;
@@ -162,7 +156,6 @@ export component AppWindow inherits Window {
     in-out property <bool> settings_auto_dismiss: false;
     in-out property <string> settings_high_contrast: "auto";
     in-out property <string> settings_reduced_motion: "auto";
-    in property <bool> settings_strict_mode_allowed: false;
 
     // ── RecoveryViewer overlay state ─────────────────────────────────────────
     in-out property <bool> show_recovery_viewer: false;
@@ -175,8 +168,6 @@ export component AppWindow inherits Window {
     callback rebuild_grub();
     callback backup_nvram();
     callback enroll_mok();
-    callback generate_paranoia();
-    callback merge_paranoia();
 
     // ── Confirmation Sheet callbacks ─────────────────────────────────────────
     callback open_confirmation(string);
@@ -220,8 +211,7 @@ export component AppWindow inherits Window {
                                 : (root.active_tab == 3 ? "Secure Boot"
                                 : (root.active_tab == 4 ? "Snapshots"
                                 : (root.active_tab == 5 ? "Logs"
-                                : (root.active_tab == 6 ? "Settings"
-                                : "Strict Mode"))))));
+                                : "Settings")))));
                             font-size: 26px;
                             font-weight: Tokens.weight-strong;
                             color: Tokens.on-surface;
@@ -334,16 +324,6 @@ export component AppWindow inherits Window {
                     auto-dismiss-successes <=> root.settings_auto_dismiss;
                     high-contrast-override <=> root.settings_high_contrast;
                     reduced-motion-override <=> root.settings_reduced_motion;
-                    strict-mode-allowed: root.settings_strict_mode_allowed;
-                }
-
-                // Off-sidebar legacy route: Strict Mode (Q4 verdict will fold
-                // this into Secure Boot page in PR 7).
-                if root.active_tab == 7 : SecurityLabPage {
-                    show-loading: root.show_loading;
-                    paranoia-confirmed <=> root.paranoia_confirmed;
-                    generate-paranoia => { root.generate_paranoia(); }
-                    merge-paranoia => { root.merge_paranoia(); }
                 }
             }
         }

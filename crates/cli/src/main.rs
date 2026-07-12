@@ -21,8 +21,6 @@
 //! | `snapshot restore`    | Restore a snapshot by ID. |
 //! | `nvram backup`        | Archive EFI NVRAM variables to a target directory. |
 //! | `mok sign`            | Sign a UKI image with the MOK and enroll the certificate. |
-//! | `paranoia generate`   | Generate a custom Secure Boot keyset (PK/KEK/db). |
-//! | `paranoia merge`      | Merge the custom db cert with Microsoft UEFI CA signatures. |
 //! | `efi list-entries`    | List `Boot####` UEFI variables (parsed). |
 //! | `efi get-order`       | Print current `BootOrder` as comma-separated indices. |
 //! | `efi set-order`       | Replace `BootOrder` with a permutation. |
@@ -96,11 +94,6 @@ enum Commands {
     Mok {
         #[command(subcommand)]
         action: MokAction,
-    },
-    /// Paranoia Mode — custom PK/KEK/db key generation and Microsoft merge.
-    Paranoia {
-        #[command(subcommand)]
-        action: ParanoiaAction,
     },
     /// UEFI boot menu management (BootOrder, BootNext, Boot####).
     Efi {
@@ -203,27 +196,6 @@ enum MokAction {
     Sign {
         /// Path to the unsigned UKI image (`.efi`).
         uki_path: String,
-    },
-}
-
-/// Paranoia Mode subcommands.
-///
-/// Only present when the daemon is compiled with the
-/// `experimental_paranoia` feature; otherwise both calls return
-/// `org.freedesktop.DBus.Error.UnknownMethod`.
-#[derive(Debug, Subcommand)]
-enum ParanoiaAction {
-    /// Generate a custom Secure Boot keyset (PK / KEK / db) under
-    /// `output_dir`. Empty string uses the daemon default.
-    Generate {
-        /// Output directory. Pass "" to accept the daemon default.
-        output_dir: String,
-    },
-    /// Merge the custom db certificate with Microsoft's UEFI CA
-    /// signatures into a `.auth` file usable for dual-boot.
-    Merge {
-        /// Output directory holding the previously generated keyset.
-        output_dir: String,
     },
 }
 
@@ -521,26 +493,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .await
                         .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Signed and enrolled: {uki_path}");
-                }
-            }
-        }
-
-        Commands::Paranoia { action } => {
-            let backend = resolve_backend().await;
-            match action {
-                ParanoiaAction::Generate { output_dir } => {
-                    let json = backend
-                        .generate_paranoia_keyset(&output_dir)
-                        .await
-                        .map_err(|e| dbus_error_message(&e).to_string())?;
-                    println!("{json}");
-                }
-                ParanoiaAction::Merge { output_dir } => {
-                    let auth = backend
-                        .merge_paranoia_with_microsoft(&output_dir)
-                        .await
-                        .map_err(|e| dbus_error_message(&e).to_string())?;
-                    println!("Merged .auth: {auth}");
                 }
             }
         }

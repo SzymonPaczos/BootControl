@@ -59,10 +59,6 @@ GitHub przed betą: opis+topics, zrzuty/GIF w README, CONTRIBUTING, issue templa
 
 ## P2 — porządkowe
 
-### Paranoia: `merge_with_microsoft_signatures` — mylna nazwa i copy w API/GUI
-Funkcja nie merguje sygnatur Microsoftu (przetwarza tylko własny cert → ESL → `.auth`), a D-Bus odpowiada "Signatures merged successfully" (`interface.rs:990`), GUI pokazuje "Merge with Microsoft Sigs" i "Microsoft db merged" (`security_lab.slint:76,98`, `gui/src/main.rs:624`). Fix: rename (np. `build_custom_db_auth`) + uczciwe copy albo ukrycie przycisku do czasu realnej implementacji merge. UX_MAPPING poprawione w `9a371ce`.
-**Źródło:** recenzja (Codex) 2026-07-12 #2. **Status:** czeka na decyzję właściciela.
-
 ### ETag/snapshot coverage poza GRUB write-path
 Snapshot zintegrowany tylko w `set_grub_value` (komentarz `interface.rs:151` wprost nazywa resztę follow-upem); `SetBootOrder`/`SetBootNext` nie przyjmują ETagu i nie robią snapshotu. README zawężone (`9a371ce`). Fix: dociągnąć snapshot/ETag do pozostałych write-pathów + doprecyzować decyzję "Stateless daemon, ETag" względem zapisów efivars (pojedyncza atomowa zmienna vs plik).
 **Źródło:** recenzja (Codex) 2026-07-12 #6. **Status:** czeka na decyzję właściciela.

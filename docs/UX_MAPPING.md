@@ -1,6 +1,6 @@
 # BootControl ↔ Grub Customizer — UX Mapping
 
-This is **not a 1:1 port**. Grub Customizer (GC) is a single-bootloader tool (GRUB only) for customising one config file (`/etc/default/grub`) and the menu it generates. BootControl spans **three bootloaders** (GRUB · systemd-boot · UKI) plus Secure Boot key management, MOK, and experimental Paranoia mode — operating through a privileged D-Bus daemon, not via Bash injection. The mapping below answers four questions per GC capability:
+This is **not a 1:1 port**. Grub Customizer (GC) is a single-bootloader tool (GRUB only) for customising one config file (`/etc/default/grub`) and the menu it generates. BootControl spans **three bootloaders** (GRUB · systemd-boot · UKI) plus Secure Boot status, NVRAM backup and MOK signing (Paranoia mode removed 2026-07-12 — scope decision) — operating through a privileged D-Bus daemon, not via Bash injection. The mapping below answers four questions per GC capability:
 
 1. What does GC expose to the user?
 2. What does BootControl expose **today**?
@@ -91,8 +91,8 @@ Net-new UX surface — these don't appear in GC at all. Each gets a v2 location 
 | **Secure Boot — current state** | Reads `efivarfs` and `mokutil`; shows enabled/setup-mode/disabled, MOK list, db/KEK/PK fingerprints | **Secure Boot** page → "State" card | **P0** |
 | **Secure Boot — NVRAM backup** | Saves `db`/`KEK`/`PK`/`MokListRT` to `/var/lib/bootcontrol/certs/` | **Secure Boot** page → "Backup" card → action button | **P0** |
 | **MOK enrollment** | Sign UKI with MOK private key, register MOK enrollment for next boot | **Secure Boot** page → "MOK" card → action button | **P0** |
-| **Paranoia mode — generate custom PK/KEK/db** | `experimental_paranoia` feature flag; replaces platform key | **Secure Boot** page → bottom "Strict mode" disclosure (resolves Open tension #1: per-page Strict toggle) | **P1** |
-| **Paranoia mode — build custom db `.auth`** | Builds a KEK-signed `.auth` from the custom db cert. Microsoft-signature merge is designed but **not implemented** (daemon method still carries the old "merge" name — rename tracked in backlog) | Same disclosure as above | **P1** |
+| ~~**Paranoia mode — generate custom PK/KEK/db**~~ | **Removed 2026-07-12** (scope decision "1.0 GRUB-first") | — | — |
+| ~~**Paranoia mode — build custom db `.auth`**~~ | **Removed 2026-07-12** (scope decision) | — | — |
 | **Snapshots** | Browse timestamped pre-write snapshots, view manifest, restore | **Snapshots** page | **P0** |
 | **Live Job Log** | Streamed `grub-mkconfig` / `sbsign` / `mokutil` / `bootctl install` output | **Logs** page + inline in Confirmation Sheet for active op | **P0** |
 | ~~**Embedded terminal**~~ (Cockpit-style) | ~~`bash` inside the app~~ | **Dropped** — Slint has no native terminal widget; Live Job Log substitutes for "show me what ran" | **drop** |
@@ -125,7 +125,7 @@ Net-new UX surface — these don't appear in GC at all. Each gets a v2 location 
 | systemd-boot management | None | D-Bus methods exist, no real UI | **First-class — Boot Entries + Bootloader** |
 | UKI cmdline | None | D-Bus methods exist, no real UI | **First-class — Bootloader / cmdline chips** |
 | Secure Boot (MOK) | None | Backend done, GUI button exists | **First-class — Secure Boot page** |
-| Secure Boot (Paranoia) | None | Backend gated (experimental), GUI buttons exist | **Strict-mode disclosure on Secure Boot page** |
+| ~~Secure Boot (Paranoia)~~ | — | **Removed 2026-07-12** | — |
 | Snapshots & rollback | Per-entry trash only | None | **System-wide snapshots — Snapshots page** |
 | Live job feedback | None (modal "running…" only) | Toasts only | **Live Job Log — Logs page + inline** |
 | Pre-flight safety checks | None | None | **Mandatory in Confirmation Sheet** |
@@ -140,7 +140,7 @@ The mapping above implies a **5-phase GUI v2 ship plan** (proposal, not yet comm
 1. **Foundation** — token system, sidebar, Overview page, Confirmation Sheet, snapshot infra in daemon (P0 prerequisites for everything below).
 2. **GRUB parity** — Bootloader page + Boot Entries page wired for GRUB, matching GC's coverage of typed controls and entry CRUD.
 3. **Multi-backend** — systemd-boot and UKI surfaced in the same pages (backend-aware sub-views).
-4. **Secure Boot** — full MOK + state visualisation; Paranoia disclosure under Strict mode.
+4. **Secure Boot** — full MOK + state visualisation. (Paranoia/Strict disclosure removed 2026-07-12.)
 5. **Diagnostics** — Snapshots page, Logs page. (Terminal page dropped, see Resolved decisions §1.)
 
 Total P0 items: **~18**. P1: **~13** (theming and live preview promoted). P2: **~10**. The mapping confirms the existing single-tab GUI is roughly *one* of the 5 phases — there is real work ahead, but every line item now has a home.

@@ -33,7 +33,7 @@ Steps 1, 2, 4, 8, 11 are non-negotiable. Steps 3, 7, 10 are required for the fil
    - `grub_manager.rs` — `/etc/default/grub`
    - `systemd_boot_manager.rs` — `/boot/loader/entries/*.conf`
    - `uki_manager.rs` — `/etc/kernel/cmdline`
-   - `secureboot/` — MOK + Paranoia
+   - `secureboot/` — MOK signing + NVRAM backup
    - `initramfs/` — dracut / mkinitcpio / kernel-install drivers
 3. **Error mapping** → every new error variant in `bootcontrol-core::error::BootControlError` needs a corresponding D-Bus name in [`src/dbus_error.rs`](./src/dbus_error.rs) using the namespace `org.bootcontrol.Error.<Variant>`. The frontend matches on the **name**, never the message string.
 4. **Test** → integration test in the same manager file using `tempfile::TempDir`. End-to-end test in [`../../tests/e2e/`](../../tests/e2e/) if the change crosses the D-Bus boundary.
@@ -64,7 +64,6 @@ After every successful GRUB write the failsafe entry "Linux (Failsafe)" is re-in
   - `etag_mismatch.rs` — stale ETag rejection
   - `concurrent_write.rs` — two simultaneous mutations
   - `secureboot_mok.rs` — Shim/MOK signing path
-  - `secureboot_paranoia.rs` — `--features experimental_paranoia` only
 - E2E env: `BOOTCONTROL_BUS=session` redirects the daemon to the user's session bus. The Polkit check is replaced by an always-`Ok` mock injected via `cfg(test)`.
 
 ```bash

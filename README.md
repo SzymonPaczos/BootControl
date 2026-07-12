@@ -81,7 +81,7 @@ All frontends run in **user space**. Only `bootcontrold` runs as root, activated
 | **GRUB 2** | ✅ Implemented — parser, ETag, atomic write, failsafe |
 | **systemd-boot / UKI** | ✅ Core implemented — loader entry parser, UKI cmdline |
 | **Secure Boot (MOK)** | ✅ Implemented — sbsign, mokutil enrollment |
-| **Secure Boot (Paranoia Mode)** | 🧪 Experimental — PK/KEK/db key generation + KEK-signed `.auth` payloads (`--features experimental_paranoia`); NVRAM enrollment **not implemented yet** |
+| **Secure Boot (Paranoia Mode / custom PK)** | 🗑 Removed 2026-07-12 (scope decision "1.0 GRUB-first") — highest hardware risk, never finished; code preserved in git history |
 | **Windows UEFI boot menu (BootOrder/BootNext/Boot####)** | ✅ Managed **from Linux** (core + D-Bus + CLI, Phase 7); ⚠️ Windows-side variable backend not implemented — `x86_64-pc-windows-gnu` cross-compile scaffold only; full Windows GUI panel planned post-beta |
 
 ---
@@ -122,11 +122,7 @@ bootcontrol/
 git clone https://github.com/YOUR_USERNAME/bootcontrol.git
 cd bootcontrol
 
-# Build everything (no Secure Boot paranoia mode)
 cargo build --workspace
-
-# Build with experimental Secure Boot paranoia mode
-cargo build --workspace --features "bootcontrold/experimental_paranoia"
 ```
 
 ### Demo Mode (macOS / no Linux daemon)
@@ -177,9 +173,6 @@ Individual targets:
 ```bash
 # All unit and integration tests (cross-platform, no daemon needed):
 cargo test --workspace
-
-# With experimental_paranoia feature:
-cargo test --workspace --features "bootcontrold/experimental_paranoia"
 
 # End-to-end tests (Linux only, requires a running session bus):
 BOOTCONTROL_BUS=session cargo test --test e2e -- --ignored

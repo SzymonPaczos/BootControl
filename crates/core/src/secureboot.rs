@@ -1,11 +1,8 @@
 //! Secure Boot signing abstractions.
 #![deny(missing_docs)]
 
-use std::path::Path;
-#[cfg(feature = "experimental_paranoia")]
-use std::path::PathBuf;
-
 use crate::error::BootControlError;
+use std::path::Path;
 
 /// Abstraction over a MOK-based UKI signing and enrollment workflow.
 pub trait MokSigner {
@@ -73,22 +70,4 @@ pub trait MokSigner {
         cert: &Path,
         output: &Path,
     ) -> Result<(), BootControlError>;
-}
-
-/// Paths to a generated custom Secure Boot key set (PK, KEK, db).
-#[cfg(feature = "experimental_paranoia")]
-#[derive(Debug, Clone)]
-pub struct ParanoiaKeySet {
-    /// Path to the generated PK (Platform Key) certificate.
-    pub pk_cert: PathBuf,
-    /// Path to the generated KEK (Key Exchange Key) certificate.
-    pub kek_cert: PathBuf,
-    /// Path to the generated db (Signature Database) certificate.
-    pub db_cert: PathBuf,
-    /// Path to the generated PK private key.
-    pub pk_key: PathBuf,
-    /// Path to the generated KEK private key.
-    pub kek_key: PathBuf,
-    /// Path to the generated db private key.
-    pub db_key: PathBuf,
 }

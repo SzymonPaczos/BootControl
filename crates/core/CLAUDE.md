@@ -25,7 +25,7 @@ Read [`../../AGENTS.md`](../../AGENTS.md) §II before editing.
 | `src/hash.rs` | SHA-256 ETag. **Do not duplicate.** |
 | `src/error.rs` | `BootControlError` enum. Daemon maps each variant to a D-Bus error name. |
 | `src/initramfs.rs` | Driver detection (`mkinitcpio` / `dracut` / `kernel-install`). Pure detection logic; the daemon does the actual invocation. |
-| `src/secureboot.rs` | Pure helpers for MOK / Paranoia (key shape validation, cert fingerprinting). Shell-out happens in `crates/daemon/src/secureboot/`. |
+| `src/secureboot.rs` | Pure helpers for MOK (key shape validation, cert fingerprinting). Shell-out happens in `crates/daemon/src/secureboot/`. |
 | `src/prober.rs` | Bootloader autodetection (which manager to instantiate). |
 | `src/boot_manager.rs` | `BootManager` trait — abstraction across GRUB / systemd-boot / UKI. |
 | `src/backends/` | One submodule per concrete `BootManager` implementation. |

@@ -16,8 +16,6 @@ enum UiMessage {
     RebuildGrub,
     BackupNvram,
     EnrollMok,
-    GenerateParanoia,
-    MergeParanoia,
     FetchSnapshots,
     RestoreSnapshot(String),
 }
@@ -128,20 +126,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tx = tx.clone();
         move || {
             let _ = tx.blocking_send(UiMessage::EnrollMok);
-        }
-    });
-
-    ui.on_generate_paranoia({
-        let tx = tx.clone();
-        move || {
-            let _ = tx.blocking_send(UiMessage::GenerateParanoia);
-        }
-    });
-
-    ui.on_merge_paranoia({
-        let tx = tx.clone();
-        move || {
-            let _ = tx.blocking_send(UiMessage::MergeParanoia);
         }
     });
 
@@ -593,62 +577,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
-                UiMessage::GenerateParanoia => {
-                    set_loading(
-                        &ui_handle_async,
-                        true,
-                        "Generating custom PK/KEK/db keys...".to_string(),
-                    );
-                    match view_model.generate_paranoia().await {
-                        Ok(_json_paths) => {
-                            set_loading(&ui_handle_async, false, String::new());
-                            show_toast(
-                                &ui_handle_async,
-                                "Keys generated at /var/lib/bootcontrol/paranoia-keys/".to_string(),
-                                "success",
-                            );
-                        }
-                        Err(e) => {
-                            set_loading(&ui_handle_async, false, String::new());
-                            show_toast(
-                                &ui_handle_async,
-                                format!(
-                                    "Key generation failed: {}",
-                                    bootcontrol_client::dbus_error_message(&e)
-                                ),
-                                "error",
-                            );
-                        }
-                    }
-                }
-                UiMessage::MergeParanoia => {
-                    set_loading(
-                        &ui_handle_async,
-                        true,
-                        "Merging Microsoft signatures...".to_string(),
-                    );
-                    match view_model.merge_paranoia().await {
-                        Ok(auth_path) => {
-                            set_loading(&ui_handle_async, false, String::new());
-                            show_toast(
-                                &ui_handle_async,
-                                format!("Microsoft db merged: {}", auth_path),
-                                "success",
-                            );
-                        }
-                        Err(e) => {
-                            set_loading(&ui_handle_async, false, String::new());
-                            show_toast(
-                                &ui_handle_async,
-                                format!(
-                                    "Merge failed: {}",
-                                    bootcontrol_client::dbus_error_message(&e)
-                                ),
-                                "error",
-                            );
-                        }
-                    }
-                }
                 UiMessage::FetchSnapshots => {
                     match view_model.list_snapshots().await {
                         Ok(snaps) => {
@@ -813,7 +741,6 @@ fn populate_demo_data(ui: &AppWindow) {
 
     // Settings demo defaults (already have defaults from .slint, this is
     // explicit for clarity).
-    ui.set_settings_strict_mode_allowed(false);
 }
 
 // ── PR Granite: bundled font registration ──────────────────────────────────

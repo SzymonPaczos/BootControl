@@ -27,8 +27,6 @@ pub const REQUIRED_ACTIONS: &[&str] = &[
     "org.bootcontrol.rewrite-grub",
     "org.bootcontrol.write-bootloader",
     "org.bootcontrol.enroll-mok",
-    "org.bootcontrol.generate-keys",
-    "org.bootcontrol.replace-pk",
     "org.bootcontrol.restore-snapshot",
 ];
 

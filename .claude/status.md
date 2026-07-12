@@ -29,7 +29,7 @@ i sesji planu wydawniczego 2026-07-12:
    właściciela. Backlog P1.
 4. **P2** — z audytu 2026-07-12 (audit-evidence gate, `cargo --locked`/deny,
    symlink hardening `BackupNvram`, stare branche) i z recenzji Codex
-   2026-07-12 (paranoia rename, ETag/snapshot coverage, OVMF harness,
+   2026-07-12 (ETag/snapshot coverage, OVMF harness — paranoia rename zamknięty usunięciem funkcji 2026-07-12,
    macierz distro, daemon lifecycle) + starsze (Faza A, `gui-spike`) —
    czekają na decyzje właściciela.
 

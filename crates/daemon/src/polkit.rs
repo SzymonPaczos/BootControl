@@ -26,9 +26,7 @@ pub mod actions {
     /// Enroll a Machine Owner Key (MOK / shim path) or back up NVRAM keys.
     pub const ENROLL_MOK: &str = "org.bootcontrol.enroll-mok";
     /// Generate custom Secure Boot keys (PK, KEK, db).
-    pub const GENERATE_KEYS: &str = "org.bootcontrol.generate-keys";
     /// Replace the Platform Key with a user-generated one (irreversible).
-    pub const REPLACE_PK: &str = "org.bootcontrol.replace-pk";
     /// Restore boot configuration from a previously captured snapshot.
     pub const RESTORE_SNAPSHOT: &str = "org.bootcontrol.restore-snapshot";
 }

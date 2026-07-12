@@ -4,7 +4,6 @@
 //   - Snapshots: retention preset (Q5 verdict)
 //   - Notifications: auto-dismiss successes (Q8 a11y option)
 //   - Accessibility: high contrast + reduced motion overrides
-//   - Strict Mode: read-only display from /etc/bootcontrol/policy.toml
 //
 // PR 6 ships the page layout. Real RetentionPicker / preset radio /
 // toggle widgets land in PR 7 once we have proper a11y form atoms.
@@ -19,7 +18,6 @@ export component SettingsPage inherits Rectangle {
     in-out property <bool> auto-dismiss-successes: false;
     in-out property <string> high-contrast-override: "auto";
     in-out property <string> reduced-motion-override: "auto";
-    in property <bool> strict-mode-allowed: false;
 
     callback save();
 
@@ -80,20 +78,6 @@ export component SettingsPage inherits Rectangle {
                 text: "Reduced motion: " + root.reduced-motion-override;
                 color: Tokens.on-surface-muted;
                 font-size: Tokens.font-label-large;
-            }
-        }
-
-        Card {
-            title: "Strict Mode";
-            subtitle: "Allows custom Secure Boot key generation and Platform Key replacement. Configured by the system administrator in /etc/bootcontrol/policy.toml.";
-
-            Text {
-                text: root.strict-mode-allowed
-                    ? "Strict Mode is allowed on this host."
-                    : "Strict Mode is disabled. Edit /etc/bootcontrol/policy.toml to enable.";
-                color: root.strict-mode-allowed ? Tokens.warning : Tokens.on-surface-muted;
-                font-size: Tokens.font-label-large;
-                font-weight: Tokens.weight-medium;
             }
         }
     }

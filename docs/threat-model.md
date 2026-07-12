@@ -150,7 +150,6 @@ write that skips any of them is a critical bug.
 | Atomic write via tmp+rename | `crates/daemon/src/grub_manager.rs::tests::write_is_atomic` |
 | Snapshot creation + restore round trip | `crates/daemon/src/snapshot.rs::tests` |
 | MOK signing path (privileged) | `tests/e2e/src/secureboot_mok.rs` |
-| Paranoia keyset generation | `tests/e2e/src/secureboot_paranoia.rs` |
 
 CI for all of the above runs through `./scripts/ci-local.sh` on every
 `git push`.
@@ -181,11 +180,11 @@ about and either out-of-scope or queued behind a follow-up.
 4. **No defense against firmware that ignores `BootOrder`.** Some OEM
    firmwares hard-pin their boot entry first. Outside our scope.
 
-5. **`experimental_paranoia` PK/KEK/db generation is experimental.**
-   The feature gate is loud and deliberate. Documented in
-   [`ARCHITECTURE.md`](../ARCHITECTURE.md) §IV. Don't enable on a
-   production install without understanding what custom Platform Keys
-   imply (you lose the ability to boot any factory firmware update).
+5. **Paranoia Mode (custom PK/KEK/db) was removed 2026-07-12.**
+   The "1.0 GRUB-first" scope decision (`.claude/rules/decisions.md`)
+   deleted the half-built implementation — it carried the project's
+   highest hardware risk for its smallest audience. See
+   [`ARCHITECTURE.md`](../ARCHITECTURE.md) §IV for the removal note.
 
 6. **SteamOS / NixOS / Vanilla OS detection is rejection-only.** We
    detect and refuse. We do not yet delegate to their respective

@@ -88,11 +88,7 @@ BOOTCONTROL_DEMO=1 cargo run -p bootcontrol -- get GRUB_TIMEOUT
 
 ## Feature flags
 
-Only one exists: **`experimental_paranoia`** — gates Secure Boot custom PK/KEK/db generation.
-
-```bash
-cargo test --workspace --features bootcontrold/experimental_paranoia
-```
+None. `experimental_paranoia` was removed 2026-07-12 (scope decision "1.0 GRUB-first" in `.claude/rules/decisions.md`) — do not reintroduce feature flags without an owner decision.
 
 ## Platform
 

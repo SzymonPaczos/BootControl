@@ -11,7 +11,6 @@ autobins = false
 autolib  = false
 
 [features]
-experimental_paranoia = []
 
 [dev-dependencies]
 zbus     = { workspace = true }

@@ -6,7 +6,6 @@ description = "Pure parsing, hashing, and ETag logic for BootControl — no I/O,
 license = "GPL-3.0"
 
 [features]
-experimental_paranoia = []
 
 [dependencies]
 sha2 = "0.10"

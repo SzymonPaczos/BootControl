@@ -211,14 +211,6 @@ pub trait Manager {
     /// Sign a UKI at `uki_path` and enroll the MOK certificate.
     async fn sign_and_enroll_uki(&self, uki_path: &str) -> zbus::Result<()>;
 
-    /// Generate a custom PK/KEK/db key set in `output_dir` (empty = default).
-    /// Returns a JSON array of generated file paths.
-    async fn generate_paranoia_keyset(&self, output_dir: &str) -> zbus::Result<String>;
-
-    /// Merge the custom db cert with Microsoft UEFI CA signatures.
-    /// Returns the path to the merged `.auth` file.
-    async fn merge_paranoia_with_microsoft(&self, output_dir: &str) -> zbus::Result<String>;
-
     // ── systemd-boot ──────────────────────────────────────────────────────────
 
     /// List all systemd-boot loader entries.
@@ -337,14 +329,6 @@ pub trait BootBackend: Send + Sync {
     /// Sign a UKI and enroll the MOK certificate.
     async fn sign_and_enroll_uki(&self, uki_path: &str) -> zbus::Result<()>;
 
-    /// Generate a custom Secure Boot key set (PK/KEK/db).
-    /// Returns JSON list of generated key file paths.
-    async fn generate_paranoia_keyset(&self, output_dir: &str) -> zbus::Result<String>;
-
-    /// Merge custom db cert with Microsoft UEFI CA signatures.
-    /// Returns path to the merged `.auth` file.
-    async fn merge_paranoia_with_microsoft(&self, output_dir: &str) -> zbus::Result<String>;
-
     // ── systemd-boot ──────────────────────────────────────────────────────────
 
     /// List all systemd-boot loader entries.
@@ -449,16 +433,6 @@ impl BootBackend for DbusBackend {
     async fn sign_and_enroll_uki(&self, uki_path: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.sign_and_enroll_uki(uki_path).await
-    }
-
-    async fn generate_paranoia_keyset(&self, output_dir: &str) -> zbus::Result<String> {
-        let proxy = ManagerProxy::new(&self.conn).await?;
-        proxy.generate_paranoia_keyset(output_dir).await
-    }
-
-    async fn merge_paranoia_with_microsoft(&self, output_dir: &str) -> zbus::Result<String> {
-        let proxy = ManagerProxy::new(&self.conn).await?;
-        proxy.merge_paranoia_with_microsoft(output_dir).await
     }
 
     async fn list_loader_entries(&self) -> zbus::Result<Vec<LoaderEntryDto>> {
@@ -590,14 +564,6 @@ impl BootBackend for MockBackend {
 
     async fn sign_and_enroll_uki(&self, _uki_path: &str) -> zbus::Result<()> {
         Ok(())
-    }
-
-    async fn generate_paranoia_keyset(&self, _output_dir: &str) -> zbus::Result<String> {
-        Ok(r#"["/var/lib/bootcontrol/paranoia-keys/PK.crt","/var/lib/bootcontrol/paranoia-keys/PK.key","/var/lib/bootcontrol/paranoia-keys/KEK.crt","/var/lib/bootcontrol/paranoia-keys/KEK.key","/var/lib/bootcontrol/paranoia-keys/db.crt","/var/lib/bootcontrol/paranoia-keys/db.key"]"#.to_string())
-    }
-
-    async fn merge_paranoia_with_microsoft(&self, _output_dir: &str) -> zbus::Result<String> {
-        Ok("/var/lib/bootcontrol/paranoia-keys/db-merged.auth".to_string())
     }
 
     async fn list_loader_entries(&self) -> zbus::Result<Vec<LoaderEntryDto>> {
@@ -963,43 +929,6 @@ mod tests {
             .sign_and_enroll_uki("/boot/efi/EFI/linux.efi")
             .await
             .is_ok());
-    }
-
-    // ── MockBackend::generate_paranoia_keyset ─────────────────────────────────
-
-    #[tokio::test]
-    async fn mock_backend_generate_paranoia_keyset_returns_json_with_key_files() {
-        let backend = MockBackend;
-        let json = backend
-            .generate_paranoia_keyset("")
-            .await
-            .expect("generate_paranoia_keyset should succeed");
-        let trimmed = json.trim();
-        assert!(
-            trimmed.starts_with('['),
-            "must be a JSON array, got: {json}"
-        );
-        assert!(trimmed.ends_with(']'), "must be a JSON array, got: {json}");
-        assert!(json.contains("PK"), "keyset JSON must mention PK key file");
-        assert!(
-            json.contains("KEK"),
-            "keyset JSON must mention KEK key file"
-        );
-    }
-
-    // ── MockBackend::merge_paranoia_with_microsoft ────────────────────────────
-
-    #[tokio::test]
-    async fn mock_backend_merge_paranoia_returns_auth_path() {
-        let backend = MockBackend;
-        let path = backend
-            .merge_paranoia_with_microsoft("")
-            .await
-            .expect("merge_paranoia should succeed");
-        assert!(
-            path.ends_with(".auth"),
-            "merged db path must end with .auth, got: {path}"
-        );
     }
 
     // ── MockBackend::list_loader_entries ──────────────────────────────────────

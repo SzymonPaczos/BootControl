@@ -1,15 +1,8 @@
 # BootControl runtime policy — install to /etc/bootcontrol/policy.toml
 #
 # Daemon reads this at startup. Missing file = all defaults (safest).
-# Spec: docs/GUI_V2_SPEC_v2.md §7 (Strict Mode runtime gate) and §6 (snapshots).
-
-[strict_mode]
-# Whether the GUI's Strict Mode (custom PK/KEK/db generation, PK replacement)
-# is allowed on this host. Default: false.
-# Even when the daemon was compiled with --features experimental_paranoia,
-# this gate prevents the disclosure from rendering until an operator
-# explicitly opts the host in.
-allowed = false
+# Spec: docs/GUI_V2_SPEC_v2.md §6 (snapshots).
+# (The [strict_mode] section was removed 2026-07-12 together with Paranoia Mode.)
 
 [snapshots]
 # Retention policy. The daemon keeps the larger of the two coverage windows.

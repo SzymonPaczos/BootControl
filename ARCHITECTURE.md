@@ -173,22 +173,17 @@ No modifications to GRUB files or `os-prober`. Fast OS switching is implemented 
 
 After rebuilding a UKI, the daemon automatically signs the resulting `.efi` file with BootControl's private MOK key. This requires the user to enter a password in `MokManager` on the next reboot to enroll the new key.
 
-### Paranoia Mode — Custom PK/KEK (EXPERIMENTAL)
+### Paranoia Mode — Custom PK/KEK (REMOVED 2026-07-12)
 
-**What it does:** When `SetupMode == 1` (firmware in setup mode), the daemon generates custom keys and merges them with original Microsoft signatures.
-**WARNING:** Due to severely non-compliant UEFI NVRAM implementations from various motherboard vendors, writing manual ASN.1 signature lists can permanently brick the hardware. This mode relies on strictly offline parsing and includes an explicit **dry-run** via `efivar_signature_list` before any hardware NVRAM write is authorized.
-
-**Implementation status (2026-07-12):** the shipped code (`experimental_paranoia`) covers key-set generation and producing a KEK-signed `.auth` payload (`crates/daemon/src/secureboot/paranoia.rs`). The Microsoft-signature merge and the NVRAM write described below are the approved design target and are **not implemented yet** — nothing in the current codebase writes PK/KEK/db to firmware.
-
-**The Microsoft certificate problem — Local NVRAM Dumping:**
-
-Bundling Microsoft certificates in the binary is brittle — Microsoft rotated their UEFI CA in 2023 and will do so again. Fetching them from the internet during a firmware-level operation creates a critical MITM vector and breaks the offline requirement.
-
-**Solution:**
-1. **Before** clearing the firmware (`SetupMode=0`): BootControl backs up the original `db` and `KEK` variables from `/sys/firmware/efi/efivars/` to `/var/lib/bootcontrol/certs/`
-2. **After** rebooting with a clean BIOS (`SetupMode=1`): BootControl merges the locally extracted Microsoft signatures with the freshly generated custom keys and writes the hybrid database
-
-**Zero network. Zero hardcoded certificates.**
+Removed by the "1.0 GRUB-first" scope decision (`.claude/rules/decisions.md`).
+The half-built implementation (key-set generation + KEK-signed `.auth`; no
+Microsoft merge, no NVRAM write ever shipped) carried the project's highest
+hardware risk — non-compliant vendor NVRAM implementations can brick a board —
+for its smallest audience. The design notes live in git history (`git log --
+crates/daemon/src/secureboot/paranoia.rs`); any revival is a new, deliberate
+project with its own owner decision. The "zero network, zero hardcoded
+certificates" rule from that design still binds the remaining Secure Boot
+paths (MOK signing, NVRAM backup).
 
 ---
 

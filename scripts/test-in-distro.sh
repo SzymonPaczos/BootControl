@@ -4,7 +4,7 @@
 # pre-push hook on a single Ubuntu host doesn't see:
 #
 #   * coreutils variant (GNU vs uutils — bit us on Ubuntu 26.04 with the
-#     paranoia test stub script)
+#     test stub script)
 #   * default /bin/sh (dash vs bash — bit us with ${@: -1} array slice)
 #   * package-manager-installed Rust vs rustup
 #   * libc version skew

@@ -114,18 +114,6 @@ impl ViewModel {
         self.backend.sign_and_enroll_uki("").await
     }
 
-    /// Generate a custom Secure Boot key set (PK/KEK/db).
-    /// Returns JSON list of generated key file paths.
-    pub async fn generate_paranoia(&self) -> Result<String, zbus::Error> {
-        self.backend.generate_paranoia_keyset("").await
-    }
-
-    /// Merge custom db cert with Microsoft UEFI CA signatures.
-    /// Returns path to the merged `.auth` file.
-    pub async fn merge_paranoia(&self) -> Result<String, zbus::Error> {
-        self.backend.merge_paranoia_with_microsoft("").await
-    }
-
     /// List all snapshots known to the daemon, newest first.
     pub async fn list_snapshots(&self) -> Result<Vec<SnapshotInfoDto>, zbus::Error> {
         self.backend.list_snapshots().await

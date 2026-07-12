@@ -32,9 +32,6 @@ This document describes all levels of testing in the BootControl project: unit t
 # All workspace tests (fastest):
 cargo test --workspace
 
-# With experimental Secure Boot Paranoia Mode:
-cargo test --workspace --features "bootcontrold/experimental_paranoia"
-
 # Including doctests:
 cargo test --workspace --doc
 ```
@@ -177,7 +174,6 @@ BOOTCONTROL_BUS=session cargo test --test e2e grub_roundtrip -- --ignored
 | `etag_mismatch` | Concurrent write rejection via stale ETag |
 | `concurrent_write` | Two concurrent `set_grub_value` calls |
 | `secureboot_mok` | MOK signing and enrollment request generation |
-| `secureboot_paranoia` | Paranoia Mode key generation (`--features experimental_paranoia`) |
 
 ---
 
@@ -267,4 +263,3 @@ sudo rm /usr/share/polkit-1/actions/org.bootcontrol.policy
 - **`tempfile` for all filesystem tests** — never write to `/etc/default/grub` from tests
 - **`#[ignore]` for all E2E tests** — `cargo test --workspace` must stay fast
 - **Linux-only E2E gate** — `#![cfg(target_os = "linux")]` in `tests/e2e/src/main.rs`
-- **Feature-gated Paranoia Mode** — always use `--features experimental_paranoia` explicitly

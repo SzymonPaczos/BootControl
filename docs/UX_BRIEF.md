@@ -140,7 +140,7 @@ No password input ever appears in a Slint window. (freedesktop polkit-apps doc; 
 
 Resolved via red team + synthesis (see [`GUI_V2_SPEC_v2.md`](./GUI_V2_SPEC_v2.md) §2):
 
-- ~~**Paranoia Mode IA**~~ — **resolved Q4**: one disclosure on Secure Boot page + type-to-confirm + runtime policy gate (`/etc/bootcontrol/policy.toml`).
+- ~~**Paranoia Mode IA**~~ — resolved Q4, then **feature removed 2026-07-12** (scope decision "1.0 GRUB-first") — the disclosure/policy-gate design is moot.
 - ~~**CLI/TUI parity badge**~~ — **resolved §17**: per-action `command_disclosure` widget showing the equivalent `bootcontrol` invocation.
 - ~~**Snapshot retention policy**~~ — **resolved Q5**: bounded default (last 50 OR last 30 days, whichever is larger) + disk-pressure InfoBar when total > 1 GB; configurable in Settings.
 
