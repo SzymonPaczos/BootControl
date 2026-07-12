@@ -95,6 +95,8 @@ The daemon is **not resident**. It uses `systemd` socket activation:
 
 **Why:** A boot manager is used infrequently. Keeping a root process alive in the background violates the principle of minimal attack surface. Socket activation and async jobs naturally enforce the Stateless Design constraint.
 
+**Implementation status (2026-07-12):** socket activation ships (`bootcontrold.socket`); the async-job layer (`JobId`, `sd_notify(EXTEND_TIMEOUT_USEC)`) and the 60-second idle shutdown are design intent — none of it is implemented yet (no `sd_notify`/`JobId` in `crates/daemon`; no idle timeout in the systemd unit).
+
 **CI Testing Strategy — Session Bus + Polkit Mock:**
 
 The system D-Bus and Polkit require root and a running systemd, which breaks GitHub Actions. The architecture solves this with a single environment variable:
@@ -123,7 +125,7 @@ Within that boundary, the recovery mechanisms are per-bootloader:
 
 | Bootloader | Mechanism | Status |
 |-----------|-----------|--------|
-| GRUB | **Failsafe menu entry** — a minimal known-good `menuentry` written to `/etc/bootcontrol/failsafe.cfg` after every successful GRUB write. Built exclusively from `/proc/version` + `/proc/mounts` (running kernel, `root=<uuid> ro`), never from the config being written. Config-level only — not an EFI entry. | ✅ Implemented (`crates/daemon/src/failsafe.rs`) |
+| GRUB | **Failsafe menu entry** — a minimal known-good `menuentry` written to `/etc/bootcontrol/failsafe.cfg` after every successful GRUB write. Built exclusively from `/proc/version` + `/proc/mounts` (running kernel, `root=<uuid> ro`), never from the config being written. Config-level only — not an EFI entry. | ⚠️ Partially implemented — the snippet is written by `crates/daemon/src/failsafe.rs`, but no shipped `/etc/grub.d/` hook includes it in `grub.cfg` yet (gate G2) |
 | systemd-boot / UKI | **systemd `BootCounting`** (`systemd-bless-boot`) — each write should set the "tries left" counter (e.g. `+3`) so the boot loader falls back to the previous entry after repeated boot failures. | ⚠️ Design intent — **not yet implemented**: no write-path sets the counter today (verification/implementation tracked as release gate G2 in `.claude/task-briefs/release-readiness.md`) |
 | All backends | Pre-write **snapshots** (`/var/lib/bootcontrol/snapshots/`) restorable via `RestoreSnapshot`, plus the CLI `--rescue` chroot module. | ✅ Implemented |
 

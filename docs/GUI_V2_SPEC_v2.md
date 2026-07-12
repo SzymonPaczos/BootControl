@@ -274,7 +274,7 @@ This section moves the snapshot promise from "UX-side guarantee" (UX_BRIEF.md:11
 
 ## 7. Polkit actions reconciliation
 
-`ARCHITECTURE.md:51` declares a single action `org.bootcontrol.manage`. UX_BRIEF.md:106 declares five. **The five win** as authoritative; ARCHITECTURE.md must be patched (see §19).
+`ARCHITECTURE.md:51` declares a single action `org.bootcontrol.manage`. UX_BRIEF.md:106 declares five. **The five win** as authoritative; ARCHITECTURE.md must be patched (see §19). _Update 2026-07-12: ARCHITECTURE.md now lists **six** actions — `restore-snapshot` joined with the snapshot work; see the update note below the table._
 
 ### Authoritative action list
 
@@ -699,5 +699,5 @@ The v2 spec is implementable when:
 - ☐ Every cross-document inconsistency flagged in §19 is resolved (or explicitly punted with issue link).
 - ☐ Engineer can implement PR 0 reading only this spec + the Slint docs.
 - ☐ Every page in §10 has its 4 visual states described (carry-forward + patches).
-- ☐ Every destructive flow maps to one of the 5 polkit actions in §7.
+- ☐ Every destructive flow maps to one of the polkit actions in §7 (six since 2026-07-12, incl. `restore-snapshot`).
 - ☐ The CLI parity ledger (§17) commits each gap to a specific PR rather than deferring indefinitely.

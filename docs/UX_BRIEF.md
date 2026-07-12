@@ -106,7 +106,7 @@ The unprivileged GUI never holds elevated state. For each dangerous intent:
 
 1. User clicks the destructive primary inside the Confirmation Sheet.
 2. GUI shows a **Pre-flight Card** running checks against the daemon (read-only D-Bus calls).
-3. On all-green, GUI invokes the daemon's privileged method. The daemon registers one polkit action per intent: `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`, `org.bootcontrol.rewrite-grub`. Each ships a `.policy` file with `allow_active=auth_admin_keep` (5-minute cache scoped to the flow) and a contextual auth message passed at call time, naming the device path and the artefact.
+3. On all-green, GUI invokes the daemon's privileged method. The daemon registers one polkit action per intent — six today: `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`, `org.bootcontrol.rewrite-grub`, `org.bootcontrol.restore-snapshot` (canonical list: `packaging/polkit/org.bootcontrol.policy`). Auth level is per action: `auth_admin_keep` only for non-irreversible actions (`rewrite-grub`, `write-bootloader`); irreversible actions use `auth_admin` (re-prompt every time) — see GUI_V2_SPEC_v2.md §7. Each ships a contextual auth message passed at call time, naming the device path and the artefact.
 4. The session polkit agent (polkit-gnome on GNOME, plasma-polkit-agent on KDE) shows the prompt. BootControl ships no agent of its own.
 5. On success, the daemon emits a D-Bus signal; the GUI re-reads live state and updates the Persistent InfoBar / Live Job Log. No success toast is the only signal — the InfoBar transitions to `--success`.
 

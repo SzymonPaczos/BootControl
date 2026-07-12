@@ -32,12 +32,12 @@ Each version represents a stable, shippable milestone. Work within a version is 
 | 1 | `feat(core): implement sha-256 stateless file hashing` | Hash computation for `/boot/efi` and `/etc/default/grub`; ETag generation | ✅ Done |
 | 2 | `feat(parser): implement /etc/default/grub parser` | Safe key-value extraction and mutation; user comments preserved exactly | ✅ Done |
 | 3 | `feat(daemon): add d-bus interface and polkit authorization` | Socket-activated daemon; Polkit check before every write; ETag validation | ✅ Done |
-| 4 | `feat(failsafe): add golden parachute and rescue module` | Auto-inject `Linux (Failsafe)` entry on every write; basic `--rescue` CLI module | ✅ Done |
+| 4 | `feat(failsafe): add golden parachute and rescue module` | Auto-inject `Linux (Failsafe)` entry on every write; basic `--rescue` CLI module | ⚠️ Partial — snippet generator (`failsafe.rs`) + `--rescue` shipped, but **no `/etc/grub.d/` hook ships to include the snippet in `grub.cfg`** (wiring = release gate G2) |
 | 5 | `feat(cli): wire cli frontend to d-bus daemon` | `bootcontrol list`, `bootcontrol set <key> <value>`, `bootcontrol --rescue` | ✅ Done |
 | 6 | `feat(tui): wire tui frontend to d-bus daemon` | Interactive terminal UI (ratatui); end-to-end tests in headless container | ✅ Done |
 | 7 | `test(e2e): add container-based end-to-end test suite` | Full write/verify/rollback cycle tested in isolation without real hardware | ✅ Done |
 
-**Exit criteria:** A user on Fedora, Arch, or Ubuntu can install BootControl, change a GRUB parameter via CLI or TUI, and the system boots correctly. If anything goes wrong, the Failsafe entry guarantees recovery.
+**Exit criteria:** A user on Fedora, Arch, or Ubuntu can install BootControl, change a GRUB parameter via CLI or TUI, and the system boots correctly. Recovery today = snapshots + `--rescue`; the failsafe menu entry is generated but not yet wired into `grub.cfg` (gate G2).
 
 ---
 
@@ -68,7 +68,7 @@ Each version represents a stable, shippable milestone. Work within a version is 
 | 2 | `feat(gui): implement boot entry list view` | Visual list of boot entries with status indicators | ✅ Done |
 | 3 | `feat(gui): implement parameter editor` | Form-based GRUB parameter editing with live validation | ✅ Done |
 | 4 | `feat(gui): implement failsafe status panel` | Shows current Failsafe entry state; one-click rescue launch | ✅ Done |
-| 5 | `feat(gui): implement secure boot panel` | NVRAM backup, MOK enrollment, Paranoia Mode controls | ✅ Done |
+| 5 | `feat(gui): implement secure boot panel` | NVRAM backup, MOK enrollment, Paranoia Mode controls | ⚠️ Regression noted 2026-07-12 — panel ships, but `enroll_mok`/`backup_nvram` pass empty paths (`crates/gui/src/view_model.rs:108-115`) and fail daemon validation; fix tracked in backlog P1 |
 | 6 | `test(gui): add gui smoke tests` | Automated UI tests verifying core flows without real hardware | ✅ Done |
 
 **Exit criteria:** A non-technical user can change their GRUB timeout or default OS using a point-and-click interface.
@@ -122,7 +122,7 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 | 1 | `feat(secureboot): add shim/mok signing mode` | Auto-sign rebuilt UKI with MOK private key; generate MokManager enrollment request | ✅ Done |
 | 2 | `feat(secureboot): add nvram backup utility` | Back up `db` and `KEK` EFI variables to `/var/lib/bootcontrol/certs/` before any key operation | ✅ Done |
 | 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | ⚠️ Partial (`experimental_paranoia`) — keyset generation + KEK-signed `.auth` shipped; Microsoft-signature merge and NVRAM write **not implemented** (`crates/daemon/src/secureboot/paranoia.rs` stops at the `.auth` file) |
-| 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | ✅ Done |
+| 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | ⚠️ Smoke harness — boots OVMF with enrolled MOK vars, kills QEMU after 5 s; no boot/serial/enrollment assertion yet (`tests/e2e/src/secureboot_mok.rs`) |
 
 **Exit criteria:** A user can enroll BootControl's MOK key (Shim mode) or take full ownership of Secure Boot keys (Paranoia mode) without touching the internet. ✅ Met for Shim/MOK; ⚠️ the Paranoia ownership flow is partial — see PR 3 status.
 
@@ -149,13 +149,13 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 
 | PR | Commit | Deliverable | Status |
 |----|--------|------------|--------|
-| 1 | `45e9f89` feat(core,daemon): cross-platform UEFI variable reader | Read EFI boot variables via `/sys/firmware/efi/efivars` (Linux) and the Windows `GetFirmwareEnvironmentVariable` API surface | ✅ Done |
+| 1 | `45e9f89` feat(core,daemon): cross-platform UEFI variable reader | Read EFI boot variables via `/sys/firmware/efi/efivars` (Linux) and the Windows `GetFirmwareEnvironmentVariable` API surface | ⚠️ Partial — Linux efivarfs backend shipped; the Windows half is a documented follow-up (`crates/core/src/uefi_vars.rs` module note) and **does not exist yet** |
 | 2 | `d1e7bbb` feat(core,daemon): BootNext atomic write + clear | Atomically set/clear `BootNext` UEFI variable from user space (no daemon on Windows) | ✅ Done |
 | 3 | `9fd95f8` feat(core): BootOrder reorder + move helper | Read and reorder `BootOrder` EFI variable | ✅ Done |
 | 4–6 | `e2f70ca` feat: Phase 7 PR4-6 — Windows scaffold via cross-compile | Windows binary stub, platform-aware feature gating in frontends, CI cross-compile target `x86_64-pc-windows-gnu` (frontends + core; daemon excluded by design) | ✅ Done |
 | (follow-up) | `4e5429b` feat: expose UEFI boot menu management (BootOrder, BootNext, Boot####) | Surface the Phase 7 PR1-3 core helpers through D-Bus + client trait + CLI (`bootcontrol efi list-entries / get-order / set-order / move-entry / get-next / set-next / clear-next`) | ✅ Done |
 
-**Exit criteria:** A Windows user can install BootControl, see their EFI boot entries, reorder them, and set a one-time `BootNext` target. ✅ Met on the API surface; native Windows GUI panel beyond the cross-compile scaffold is post-beta polish (see versioning note at the top).
+**Exit criteria:** A Windows user can install BootControl, see their EFI boot entries, reorder them, and set a one-time `BootNext` target. ❌ Not met from Windows — no Windows variable backend exists; the D-Bus/CLI surface manages UEFI entries **from Linux** only. Windows backend + GUI panel are post-beta (see versioning note at the top).
 
 ---
 
@@ -166,7 +166,7 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 | PR | Commit | Deliverable | Status |
 |----|--------|------------|--------|
 | 1 | `8838dab` docs(man): add bootcontrol(1) and bootcontrold(8) man pages | Full man pages for the user-facing CLI and the daemon | ✅ Done |
-| 2 | `cb6d3e2` chore(test): multi-distro container test runner | Containerised integration test runner across Ubuntu / Fedora / Arch / openSUSE / Silverblue | ✅ Done |
+| 2 | `cb6d3e2` chore(test): multi-distro container test runner | Containerised integration test runner across Ubuntu / Fedora / Arch / openSUSE / Silverblue | ⚠️ Partial — runner supports ubuntu / fedora / arch (`scripts/test-in-distro.sh`); openSUSE and Silverblue are not in the matrix yet |
 | 3 | `11dea25` chore(release): local release artifact builder | Local release workflow: tag → build → package → publish artifacts (mirrors the abandoned GitHub Actions pipeline locally per the no-cloud-CI decision) | ✅ Done |
 | 4 | `a033e6e` docs(security): add structured threat model | Internal red-team review of all write paths; structured threat model document at [`docs/threat-model.md`](./docs/threat-model.md) | ✅ Done |
 

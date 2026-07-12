@@ -17,7 +17,7 @@ Tools like **Grub Customizer** work by injecting Bash scripts and manipulating s
 
 **BootControl** takes a different approach:
 - It is a **declarative configuration manager** — it uses native parsers, never raw script injection
-- Every write operation is **authorized via Polkit** and protected by an ETag concurrency check
+- Every write operation is **authorized via Polkit**; config-file writes additionally carry an **ETag** concurrency check
 - If BootControl crashes or fails, **your system still boots normally** (no chainloader, no single point of failure)
 - The **stateless design** means no internal database — every operation hashes config files fresh
 
@@ -82,7 +82,7 @@ All frontends run in **user space**. Only `bootcontrold` runs as root, activated
 | **systemd-boot / UKI** | ✅ Core implemented — loader entry parser, UKI cmdline |
 | **Secure Boot (MOK)** | ✅ Implemented — sbsign, mokutil enrollment |
 | **Secure Boot (Paranoia Mode)** | 🧪 Experimental — PK/KEK/db key generation + KEK-signed `.auth` payloads (`--features experimental_paranoia`); NVRAM enrollment **not implemented yet** |
-| **Windows UEFI boot menu (BootOrder/BootNext/Boot####)** | ✅ Core + D-Bus + CLI implemented (Phase 7) — cross-compile scaffold for `x86_64-pc-windows-gnu`; full Windows GUI panel planned post-beta |
+| **Windows UEFI boot menu (BootOrder/BootNext/Boot####)** | ✅ Managed **from Linux** (core + D-Bus + CLI, Phase 7); ⚠️ Windows-side variable backend not implemented — `x86_64-pc-windows-gnu` cross-compile scaffold only; full Windows GUI panel planned post-beta |
 
 ---
 
@@ -248,12 +248,12 @@ short tour stays in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §V.
 
 **Key security properties:**
 - 🔒 **Polkit authorization** — every write requires user authentication
-- 🔒 **ETag freshness check** — prevents stale-read overwrite and concurrent modification
+- 🔒 **ETag freshness check** — config-file writes reject stale reads and concurrent modification (UEFI-variable writes are single atomic operations; ETag/snapshot coverage for them is tracked pre-beta)
 - 🔒 **POSIX flock** — exclusive file lock prevents TOCTOU race conditions
 - 🔒 **Payload blacklist** — blocks injection of dangerous kernel parameters (`init=`, `selinux=0`, etc.)
-- 🔒 **Failsafe menu entry (GRUB)** — a minimal known-good `menuentry` (running kernel, `root=<uuid> ro` only) regenerated after every successful GRUB write; config-level only, never an EFI boot entry
+- 🔒 **Failsafe menu entry (GRUB)** — a minimal known-good `menuentry` (running kernel, `root=<uuid> ro` only) regenerated after every successful GRUB write; config-level only, never an EFI boot entry. **Note:** the generated snippet is not yet auto-included in `grub.cfg` — the packaging hook is pending (release gate G2)
 - 🔒 **Bail-out policy** — any complex Bash in `/etc/default/grub` causes an immediate error, never a partial edit
-- 🔒 **Snapshot before every write** — pre-write contents archived to `/var/lib/bootcontrol/snapshots/`, rollback restores byte-for-byte
-- 🔒 **Atomic-distro pre-flight** — refuses writes on ostree / rpm-ostree / SteamOS / NixOS / Vanilla OS that would either fail or get rolled back
+- 🔒 **Snapshot before config-file writes** — pre-write contents archived to `/var/lib/bootcontrol/snapshots/`, rollback restores byte-for-byte; integrated in the GRUB write-path today, remaining write-paths tracked pre-beta
+- 🔒 **Atomic-distro pre-flight** — bare ostree / SteamOS / NixOS / Vanilla OS: writes refused with an actionable error; rpm-ostree: kernel-arg changes delegated to `rpm-ostree kargs`
 
 **Found a vulnerability?** See the [reporting section](./docs/threat-model.md#6-reporting-a-vulnerability) in the threat model.
