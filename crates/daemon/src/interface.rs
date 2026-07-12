@@ -16,6 +16,9 @@
 //! ## `GetActiveBackend`
 //! Read-only — no authorization required.
 //!
+//! ## `ListGrubEntries`
+//! Read-only — no authorization required.
+//!
 //! ## `SetGrubValue`
 //! Wielowarstwowa autoryzacja zapisu:
 //! 1. Polkit check ([`crate::polkit::authorize_with_polkit`])
@@ -63,6 +66,21 @@ struct EfiBootEntryDto {
     pub active: bool,
     pub hidden: bool,
     pub description: String,
+}
+
+/// Daemon-side wire DTO for one GRUB boot-menu item, serialized as JSON
+/// inside the `ListGrubEntries` D-Bus method's string return. Mirrors
+/// [`bootcontrol_core::grub_cfg::GrubMenuEntry`] field-for-field (core has
+/// no serde dependency); the client declares a matching DTO and
+/// deserializes identical JSON.
+#[derive(Debug, Clone, Serialize)]
+struct GrubMenuEntryDto {
+    pub title: String,
+    pub id: Option<String>,
+    /// `GRUB_DEFAULT`-compatible index path, e.g. `"1>0"`.
+    pub path: String,
+    pub depth: usize,
+    pub is_submenu: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -625,6 +643,57 @@ impl GrubManager {
     async fn get_active_backend(&self) -> String {
         info!("D-Bus: GetActiveBackend");
         self.backend.name().to_string()
+    }
+
+    /// List the boot menu entries from the generated `grub.cfg`.
+    ///
+    /// Parses the `menuentry`/`submenu` structure that GRUB would show at
+    /// boot, in file order (A1 chunk 2 — the read half of GRUB menu-entry
+    /// management).
+    ///
+    /// **Read-only — no Polkit authorization required.** Consistent with
+    /// `ListLoaderEntries`: the same information is readable from
+    /// `/boot/grub/grub.cfg` anyway (see `docs/threat-model.md` on
+    /// unauthenticated read-only listing).
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// ListGrubEntries() -> (s, s)
+    /// ```
+    ///
+    /// ## Return value
+    ///
+    /// A tuple of:
+    /// - `s` — JSON array of menu items; each object has `title`, `id`
+    ///   (nullable), `path` (`GRUB_DEFAULT`-compatible index path, e.g.
+    ///   `"1>0"`), `depth`, `is_submenu`.
+    /// - `s` — 64-character lowercase hex SHA-256 ETag of `grub.cfg`,
+    ///   letting callers detect that the menu was regenerated since listing.
+    ///
+    /// ## Errors
+    ///
+    /// - `org.bootcontrol.Error.EspScanFailed` — `grub.cfg` missing or
+    ///   unreadable.
+    /// - `org.bootcontrol.Error.MalformedValue` — menu structure could not
+    ///   be parsed (unterminated block or quote).
+    async fn list_grub_entries(&self) -> Result<(String, String), DaemonError> {
+        info!(path = ?self.grub_cfg_path, "D-Bus: ListGrubEntries");
+        let (entries, etag) =
+            grub_manager::list_menu_entries(&self.grub_cfg_path).map_err(to_daemon_error)?;
+        let dtos: Vec<GrubMenuEntryDto> = entries
+            .into_iter()
+            .map(|e| GrubMenuEntryDto {
+                title: e.title,
+                id: e.id,
+                path: e.path,
+                depth: e.depth,
+                is_submenu: e.is_submenu,
+            })
+            .collect();
+        let json = serde_json::to_string(&dtos)
+            .map_err(|e| DaemonError::EspScanFailed(format!("serialization error: {e}")))?;
+        Ok((json, etag))
     }
 
     /// Regenerate `/boot/grub/grub.cfg` by invoking `grub-mkconfig`.
