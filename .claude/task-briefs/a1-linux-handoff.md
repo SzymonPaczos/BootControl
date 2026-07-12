@@ -12,12 +12,15 @@
 | Chunk 1 — parser `grub_cfg.rs` w core (15 testów kontraktowych) | commit `cf7ddaf`, pełne `ci-local.sh` zielone |
 | Fix P0: daemon nie kompilował się na Linuksie (wiszące `actions::GENERATE_KEYS`/`REPLACE_PK` po usunięciu paranoia w `4fcf14c`) | commit `6a3fd03`; systemowa luka gate'ów zapisana w backlogu (P1) |
 | Chunk 2 — daemon: `grub_manager::list_menu_entries` + D-Bus `ListGrubEntries() -> (json, etag)` | commit `34668c3` |
+| Fix: wyścig o stały plik tmp w `uki_manager` (ENOENT/zgubiony zapis przy równoległych testach; nazwa tmp teraz pochodna od pliku docelowego jak w pozostałych managerach) | commit `ccd04af` |
+| Test `policy_check` dostosowany do 4 akcji Polkit (kolejny fallout `4fcf14c`, ta sama klasa co `6a3fd03`) | commit `a0fb883` |
 
 Gate'y chunku 2 wykonane na macOS: `cargo check` + `clippy --all-targets
 --all-features -D warnings` dla targetu `x86_64-unknown-linux-gnu` (czysto)
-oraz testy daemona w kontenerze Docker `rust:1` (aarch64 Linux) — wynik w
-polu `Gates:` commita. **Natywna weryfikacja na Linuksie = pierwszy krok
-poniżej.**
+oraz **pełne testy daemona w kontenerze Docker `rust:1` (aarch64 Linux):
+lib-testy + 35 doctestów zielone** (po fixach `ccd04af`/`a0fb883`; pierwszy
+przebieg złapał 3 zastane porażki). Natywna weryfikacja na x86_64 = pierwszy
+krok poniżej — kontener to arm64, nie zastępuje docelowej platformy.
 
 ## Krok 0 — świeży klon (jeśli to nowy checkout)
 

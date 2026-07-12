@@ -34,7 +34,8 @@ Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.
 
 ### Lokalne gate'y nie kompilują daemona dla Linuksa — regresje przechodzą niewykryte
 Lib daemona jest w całości za `#![cfg(target_os = "linux")]` (`crates/daemon/src/lib.rs:11`), a środowisko dev to macOS: pre-commit/pre-push clippy widzi pusty crate, cross-compile Windows w pre-push jawnie wyklucza daemona. Efekt: commit `4fcf14c` (usunięcie paranoia) zostawił w `polkit.rs` referencje do usuniętych `actions::GENERATE_KEYS`/`REPLACE_PK` i **daemon przestał się kompilować na swoim docelowym targecie** — nie wykrył tego żaden hook; znalezione przypadkiem przy A1 chunk 2. Kandydat rules-as-gates: do `ci-local.sh` dodać `cargo check -p bootcontrold --target x86_64-unknown-linux-gnu --all-targets --all-features` (target zainstalowany; na Linuksie krok pokrywa się z natywnym buildem).
-**Źródło:** sesja A1 chunk 2, 2026-07-12 (naprawa samej regresji: osobny commit `fix(daemon)` na gałęzi A1). **Status:** otwarte.
+Skala potwierdzona w tej samej sesji: uruchomienie testów daemona w kontenerze Linux wykryło **jeszcze dwie** niewidoczne na macOS pozycje — test `policy_check` z oczekiwaniami na 6 akcji (fallout tego samego `4fcf14c`) i wyścig o stały plik tmp w `uki_manager` (naprawione: `a0fb883`, `ccd04af`).
+**Źródło:** sesja A1 chunk 2, 2026-07-12 (naprawa samej regresji kompilacji: commit `6a3fd03` na gałęzi A1). **Status:** otwarte.
 
 ### Failsafe menu entry nie jest wpinany do `grub.cfg`
 `failsafe.rs` zapisuje snippet do `/etc/bootcontrol/failsafe.cfg` i odpala `grub-mkconfig`, ale w repo nie ma skryptu `/etc/grub.d/` (ani innego mechanizmu) dołączającego ten plik do wynikowego `grub.cfg` — wpis ratunkowy realnie **nie pojawia się w menu GRUB-a**. Fix: packaging hook (np. `/etc/grub.d/41_bootcontrol_failsafe`) + test VM asertujący obecność wpisu w `grub.cfg` po zapisie. Dokumenty oznaczone jako Partial (commit `9a371ce`).
