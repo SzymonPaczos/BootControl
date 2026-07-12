@@ -107,6 +107,11 @@ _Zasada „najpierw zapisz, potem kontynuuj": zadania odkryte w rozmowie/audycie
 lądują tu natychmiast, gdy priorytet nie jest oczywisty. Triage do P0/P1/P2 robi
 właściciel._
 
+### GUI v2: strony Boot Entries i Bootloader nigdy nie dostały UX ze spec v2
+`bootloader.slint` to jawny placeholder („Coming in PR 7", 39 linii), a `boot_entries.slint` to port tabeli v1 key=value z per-row Save (komentarz w pliku: „PR 3 is a faithful port"; Inspector/reorder z v2 §3.2 „lands in PR 6"). ROADMAP Phase 3.5 deklaruje PR 6/7 ✅ Done (mega-commit `64e1001`) — naddeklaracja: tokeny/atomy/router/confirmation-sheet istnieją, ale **dwie główne strony robocze zostały przy UX v1**. To prawdopodobnie rdzeń „katastrofy UX" zgłaszanej przez właściciela 2026-07-12. Akcje: (1) sprostować ROADMAP Phase 3.5 (kolejna pozycja doc-honesty), (2) decyzja właściciela: implementacja §3.2/§3.3 przed czy po becie, (3) redesign wizualny (CLAUDE_DESIGN_BRIEF) rozszerzyć — brief zakłada „IA locked, tylko wizualia", a problem jest głębszy.
+Pełny handoff (diagnoza, pipeline zrzutów, tory A/B, prompt startowy): [`task-briefs/gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
+**Źródło:** przegląd UX 2026-07-12 (statyczna analiza `.slint` + spec v2). **Status:** niejasny priorytet — handoff gotowy do startu w nowej rozmowie.
+
 ### `cargo-udeps` exec error w audit.sh (drugi audyt z rzędu)
 `.claude/audit.sh` wywołuje `cargo-udeps --workspace` do dead-code detection — od 2026-05-23 zwraca exec error (toolchain nightly niedostępny/niekompatybilny). Efekt: dead-code layer zdegradowany, weryfikacja greppem zamiast tego. Decyzja: naprawić nightly (`rustup toolchain install nightly` + `cargo install cargo-udeps`) czy usunąć krok ze skryptu i polegać na warstwie greppem.
 **Źródło:** Audyt 2026-07-12 (warstwa statyczna). **Status:** niejasny priorytet.
