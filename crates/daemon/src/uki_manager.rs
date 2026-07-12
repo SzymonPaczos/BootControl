@@ -160,10 +160,17 @@ where
     let new_content = transform(&content)?;
 
     // ── Step 6: Atomic write ──────────────────────────────────────────────────
+    // The tmp name derives from the target file name (same pattern as
+    // grub_manager/systemd_boot_manager) — a fixed name collides when two
+    // targets share a parent directory (e.g. parallel tests in /tmp).
+    let file_name = path
+        .file_name()
+        .unwrap_or_else(|| std::ffi::OsStr::new("cmdline"))
+        .to_string_lossy();
     let tmp_path = path
         .parent()
         .unwrap_or(Path::new("/etc/kernel"))
-        .join("cmdline.bootcontrol.tmp");
+        .join(format!("{file_name}.bootcontrol.tmp"));
 
     let mut tmp = File::create(&tmp_path).map_err(|e| BootControlError::EspScanFailed {
         reason: format!("create tmp file failed: {e}"),
