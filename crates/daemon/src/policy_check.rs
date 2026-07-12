@@ -175,20 +175,18 @@ mod tests {
 
     #[test]
     fn partial_policy_lists_missing_actions() {
-        // Three out of six declared.
+        // Two out of four declared.
         let partial = format!(
             r#"<action id="{}"></action>
-            <action id="{}"></action>
             <action id="{}"></action>"#,
-            REQUIRED_ACTIONS[0], REQUIRED_ACTIONS[1], REQUIRED_ACTIONS[2]
+            REQUIRED_ACTIONS[0], REQUIRED_ACTIONS[1]
         );
         match validate_policy_content(&partial) {
             Err(PolicyError::IncompleteActions { present, missing }) => {
-                assert_eq!(present.len(), 3);
-                assert_eq!(missing.len(), 3);
+                assert_eq!(present.len(), 2);
+                assert_eq!(missing.len(), 2);
+                assert!(missing.contains(&REQUIRED_ACTIONS[2].to_string()));
                 assert!(missing.contains(&REQUIRED_ACTIONS[3].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[4].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[5].to_string()));
             }
             other => panic!("expected IncompleteActions, got {other:?}"),
         }
