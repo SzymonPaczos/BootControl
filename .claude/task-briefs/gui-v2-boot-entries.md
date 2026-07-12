@@ -37,6 +37,16 @@ Strona Boot Entries zgodna z v1 §3.2 (`.claude/history/2026-05-01-gui-v2-redesi
 - Branch base: `main`; proponowana gałąź: `feat/gui-v2-boot-entries` (PR A1a/b/c mogą iść jako osobne gałęzie sekwencyjne, jedna per PR).
 - Kolejność: A1a → A1b → A1c; A2 dopiero po A1.
 
+## Protokół local-Builder (eksperyment tokenowy, zgoda właściciela 2026-07-12)
+
+Lokalny model (LM Studio) = Builder; agent Claude = Coordinator + autor testów + Reviewer. Per chunk:
+1. Agent pisze do repo **work-order** (spec + sygnatury + twarde ograniczenia: zero `unwrap`, pure `&str -> Result`, komentarze przeżywają bajtowo) **+ komplet failing testów** (testy = kontrakt).
+2. Właściciel podaje work-order lokalnemu modelowi; model implementuje i **iteruje lokalnie do zielonych testów** (`cargo test -p <crate>` — zero tokenów).
+3. Agent robi przegląd diffu (PASS / NEEDS_WORK z konkretami), pełne gate'y, zgodność z decyzjami, commit z provenance.
+4. Max **2 pętle** NEEDS_WORK na chunk (konwencja multi-agent) — potem agent przejmuje chunk.
+
+Przydział chunków wg dopasowania do lokalnego modelu: **chunk 1 (parser `menuentry` w core — idealny: pure functions, table-driven testy)** → **chunk 4 (client trait + MockBackend — łatwy)** → chunk 2 (daemon D-Bus — średni, dużo idiomów Polkit/ETag) → chunk 3 (GUI `.slint` — **odradzany dla lokalnego modelu**: Slint to niszowy język, którego małe modele praktycznie nie znają; robi agent).
+
 ## Prompt rozpoczynający nową rozmowę
 
 > Przeczytaj `CLAUDE.md`, potem `.claude/task-briefs/gui-v2-boot-entries.md`
