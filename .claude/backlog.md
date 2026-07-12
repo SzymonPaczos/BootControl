@@ -32,6 +32,10 @@ Kanoniczny plan cyklu wydawniczego (alfa/beta/stable wg ryzyka — decyzja `deci
 Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.claude/agents/`, `.claude/settings*.json`, `.claude/rules/`, `AGENTS.md`, `packaging/polkit/`) nie mają żadnego mechanicznego strażnika — jedyną granicą jest proza w `multi-agent-delivery.md §6`. Rola Builder (jedyna z `Write`) mogłaby cicho osłabić gate w commicie zbundlowanym z feature; hooki działają z working tree, więc samoosłabiający edit `.githooks/pre-push` (np. `exit 0`) zadziałałby na tym samym pushu. Obniżone z HIGH → MEDIUM/P1 bo `Write` nie jest allowlistowany w commitowanym `settings.json` (zapis generuje prompt = gate ludzki). Proponowany fix: w `pre-push`/`audit.sh` przeciąć `git diff --name-only <range>` z listą chronionych ścieżek → WARN + wymóg osobnego, review'owanego commitu (opcjonalnie: commit dotykający control-plane nie może zawierać zmian w `crates/**`); dodać `permissions.deny` path-scope na Write do tych ścieżek.
 **Źródło:** Red Team 2026-07-12 (Finding 1, MEDIUM). **Status:** czeka na decyzję właściciela.
 
+### Lokalne gate'y nie kompilują daemona dla Linuksa — regresje przechodzą niewykryte
+Lib daemona jest w całości za `#![cfg(target_os = "linux")]` (`crates/daemon/src/lib.rs:11`), a środowisko dev to macOS: pre-commit/pre-push clippy widzi pusty crate, cross-compile Windows w pre-push jawnie wyklucza daemona. Efekt: commit `4fcf14c` (usunięcie paranoia) zostawił w `polkit.rs` referencje do usuniętych `actions::GENERATE_KEYS`/`REPLACE_PK` i **daemon przestał się kompilować na swoim docelowym targecie** — nie wykrył tego żaden hook; znalezione przypadkiem przy A1 chunk 2. Kandydat rules-as-gates: do `ci-local.sh` dodać `cargo check -p bootcontrold --target x86_64-unknown-linux-gnu --all-targets --all-features` (target zainstalowany; na Linuksie krok pokrywa się z natywnym buildem).
+**Źródło:** sesja A1 chunk 2, 2026-07-12 (naprawa samej regresji: osobny commit `fix(daemon)` na gałęzi A1). **Status:** otwarte.
+
 ### Failsafe menu entry nie jest wpinany do `grub.cfg`
 `failsafe.rs` zapisuje snippet do `/etc/bootcontrol/failsafe.cfg` i odpala `grub-mkconfig`, ale w repo nie ma skryptu `/etc/grub.d/` (ani innego mechanizmu) dołączającego ten plik do wynikowego `grub.cfg` — wpis ratunkowy realnie **nie pojawia się w menu GRUB-a**. Fix: packaging hook (np. `/etc/grub.d/41_bootcontrol_failsafe`) + test VM asertujący obecność wpisu w `grub.cfg` po zapisie. Dokumenty oznaczone jako Partial (commit `9a371ce`).
 **Źródło:** niezależna recenzja (Codex) 2026-07-12 #1; powiązane z bramką G2 release-readiness. **Status:** otwarte.
@@ -58,6 +62,10 @@ GitHub przed betą: opis+topics, zrzuty/GIF w README, CONTRIBUTING, issue templa
 **Źródło:** decyzja zakresu 2026-07-12. **Status:** zatwierdzone — czeka na kolejkę (#6–7).
 
 ## P2 — porządkowe
+
+### `audit.rs`: MESSAGE_ID martwych operacji po usunięciu paranoia
+`crates/daemon/src/audit.rs:35-38` trzyma `message_ids::REPLACE_PK`/`GENERATE_KEYS` dla operacji usuniętych commitem `4fcf14c`. Kompiluje się (to tylko stałe + test unikalności); potencjalna wartość: interpretacja historycznych wpisów journald — ale paranoia nigdy nie wyszła poza alfę właściciela. Decyzja: usunąć czy zostawić z komentarzem „historical, operation removed".
+**Źródło:** sesja A1 chunk 2, 2026-07-12. **Status:** czeka na decyzję właściciela.
 
 ### ETag/snapshot coverage poza GRUB write-path
 Snapshot zintegrowany tylko w `set_grub_value` (komentarz `interface.rs:151` wprost nazywa resztę follow-upem); `SetBootOrder`/`SetBootNext` nie przyjmują ETagu i nie robią snapshotu. README zawężone (`9a371ce`). Fix: dociągnąć snapshot/ETag do pozostałych write-pathów + doprecyzować decyzję "Stateless daemon, ETag" względem zapisów efivars (pojedyncza atomowa zmienna vs plik).

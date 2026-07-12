@@ -15,9 +15,11 @@
 
 use bootcontrol_core::error::BootControlError;
 
-/// The six per-intent Polkit Action IDs declared in
+/// The four per-intent Polkit Action IDs declared in
 /// `packaging/polkit/org.bootcontrol.policy`. Single source of truth for
 /// callers — every `authorize_with_polkit` call site picks one of these.
+/// (`generate-keys` and `replace-pk` were removed together with Paranoia
+/// Mode — scope decision "1.0 GRUB-first", 2026-07-12.)
 pub mod actions {
     /// Modify `/etc/default/grub`, `/etc/kernel/cmdline`, or rpm-ostree kargs.
     pub const REWRITE_GRUB: &str = "org.bootcontrol.rewrite-grub";
@@ -25,8 +27,6 @@ pub mod actions {
     pub const WRITE_BOOTLOADER: &str = "org.bootcontrol.write-bootloader";
     /// Enroll a Machine Owner Key (MOK / shim path) or back up NVRAM keys.
     pub const ENROLL_MOK: &str = "org.bootcontrol.enroll-mok";
-    /// Generate custom Secure Boot keys (PK, KEK, db).
-    /// Replace the Platform Key with a user-generated one (irreversible).
     /// Restore boot configuration from a previously captured snapshot.
     pub const RESTORE_SNAPSHOT: &str = "org.bootcontrol.restore-snapshot";
 }
@@ -82,8 +82,6 @@ pub async fn authorize_with_polkit(caller_uid: u32, action: &str) -> Result<(), 
         actions::REWRITE_GRUB,
         actions::WRITE_BOOTLOADER,
         actions::ENROLL_MOK,
-        actions::GENERATE_KEYS,
-        actions::REPLACE_PK,
         actions::RESTORE_SNAPSHOT,
     ];
     if !KNOWN.contains(&action) {
@@ -166,12 +164,6 @@ mod tests {
                 .await
                 .is_ok());
             assert!(authorize_with_polkit(uid, actions::ENROLL_MOK)
-                .await
-                .is_ok());
-            assert!(authorize_with_polkit(uid, actions::GENERATE_KEYS)
-                .await
-                .is_ok());
-            assert!(authorize_with_polkit(uid, actions::REPLACE_PK)
                 .await
                 .is_ok());
             assert!(authorize_with_polkit(uid, actions::RESTORE_SNAPSHOT)
