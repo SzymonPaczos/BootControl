@@ -40,8 +40,8 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Status:** aktywna.
 **Jak stosować:** Nigdy nie renaming. Jeśli pojawi się drugi binary — nowy identyfikator, nie zmiana istniejącego. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`AGENTS.md`](../../AGENTS.md) §VI.
 
-### 2026-05-03 — Polkit Actions: 5 per-intent
-**Decyzja:** Daemon eksponuje 5 osobnych Polkit Action IDs zamiast jednej `manage`: `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`. Legacy `org.bootcontrol.manage` deprecated.
+### 2026-05-03 — Polkit Actions: per-intent (pierwotnie 5, od PR 5c: 6)
+**Decyzja:** Daemon eksponuje osobne Polkit Action IDs per intent zamiast jednej `manage` — pierwotnie 5: `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk` *(liczba superseded — od PR 5c jest ich 6, patrz Doprecyzowanie)*. Legacy `org.bootcontrol.manage` deprecated.
 **Dlaczego:** Single-action `manage` autoryzuje wszystko jednym hasłem — niezgodne z principle of least privilege. Per-intent pozwala adminowi zezwolić użytkownikowi na rewrite GRUB-a bez zgody na PK replacement.
 **Status:** aktywna.
 **Jak stosować:** Nowy write-path w daemonie wymaga osobnego Action ID per intent. Polkit `.policy` w `packaging/` wymienia wszystkie akcje. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7.
@@ -60,10 +60,10 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Jak stosować:** Nowy kernel parameter w UI nie omija sanitizera — dodać go do allowlist/blacklist w `crates/daemon/src/sanitizer.rs` (lub gdziekolwiek jest). Klient walidacyjny w GUI to wygoda; daemon **musi** re-walidować. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II.
 
 ### 2026-05-03 — Failsafe = systemd BootCounting, nie własny chainloader
-**Decyzja:** BootControl integruje się z `systemd-bless-boot` (BootCounting, `tries left +3`). Brak własnych "Golden Parachute" duplicate entries. **Tworzenie chainloaderów (`BootControl.efi` jako pierwszy EFI boot entry) jest zakazane.**
+**Decyzja:** BootControl integruje się z `systemd-bless-boot` (BootCounting, `tries left +3`) *(kierunek docelowy — integracja dotąd niezaimplementowana, patrz Doprecyzowanie 2026-07-12)*. Brak własnych "Golden Parachute" duplicate entries. **Tworzenie chainloaderów (`BootControl.efi` jako pierwszy EFI boot entry) jest zakazane.**
 **Dlaczego:** BootControl jest **managerem**, nigdy zależnością procesu boot. Chainloader = single point of failure: zepsuty BootControl = niemożliwy boot. BootCounting = native, sprawdzony, distro-agnostic.
 **Status:** aktywna.
-**Jak stosować:** Każdy nowy write-path ustawia tries-left counter. Jeśli pojawi się pomysł "a może własny failsafe entry" — przeczytaj tę decyzję i zaproponuj inaczej. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II.
+**Jak stosować:** Każdy nowy write-path ustawia tries-left counter *(wymóg docelowy — dziś żaden go nie ustawia, patrz Doprecyzowanie)*. Jeśli pojawi się pomysł "a może własny failsafe entry" — przeczytaj tę decyzję i zaproponuj inaczej. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II.
 **Doprecyzowanie (2026-07-12, G1 doc-honesty):** (1) Terminologia: zakaz dotyczy wpisów na poziomie **EFI** i chainloaderów. **Menu entry** „Linux (Failsafe)" zapisywany przez `crates/daemon/src/failsafe.rs` do `/etc/bootcontrol/failsafe.cfg` (poziom configu GRUB, budowany wyłącznie z `/proc`, nigdy z zapisywanej konfiguracji) jest **zgodny** z tą decyzją — nie czyni BootControl zależnością bootowania. Termin „Golden Parachute" wycofany z dokumentów jako dwuznaczny; kanoniczne nazwy: „failsafe menu entry" (GRUB, dozwolone/zaimplementowane) vs „EFI-level duplicate entries / chainloader" (zakazane). (2) Stan implementacji: integracja BootCounting **nie jest jeszcze zaimplementowana** — żaden write-path nie ustawia tries-left; do czasu implementacji (bramka G2 w `task-briefs/release-readiness.md`) dokumenty nie przedstawiają auto-rollbacku jako istniejącego.
 
 ### 2026-05-03 — TDD bez wyjątków, pure-function parsers
@@ -74,7 +74,7 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 
 ### 2026-05-03 — `unwrap()`/`expect()` zakazane w production code
 **Decyzja:** Wszystkie funkcje produkcyjne propagują `Result<T, BootControlError>` aż do D-Bus interface. `unwrap()`/`expect()`/`panic!()` dopuszczalne tylko w testach i `build.rs`.
-**Dlaczego:** Panic w daemonie = abort root processu w trakcie pisania do `/boot`. Failsafe (BootCounting) ratuje sytuację, ale nie powinno się polegać na nim w wyniku unwrap.
+**Dlaczego:** Panic w daemonie = abort root processu w trakcie pisania do `/boot`. Warstwa ratunkowa (snapshoty + `--rescue`; docelowo BootCounting) ogranicza skutki, ale nie powinno się polegać na niej w wyniku unwrap.
 **Status:** aktywna.
 **Jak stosować:** Audyt sprawdza `grep -rn "unwrap\|expect" crates/*/src` — budżet per crate ustalony w `audit.sh`. `core/` i `daemon/` najściślej. Źródło: [`AGENTS.md`](../../AGENTS.md) §II.
 

@@ -36,26 +36,35 @@ zgodne z kodem) i bez ryzyka uszkodzenia maszyn early adopterów
 ## Zakres — bramki do publicznej bety
 
 Stan na 2026-07-12: **6 otwartych** (pierwotnie 8; „domknięcie audytu
-2026-07-12" zamknięte commitem `1bf504f`; **G1 zamknięta** commitem `00a9a9c`).
+2026-07-12" zamknięte commitem `1bf504f`; **G1 zamknięta** commitami
+`00a9a9c` + `9a371ce` — 2 iteracje, druga po niezależnej recenzji Codex).
 
-### G1 — Doc-honesty pass ✅ zamknięta (2026-07-12, commit `00a9a9c`)
+### G1 — Doc-honesty pass ✅ zamknięta (2026-07-12, commity `00a9a9c` + `9a371ce`)
 ROADMAP Phase 5 PR3 deklaruje „merge with Microsoft signatures; write hybrid
 db to NVRAM ✅ Done", a kod (`crates/daemon/src/secureboot/paranoia.rs`)
 generuje klucze i podpisany `.auth`, ale **nie merguje** backupowanych
 sygnatur MS i **nie zapisuje niczego do NVRAM** (jedyny zapis efivars w repo
 to BootNext/BootOrder w `uefi_vars_linux.rs`). Do tej samej bramki:
 ujednolicenie wersji (README badge, ROADMAP nagłówek, adnotacja przy
-etykietach faz) oraz rozstrzygnięcie sprzeczności „Golden Parachute":
+etykietach faz) oraz rozstrzygnięcie sprzeczności wokół failsafe (dwuznaczny
+termin z wczesnych dokumentów, wycofany w tej bramce):
 `ARCHITECTURE.md` §II zakazuje duplicate entries, a `failsafe.rs` + README
 §Security + Phase 1 PR4 wprost wpisują entry „Linux (Failsafe)".
 **Acceptance:** żadna deklaracja „Done/✅" w README/ROADMAP nie wykracza poza
 kod; Paranoia opisana jako „experimental — generuje keyset, nie flashuje";
 jedna spójna semantyka wersji we wszystkich plikach; sprzeczność failsafe
 rozstrzygnięta w obu dokumentach.
-**Wynik:** wszystkie kryteria spełnione commitem `00a9a9c`. Dodatkowe
-odkrycie po drodze: integracja BootCounting **w ogóle nie jest
-zaimplementowana** (żaden write-path nie ustawia tries-left) — doprecyzowane
-w `decisions.md` (2026-05-03 Failsafe, nota 2026-07-12); konsekwencje → G2.
+**Wynik:** iteracja 1 = commit `00a9a9c`. Niezależna recenzja (Codex,
+2026-07-12) obaliła pełność passu — 10 dodatkowych naddeklaracji, wszystkie
+zweryfikowane w kodzie: failsafe snippet niewpinany do `grub.cfg`, brak
+backendu Windows, GUI Secure Boot z pustymi ścieżkami, OVMF smoke-only,
+snapshot/ETag tylko w GRUB path, brak IdleTimeout/`sd_notify`/`JobId`,
+macierz distro 3/5, stare copy w UX-docs, sprzeczność rpm-ostree
+README↔ARCHITECTURE, czas teraźniejszy w decyzjach BootCounting. Iteracja 2 =
+commit `9a371ce` (dokumenty) — naprawy kodu zapisane w backlogu (2×P1:
+failsafe wiring, GUI puste ścieżki; 5×P2). Odkrycia po drodze: BootCounting
+w ogóle niezaimplementowany (→ G2), backend Windows nieistniejący (Phase 7
+oznaczona ❌ od strony Windows).
 
 ### G2 — Weryfikacja failsafe na GRUB-ie (dni)
 BootCounting (`systemd-bless-boot`) to natywny mechanizm systemd-boot; czysty
@@ -65,6 +74,9 @@ musi być albo potwierdzony, albo zawężony.
 Ustalenie z G1 (2026-07-12): BootCounting **nie jest w ogóle zaimplementowany**
 — żaden write-path nie ustawia tries-left (grep `bless|tries|counting` po
 `crates/` pusty); dokumenty od `00a9a9c` opisują go jako design intent.
+Ustalenie z recenzji (Codex #1): failsafe snippet GRUB **nie jest wpinany do
+`grub.cfg`** — brak hooka `/etc/grub.d/` w packagingu; do zakresu G2 dochodzi
+ten hook + test VM asertujący obecność wpisu (backlog P1).
 **Acceptance:** test w VM (warstwa L3): celowo zepsuty boot na (a) systemd-boot
 i (b) GRUB → działające ścieżki recovery (snapshot restore, failsafe menu
 entry, `--rescue`) potwierdzone; implementacja minimalnego tries-left przy

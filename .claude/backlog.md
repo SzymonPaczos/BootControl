@@ -32,7 +32,35 @@ Kanoniczny plan cyklu wydawniczego (alfa/beta/stable wg ryzyka — decyzja `deci
 Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.claude/agents/`, `.claude/settings*.json`, `.claude/rules/`, `AGENTS.md`, `packaging/polkit/`) nie mają żadnego mechanicznego strażnika — jedyną granicą jest proza w `multi-agent-delivery.md §6`. Rola Builder (jedyna z `Write`) mogłaby cicho osłabić gate w commicie zbundlowanym z feature; hooki działają z working tree, więc samoosłabiający edit `.githooks/pre-push` (np. `exit 0`) zadziałałby na tym samym pushu. Obniżone z HIGH → MEDIUM/P1 bo `Write` nie jest allowlistowany w commitowanym `settings.json` (zapis generuje prompt = gate ludzki). Proponowany fix: w `pre-push`/`audit.sh` przeciąć `git diff --name-only <range>` z listą chronionych ścieżek → WARN + wymóg osobnego, review'owanego commitu (opcjonalnie: commit dotykający control-plane nie może zawierać zmian w `crates/**`); dodać `permissions.deny` path-scope na Write do tych ścieżek.
 **Źródło:** Red Team 2026-07-12 (Finding 1, MEDIUM). **Status:** czeka na decyzję właściciela.
 
+### Failsafe menu entry nie jest wpinany do `grub.cfg`
+`failsafe.rs` zapisuje snippet do `/etc/bootcontrol/failsafe.cfg` i odpala `grub-mkconfig`, ale w repo nie ma skryptu `/etc/grub.d/` (ani innego mechanizmu) dołączającego ten plik do wynikowego `grub.cfg` — wpis ratunkowy realnie **nie pojawia się w menu GRUB-a**. Fix: packaging hook (np. `/etc/grub.d/41_bootcontrol_failsafe`) + test VM asertujący obecność wpisu w `grub.cfg` po zapisie. Dokumenty oznaczone jako Partial (commit `9a371ce`).
+**Źródło:** niezależna recenzja (Codex) 2026-07-12 #1; powiązane z bramką G2 release-readiness. **Status:** otwarte.
+
+### GUI Secure Boot: `enroll_mok`/`backup_nvram` przekazują puste ścieżki
+`crates/gui/src/view_model.rs:108-115` woła `sign_and_enroll_uki("")` i `backup_nvram("")`, a daemon wymaga absolutnych ścieżek — oba przyciski panelu Secure Boot zawsze kończą się błędem walidacji. Fix: wykrycie/wybór UKI (file picker) i domyślny `target_dir` backupu, albo wyłączenie przycisków z komunikatem "not implemented". ROADMAP Phase 3 PR5 oznaczone ⚠️ (commit `9a371ce`).
+**Źródło:** recenzja (Codex) 2026-07-12 #4. **Status:** otwarte.
+
 ## P2 — porządkowe
+
+### Paranoia: `merge_with_microsoft_signatures` — mylna nazwa i copy w API/GUI
+Funkcja nie merguje sygnatur Microsoftu (przetwarza tylko własny cert → ESL → `.auth`), a D-Bus odpowiada "Signatures merged successfully" (`interface.rs:990`), GUI pokazuje "Merge with Microsoft Sigs" i "Microsoft db merged" (`security_lab.slint:76,98`, `gui/src/main.rs:624`). Fix: rename (np. `build_custom_db_auth`) + uczciwe copy albo ukrycie przycisku do czasu realnej implementacji merge. UX_MAPPING poprawione w `9a371ce`.
+**Źródło:** recenzja (Codex) 2026-07-12 #2. **Status:** czeka na decyzję właściciela.
+
+### ETag/snapshot coverage poza GRUB write-path
+Snapshot zintegrowany tylko w `set_grub_value` (komentarz `interface.rs:151` wprost nazywa resztę follow-upem); `SetBootOrder`/`SetBootNext` nie przyjmują ETagu i nie robią snapshotu. README zawężone (`9a371ce`). Fix: dociągnąć snapshot/ETag do pozostałych write-pathów + doprecyzować decyzję "Stateless daemon, ETag" względem zapisów efivars (pojedyncza atomowa zmienna vs plik).
+**Źródło:** recenzja (Codex) 2026-07-12 #6. **Status:** czeka na decyzję właściciela.
+
+### OVMF harness: realne asercje zamiast sleep+kill
+`tests/e2e/src/secureboot_mok.rs` śpi 5 s i ubija QEMU bez czytania serialu/statusu — nie weryfikuje bootu ani enrollmentu. Fix: bootowalny payload EFI + asercja tokenu na serialu / Secure Boot rejection. ROADMAP oznaczone "Smoke harness" (`9a371ce`).
+**Źródło:** recenzja (Codex) 2026-07-12 #5. **Status:** czeka na decyzję właściciela.
+
+### test-in-distro: brak openSUSE i Silverblue z deklaracji Phase 8
+Runner obsługuje ubuntu/fedora/arch (`SUPPORTED=(ubuntu fedora arch)`); ROADMAP Phase 8 PR2 obiecywał 5 distro — oznaczone Partial (`9a371ce`). Fix: dodać 2 Containerfile'y albo trwale zawęzić macierz.
+**Źródło:** recenzja (Codex) 2026-07-12 #8a. **Status:** czeka na decyzję właściciela.
+
+### Daemon lifecycle: IdleTimeout / sd_notify / JobId niezaimplementowane
+ARCHITECTURE §II obiecywał 60 s idle shutdown, `sd_notify(EXTEND_TIMEOUT_USEC)` i async `JobId` — w kodzie i unicie nie ma żadnego z tych elementów (oznaczone "design intent" w `9a371ce`). Fix: zaimplementować albo formalnie zdjąć z architektury. Uwaga dodatkowa: `Type=notify` w `bootcontrold.service` bez `sd_notify` w kodzie wymaga weryfikacji na realnym systemie (czy zbus wysyła READY=1) — inaczej start przez systemd może timeoutować; sprawdzić przy bramce G4.
+**Źródło:** recenzja (Codex) 2026-07-12 #8b. **Status:** czeka na decyzję właściciela.
 
 ### Audit-evidence gate — świeżość audytu wiązać z dowodem, nie samą datą
 `pre-push` preflight (dodany 2026-07-12) sprawdza tylko, czy najnowszy nagłówek `## Audyt YYYY-MM-DD` jest ≤7 dni. Warunek spełnia jednolinijkowy edit daty albo `bash .claude/audit.sh` (stempluje datę bez LLM i bez Security Review). Fix: wymagać w najnowszym wpisie `AUDITED_REVISION: <SHA>` osiągalnego z HEAD oraz `SECURITY_REVIEW: PASS|ACCEPTED_RISK|...`, nie samej daty.

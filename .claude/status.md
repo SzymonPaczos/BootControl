@@ -11,7 +11,8 @@ Bieżący stan zepsutych / niekompletnych funkcji BootControl. Co naprawić →
 
 | Funkcja | Stan | Czego brakuje | Źródło |
 |---------|------|---------------|--------|
-| _(brak — wszystkie P0/P1 z audytu 2026-05-23 zamknięte)_ | | | |
+| GUI Secure Boot panel (MOK enroll, NVRAM backup) | zepsute — przyciski zawsze failują walidację daemona | GUI przekazuje puste ścieżki (`view_model.rs:108-115`) | recenzja Codex 2026-07-12 #4 → backlog P1 |
+| Failsafe menu entry (GRUB) | nieskuteczny — snippet generowany, ale nie trafia do `grub.cfg` | hook `/etc/grub.d/` w packagingu + test VM | recenzja Codex 2026-07-12 #1 → backlog P1, bramka G2 |
 
 ## Priorytety (kolejność prac)
 
@@ -22,11 +23,15 @@ i sesji planu wydawniczego 2026-07-12:
    G1 doc-honesty zamknięta 2026-07-12, commit `00a9a9c`) — kanoniczny plan:
    [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md);
    semantyka wersji: `decisions.md` 2026-07-12. Backlog P1.
-2. **Control-plane gate** (Red Team 2026-07-12 F1) — czeka na decyzję
+2. **Naprawy z recenzji Codex 2026-07-12 (P1):** failsafe wiring do
+   `grub.cfg` + GUI Secure Boot (puste ścieżki) — backlog P1, tabela wyżej.
+3. **Control-plane gate** (Red Team 2026-07-12 F1) — czeka na decyzję
    właściciela. Backlog P1.
-3. **P2 audytu 2026-07-12** (audit-evidence gate, `cargo --locked`/deny,
-   polkit „5→6", symlink hardening `BackupNvram`, doc drift, stare branche)
-   + starsze P2 (Faza A, `gui-spike`) — czekają na decyzje właściciela.
+4. **P2** — z audytu 2026-07-12 (audit-evidence gate, `cargo --locked`/deny,
+   symlink hardening `BackupNvram`, stare branche) i z recenzji Codex
+   2026-07-12 (paranoia rename, ETag/snapshot coverage, OVMF harness,
+   macierz distro, daemon lifecycle) + starsze (Faza A, `gui-spike`) —
+   czekają na decyzje właściciela.
 
 ## Memory checkpoint (2026-05-23)
 
