@@ -41,6 +41,10 @@ Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.
 Dodatkowo (audyt UX 2026-07-12, P1-2): te same przyciski **omijają Confirmation Sheet** — `secure_boot.slint:61-72` woła callbacki wprost, bez preflight/snapshot/type-to-confirm (złamanie destructive-action protocol; jedyna bramka to daemon-side Polkit). Fix przycisków powinien od razu poprowadzić je przez sheet (wzorzec: Snapshots→Restore, `main.rs:262-293`).
 **Źródło:** recenzja (Codex) 2026-07-12 #4; audyt UX 2026-07-12 ([raport](history/2026-07-12-gui-ux-audit.md)). **Status:** otwarte.
 
+### GUI v2: dokończenie stron Boot Entries i Bootloader (Tor A) — zatwierdzone
+`boot_entries.slint` = tabela v1 key=value (per-row Save, bez diff preview), `bootloader.slint` = placeholder „Coming in PR 7", Settings = statyczny tekst. Audyt wizualny 2026-07-12: finding P0-1 + 5×P1 ([raport](history/2026-07-12-gui-ux-audit.md)); ROADMAP Phase 3.5 sprostowany (`04207dd`). **Decyzja właściciela 2026-07-12: Tor A + kick-off B.** Kolejność: A1 Boot Entries §3.2 (brief: [`task-briefs/gui-v2-boot-entries.md`](task-briefs/gui-v2-boot-entries.md)) → A2 Bootloader §3.3 (zależność: typed getters w daemonie) → A3 szybkie wygrane (Settings §10.7, Logs expand, obcięte klucze, demo stuby). Tor B wypchnięty przez DesignSync (projekt „BootControl GUI Redesign"); cykl designu czeka na stabilny layout A1/A2. Handoff macierzysty: [`task-briefs/gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
+**Źródło:** audyt UX 2026-07-12 + decyzja właściciela w sesji. **Status:** zatwierdzone — A1 gotowe do startu w nowej rozmowie (prompt w briefie).
+
 ## P2 — porządkowe
 
 ### Paranoia: `merge_with_microsoft_signatures` — mylna nazwa i copy w API/GUI
@@ -104,15 +108,13 @@ Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md,
 
 ## Inbox — niejasny priorytet
 
+### Przegląd projektowy CLI i TUI (analiza, bez zmian)
+Właściciel (2026-07-12, sesja gui-ux-redesign): „przeanalizuj również CLI czy mamy dobrze zaprojektowane i TUI". Ocena designu `crates/cli` (struktura komend, spójność z parity ledger spec v2 §17, help/exit codes, konwencje clap) i `crates/tui` (model klawiszy, spójność z backendami). Wynik = raport/ocena, nie implementacja.
+**Źródło:** polecenie właściciela 2026-07-12. **Status:** w trakcie (ta sesja, po domknięciu GUI).
+
 _Zasada „najpierw zapisz, potem kontynuuj": zadania odkryte w rozmowie/audycie/review
 lądują tu natychmiast, gdy priorytet nie jest oczywisty. Triage do P0/P1/P2 robi
 właściciel._
-
-### GUI v2: strony Boot Entries i Bootloader nigdy nie dostały UX ze spec v2
-`bootloader.slint` to jawny placeholder („Coming in PR 7", 39 linii), a `boot_entries.slint` to port tabeli v1 key=value z per-row Save (komentarz w pliku: „PR 3 is a faithful port"; Inspector/reorder z v2 §3.2 „lands in PR 6"). ROADMAP Phase 3.5 deklaruje PR 6/7 ✅ Done (mega-commit `64e1001`) — naddeklaracja: tokeny/atomy/router/confirmation-sheet istnieją, ale **dwie główne strony robocze zostały przy UX v1**. To prawdopodobnie rdzeń „katastrofy UX" zgłaszanej przez właściciela 2026-07-12. Akcje: (1) sprostować ROADMAP Phase 3.5 (kolejna pozycja doc-honesty), (2) decyzja właściciela: implementacja §3.2/§3.3 przed czy po becie, (3) redesign wizualny (CLAUDE_DESIGN_BRIEF) rozszerzyć — brief zakłada „IA locked, tylko wizualia", a problem jest głębszy.
-Pełny handoff (diagnoza, pipeline zrzutów, tory A/B, prompt startowy): [`task-briefs/gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
-Audyt wizualny wykonany 2026-07-12 — raport z findingami P0/P1/P2 (w tym: Settings-atrapa odsyłająca do ręcznej edycji TOML, brak per-row expand w Logs, obcięte klucze 180px, per-row Save bez diff preview, niespójne demo stuby): [`history/2026-07-12-gui-ux-audit.md`](history/2026-07-12-gui-ux-audit.md). ROADMAP Phase 3.5 sprostowany.
-**Źródło:** przegląd UX 2026-07-12 (statyczna analiza `.slint` + spec v2); audyt na zrzutach 2026-07-12. **Status:** czeka na decyzję właściciela (tor A/B — porównanie przedstawione w sesji 2026-07-12).
 
 ### `cargo-udeps` exec error w audit.sh (drugi audyt z rzędu)
 `.claude/audit.sh` wywołuje `cargo-udeps --workspace` do dead-code detection — od 2026-05-23 zwraca exec error (toolchain nightly niedostępny/niekompatybilny). Efekt: dead-code layer zdegradowany, weryfikacja greppem zamiast tego. Decyzja: naprawić nightly (`rustup toolchain install nightly` + `cargo install cargo-udeps`) czy usunąć krok ze skryptu i polegać na warstwie greppem.

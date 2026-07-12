@@ -1,7 +1,8 @@
 # GUI — audyt UX na zrzutach + handoff redesignu
 
 **Task-Id:** gui-ux-redesign
-**Status:** zapisane — gotowe do startu (uprawnienie Screen Recording nadane 2026-07-12)
+**Status:** kroki 1–4 wykonane 2026-07-12 (zrzuty ✓, audyt ✓ [raport](../history/2026-07-12-gui-ux-audit.md), ROADMAP ✓ commit `04207dd`, decyzja ✓)
+**Decyzja właściciela (2026-07-12):** **Tor A + kick-off Toru B.** Tor A startuje od A1 (Boot Entries §3.2, osobny brief: [`gui-v2-boot-entries.md`](gui-v2-boot-entries.md)), potem A2 (Bootloader §3.3, zależność: typed getters w daemonie). Tor B: CLAUDE_DESIGN_BRIEF zaktualizowany + materiał wypchnięty przez DesignSync — cykl designu (Phases A–D) czeka, aż A1/A2 ustabilizują layout stron.
 **Zadanie źródłowe:** sesja 2026-07-12 — właściciel zgłosił „katastrofę UX" GUI; wcześniejsza próba (Opus) nie przyniosła rezultatu.
 **Powiązanie:** To zadanie wynikło z przeglądu projektu 2026-07-12, ponieważ statyczna analiza `.slint` wykazała, że problem UX ma techniczną przyczynę (niedokończona implementacja v2), a ocena wizualna była zablokowana brakiem uprawnienia Screen Recording — już nadanego.
 

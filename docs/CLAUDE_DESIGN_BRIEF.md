@@ -2,7 +2,11 @@
 
 You are a senior visual designer being briefed by another Claude instance that built the current GUI. Your task: propose a fresh visual direction for the BootControl desktop app, *without* breaking the locked information architecture, component decomposition, or accessibility contract.
 
-The current build is functionally complete (PRs 0–7b shipped; see `docs/GUI_V2_SPEC_v2.md` §16 migration plan) but the user has explicitly stated they are **not satisfied with how it looks**. They have NOT specified what they want instead. Phase A of your work is therefore to ask them, not to invent.
+**Status correction (2026-07-12, visual audit `.claude/history/2026-07-12-gui-ux-audit.md`):** the build is NOT functionally complete. The v2 *infrastructure* shipped (tokens, atoms, router, Confirmation Sheet, onboarding, high-contrast), but two core pages never received their v2 UX: **Boot Entries** is still the v1 flat key=value table with per-row Save, and **Bootloader** is an explicit "Coming in PR 7" placeholder. Settings cards are static text. An engineering track (Tor A) is rebuilding those pages against the v2 wireframes in parallel with your work.
+
+**Consequence for you:** do NOT restyle the current Boot Entries / Bootloader screenshots — they show layouts that are being replaced. For those two pages, design against the spec wireframes: v1 §3.2/§3.3 in `.claude/history/2026-05-01-gui-v2-redesign/GUI_V2_SPEC.md` as patched by `docs/GUI_V2_SPEC_v2.md` §10.2/§10.3. The remaining pages (Overview, Secure Boot, Snapshots, Logs, Settings, Confirmation Sheet) can be restyled from the screenshots.
+
+The user has explicitly stated they are **not satisfied with how it looks**. They have NOT specified what they want instead. Phase A of your work is therefore to ask them, not to invent.
 
 This brief is the only context you should need. Read the cited files when a section says "Read"; otherwise everything you need is here.
 
@@ -12,7 +16,7 @@ This brief is the only context you should need. Read the cited files when a sect
 
 BootControl is a Linux desktop application that manages the system bootloader (GRUB / systemd-boot / UKI). It sits on top of a privileged D-Bus daemon and runs as an unprivileged user-space app. Operations are *system-level and dangerous* — wrong click can leave a machine unbootable. Target users span beginner Linux desktop users (recently from Windows / macOS) through seasoned sysadmins. The app is GNOME-first visually but must remain viable on KDE and Sway. The framework is **Slint 1.14**.
 
-The functional scope is locked. The look is what's being redone.
+The IA (sidebar 6+1) and component APIs are locked. The look is what's being redone — but two pages (Boot Entries, Bootloader) are simultaneously being *finished* functionally by the engineering track; for them, design against the v2 wireframes, not the current build (see Status correction above).
 
 ---
 
@@ -21,7 +25,7 @@ The functional scope is locked. The look is what's being redone.
 - **Framework:** Slint 1.14 (declarative UI markup compiled to Rust at build time)
 - **Backend wiring:** Rust + tokio + zbus
 - **Token system:** `crates/gui/ui/tokens.slint` — one global `Tokens` with semantic color / typography / spacing / sizing / motion properties. Single source of truth; no raw hex anywhere else.
-- **Current palette:** Catppuccin Mocha (dark, mauve accent — `#cba6f7`, on `#1e1e2e` surface). Map: see §8 of [`docs/GUI_V2_SPEC_v2.md`](GUI_V2_SPEC_v2.md).
+- **Current palette:** Granite — cool-neutral ground, sapphire accent (`#5fa3d0`, "no mauve / no purple"), light palette + high-contrast variants included. Ground truth is `crates/gui/ui/tokens.slint` (Granite redesign, commit `80fa4dd`). NOTE: §8 of [`docs/GUI_V2_SPEC_v2.md`](GUI_V2_SPEC_v2.md) still documents the pre-Granite Catppuccin Mocha (mauve `#cba6f7`) map — treat it as historical, not current.
 - **IA:** sidebar with 6 items + footer Settings. Pages: Overview / Boot Entries / Bootloader / Secure Boot / Snapshots / Logs + Settings.
 - **Atoms:** `crates/gui/ui/components/` — 13 components: ghost / primary / danger buttons, styled input, card, action footer, sidebar, status card, checkbox, loading bar, warning banner, section header, info bar, diff preview, preflight card, command disclosure, confirmation sheet, onboarding card, audit log link, recovery viewer, toast (inline in appwindow).
 - **Pages:** `crates/gui/ui/pages/` — 8 .slint files, one per sidebar position + legacy security_lab.
@@ -32,7 +36,7 @@ The functional scope is locked. The look is what's being redone.
 - [`crates/gui/ui/components/primary_button.slint`](../crates/gui/ui/components/primary_button.slint) and [`danger_button.slint`](../crates/gui/ui/components/danger_button.slint) — sample atoms
 - [`crates/gui/ui/pages/overview.slint`](../crates/gui/ui/pages/overview.slint) — most visually dense page
 
-**Take screenshots first**: launch `BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-gui` on macOS or Linux, capture each of the 7 pages plus the Confirmation Sheet (open by clicking "⟳ Rebuild GRUB" on Boot Entries) and the high-contrast variant (`BOOTCONTROL_HIGH_CONTRAST=1 BOOTCONTROL_DEMO=1 …`).
+**Screenshots**: a full set of 9 (7 pages + Confirmation Sheet + high-contrast) captured 2026-07-12 is delivered alongside this brief via DesignSync. To re-capture: launch `BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-gui` on macOS or Linux, capture each of the 7 pages plus the Confirmation Sheet (open by clicking "Rebuild GRUB" on Boot Entries) and the high-contrast variant (`BOOTCONTROL_HIGH_CONTRAST=1 BOOTCONTROL_DEMO=1 …`).
 
 ---
 
@@ -41,7 +45,9 @@ The functional scope is locked. The look is what's being redone.
 > "nie jestem zadowolony z wyglądu, wypada go przeprojektować"
 > *— "I'm not happy with the look, it should be redesigned"*
 
-That's all the user said. **They have not specified:**
+Since then, the 2026-07-12 visual audit (`.claude/history/2026-07-12-gui-ux-audit.md`) established that the *primary* cause is unfinished v2 implementation (owned by the engineering track), and separately catalogued purely visual issues that ARE yours: ghost buttons indistinguishable from plain text (header actions, Snapshots links), 55–65 % of page height empty on Overview / Secure Boot, the high-contrast variant visually near-identical to the normal theme (yellow accent visible only on the logo — sidebar/status accents stay light-blue via `accent-info`), inconsistent snapshot-id formats between views, and a generally sterile density/rhythm.
+
+Beyond that, **the user has not specified:**
 - What aesthetic direction they want
 - Whether they want light mode, dark mode, or both
 - Whether the issue is palette, typography, spacing, density, iconography, or rhythm
@@ -219,6 +225,7 @@ Acceptance is signaled by the user. The implementing Claude (running in a separa
 ## 13. Files / docs to cite (in order of importance)
 
 1. [`docs/GUI_V2_SPEC_v2.md`](GUI_V2_SPEC_v2.md) — locked spec; every section number you reference here points there
+1a. [`.claude/history/2026-07-12-gui-ux-audit.md`](../.claude/history/2026-07-12-gui-ux-audit.md) — visual audit that scoped this redesign (what is engineering's vs yours)
 2. [`docs/UX_BRIEF.md`](UX_BRIEF.md) — principles and tokens contract
 3. [`docs/UX_MAPPING.md`](UX_MAPPING.md) — what lands where
 4. [`.claude/history/2026-05-01-gui-v2-redesign/red-team/a11y.md`](../.claude/history/2026-05-01-gui-v2-redesign/red-team/a11y.md) — WCAG audit captured at v2 lock
