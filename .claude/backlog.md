@@ -24,6 +24,10 @@ _(brak otwartych)_
 
 ## P1 — ważne
 
+### Release readiness — 6 otwartych bramek do publicznej bety (`0.9.0-beta.1`)
+Kanoniczny plan cyklu wydawniczego (alfa/beta/stable wg ryzyka — decyzja `decisions.md` 2026-07-12) + 6 otwartych bramek blokujących publiczne ogłoszenie: G2 weryfikacja failsafe (BootCounting dziś **w ogóle niezaimplementowany** — ustalenie G1), G3 write-path na fizycznym sprzęcie, G4 instalacja paczek E2E, G5 SECURITY.md, G6 tag+artefakty, G7 materiał ogłoszeniowy. G1 doc-honesty pass **zamknięta** 2026-07-12 (commit `00a9a9c`). Pełna specyfikacja z acceptance criteria i planem warstw testowych (kontenery → VM/OVMF → sprzęt): [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md).
+**Źródło:** sesja planistyczna 2026-07-12 (właściciel: plan kanoniczny dla wszystkich agentów). **Status:** w trakcie (1/7 bramek zamknięta).
+
 ### Control-plane gate — brak mechanicznego strażnika plików gate/agent/policy
 Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.claude/agents/`, `.claude/settings*.json`, `.claude/rules/`, `AGENTS.md`, `packaging/polkit/`) nie mają żadnego mechanicznego strażnika — jedyną granicą jest proza w `multi-agent-delivery.md §6`. Rola Builder (jedyna z `Write`) mogłaby cicho osłabić gate w commicie zbundlowanym z feature; hooki działają z working tree, więc samoosłabiający edit `.githooks/pre-push` (np. `exit 0`) zadziałałby na tym samym pushu. Obniżone z HIGH → MEDIUM/P1 bo `Write` nie jest allowlistowany w commitowanym `settings.json` (zapis generuje prompt = gate ludzki). Proponowany fix: w `pre-push`/`audit.sh` przeciąć `git diff --name-only <range>` z listą chronionych ścieżek → WARN + wymóg osobnego, review'owanego commitu (opcjonalnie: commit dotykający control-plane nie może zawierać zmian w `crates/**`); dodać `permissions.deny` path-scope na Write do tych ścieżek.
 **Źródło:** Red Team 2026-07-12 (Finding 1, MEDIUM). **Status:** czeka na decyzję właściciela.
@@ -38,23 +42,13 @@ Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.
 `scripts/ci-local.sh` uruchamia cargo bez `--locked` (nie wykrywa driftu `Cargo.toml`↔`Cargo.lock`) i nie ma kroku skanującego CVE zależności. Ograniczone ryzyko (Cargo.lock committed, zero git-deps, tylko crates.io). Fix: `--locked` do wszystkich wywołań cargo + krok `cargo deny check` (advisory→blocking wg ratchetu). `ci-cd.md §3` to zaleca.
 **Źródło:** Red Team 2026-07-12 (Finding 3, LOW). **Status:** czeka na decyzję właściciela.
 
-### Polkit „5 → 6 akcji" — drift komentarza i decyzji
-Kod poprawnie deklaruje **6** akcji Polkit (`packaging/polkit/org.bootcontrol.policy` — doszła `org.bootcontrol.restore-snapshot`), ale komentarz nagłówkowy `.policy:7` i decyzja `decisions.md` (2026-05-03 „Polkit Actions: 5 per-intent") wciąż mówią „5". Bez wpływu runtime (enforced list w `policy_check.rs`). Fix: zaktualizować komentarz + treść decyzji na 6 akcji (per-intent principle bez zmian).
-**Źródło:** Security Reviewer 2026-07-12 (NOTE-2). **Status:** czeka na decyzję właściciela.
-
 ### `BackupNvram` — symlink hardening target_dir (defense-in-depth)
 `BackupNvram` (`crates/daemon/src/interface.rs:734` → `secureboot/nvram.rs:103`) pisze do caller-supplied `target_dir` bez `O_NOFOLLOW`/`O_EXCL`; root podąża za podłożonym symlinkiem `PK-<guid>.efivar` i truncuje cel. NIE jest to eskalacja (treść = bajty własnego PK/KEK hosta, wołający ma `auth_admin` = root-equiv) — czysty DoS/corruption. Fix: confine `target_dir` pod `/var/lib/bootcontrol/certs` + `canonicalize`, albo `O_EXCL|O_NOFOLLOW`; test regresyjny: symlink → /tmp/victim nie może nadpisać celu.
 **Źródło:** Security Reviewer 2026-07-12 (NOTE-1). **Status:** czeka na decyzję właściciela.
 
-### Doc drift — CLAUDE.md, .claudeignore, ci-local.sh
-Trzy nieaktualne odnośniki: (1) `CLAUDE.md:8` — nota o „ROADMAP top desynchronizowany, patrz backlog P2 'ROADMAP top vs tabele per-PR'" jest martwa (ROADMAP top naprawiony 2026-05-23, wskazywany P2 nie istnieje). (2) `CLAUDE.md:106` + `.claudeignore:7` — odsyłają do nieistniejącego `tests/e2e/fixtures/`; realny fixture to `tests/fixtures/dummy.efi`. (3) `scripts/ci-local.sh:2` — „Mirror of `.github/workflows/rust.yml`", workflow nie istnieje (usunięty 2026-05-20). Fix: poprawić/usunąć te trzy odnośniki.
-**Źródło:** Audyt 2026-07-12 (drift) + Red Team task 4. **Status:** czeka na decyzję właściciela.
-
 ### 4 lokalne branche z 2026-05-19 niezmergowane
 `fix/core-doc-overindented-list-item`, `fix/daemon-tests-etxtbsy-aarch64`, `fix/e2e-compile-errors` są patch-equivalent z `main` (`git cherry` → `-`) i mogą zostać skasowane. `chore/cargo-fmt-workspace` (`git cherry` → `+`) niesie realny diff — wymaga przeglądu czy merge czy drop. Wiek ~54 dni.
 **Źródło:** Audyt 2026-07-12 (delivery). **Status:** czeka na decyzję właściciela.
-
-### `crates/gui-spike` — historyczny verification crate, kandydat na archiwizację
 
 ### `crates/gui-spike` — historyczny verification crate, kandydat na archiwizację
 [`crates/gui-spike/`](../crates/gui-spike/) został utworzony jako Phase 3.5 PR 0 ([commit `473a4a0`](https://github.com/SzymonPaczos/BootControl/commit/473a4a0) — *"chore(gui): slint a11y framework verification spike (PR 0)"*). Crate sam siebie deklaruje *"This crate is not shipped — it exists only to answer 'does Slint do X?' before PR 1 begins."* Wyniki zapisane w [`docs/slint-a11y-findings.md`](../docs/slint-a11y-findings.md); Phase 3.5 dawno zamknięta.
@@ -91,6 +85,7 @@ właściciel._
 
 ### Prywatny runbook disclosure (vulnerability response)
 Repo nie ma kanału disclosure ani runbooka triage podatności. Dla prywatnego repo w alfie dopuszczalny prywatny runbook zamiast `SECURITY.md` (`audit.md` §12). Decyzja: dodać teraz czy odłożyć do pierwszego publicznego release.
+**Powiązane:** bramka **G5** w [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md) — `SECURITY.md` jest wymagany przed publiczną betą; zamknięcie G5 zamyka też ten wpis.
 **Źródło:** Audyt 2026-07-12 (vuln response). **Status:** niejasny priorytet.
 
 ## Czeka na decyzję właściciela

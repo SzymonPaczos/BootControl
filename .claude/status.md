@@ -15,15 +15,18 @@ Bieżący stan zepsutych / niekompletnych funkcji BootControl. Co naprawić →
 
 ## Priorytety (kolejność prac)
 
-Pełna lista → [`.claude/backlog.md`](backlog.md). Aktualnie wszystkie P0/P1
-zamknięte; otwarte są:
+Pełna lista → [`.claude/backlog.md`](backlog.md). Stan po audycie 2026-07-12
+i sesji planu wydawniczego 2026-07-12:
 
-1. **"Faza A" w ROADMAP** — czeka na decyzję właściciela co to za strumień,
-   jaki ma być back-fill PR-ów #1/#2 i exit criteria. Backlog P2.
-2. **`crates/gui-spike` cleanup** — czeka na decyzję czy zostawić, usunąć,
-   czy archiwizować do `.claude/history/`. Backlog P2.
-3. **Hook `UserPromptSubmit` i `.claude/architecture.md`** — czeka na
-   decyzję właściciela (sekcja "Czeka na decyzję").
+1. **Release readiness — 6 otwartych bramek do publicznej bety** (`0.9.0-beta.1`;
+   G1 doc-honesty zamknięta 2026-07-12, commit `00a9a9c`) — kanoniczny plan:
+   [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md);
+   semantyka wersji: `decisions.md` 2026-07-12. Backlog P1.
+2. **Control-plane gate** (Red Team 2026-07-12 F1) — czeka na decyzję
+   właściciela. Backlog P1.
+3. **P2 audytu 2026-07-12** (audit-evidence gate, `cargo --locked`/deny,
+   polkit „5→6", symlink hardening `BackupNvram`, doc drift, stare branche)
+   + starsze P2 (Faza A, `gui-spike`) — czekają na decyzje właściciela.
 
 ## Memory checkpoint (2026-05-23)
 

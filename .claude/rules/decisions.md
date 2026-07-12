@@ -43,8 +43,9 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 ### 2026-05-03 — Polkit Actions: 5 per-intent
 **Decyzja:** Daemon eksponuje 5 osobnych Polkit Action IDs zamiast jednej `manage`: `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`. Legacy `org.bootcontrol.manage` deprecated.
 **Dlaczego:** Single-action `manage` autoryzuje wszystko jednym hasłem — niezgodne z principle of least privilege. Per-intent pozwala adminowi zezwolić użytkownikowi na rewrite GRUB-a bez zgody na PK replacement.
-**Status:** aktywna (reconciliation z legacy w toku — patrz `backlog.md` P2 "AGENTS.md §V drift").
-**Jak stosować:** Nowy write-path w daemonie wymaga osobnego Action ID per intent. Polkit `.policy` w `packaging/` wymienia wszystkie 5. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7.
+**Status:** aktywna.
+**Jak stosować:** Nowy write-path w daemonie wymaga osobnego Action ID per intent. Polkit `.policy` w `packaging/` wymienia wszystkie akcje. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II, [`docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7.
+**Doprecyzowanie (2026-07-12, G1 doc-honesty):** akcji jest **6** — `org.bootcontrol.restore-snapshot` doszła z pracą snapshot/restore (PR 5c, commit `2c723cc`). Zasada per-intent bez zmian. Single source of truth: `packaging/polkit/org.bootcontrol.policy` + `crates/daemon/src/polkit.rs` (walidacja startowa: `policy_check.rs`). Nieaktualny odsyłacz do P2 „AGENTS.md §V drift" usunięty ze statusu — pozycja dawno zamknięta.
 
 ### 2026-05-03 — Stateless daemon, ETag + flock concurrency
 **Decyzja:** Daemon nie utrzymuje wewnętrznej bazy stanu — na każde wywołanie liczy SHA-256 plików `/boot/efi` i `/etc/default/grub`. Write request musi zawierać ETag (hash); rozsynchronizowane = `ConcurrentModification`. Plus exclusive `flock(LOCK_EX|LOCK_NB)` na czas pisania, write do `.tmp` → `fsync()` → atomic `rename()`.
@@ -63,6 +64,7 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 **Dlaczego:** BootControl jest **managerem**, nigdy zależnością procesu boot. Chainloader = single point of failure: zepsuty BootControl = niemożliwy boot. BootCounting = native, sprawdzony, distro-agnostic.
 **Status:** aktywna.
 **Jak stosować:** Każdy nowy write-path ustawia tries-left counter. Jeśli pojawi się pomysł "a może własny failsafe entry" — przeczytaj tę decyzję i zaproponuj inaczej. Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §II.
+**Doprecyzowanie (2026-07-12, G1 doc-honesty):** (1) Terminologia: zakaz dotyczy wpisów na poziomie **EFI** i chainloaderów. **Menu entry** „Linux (Failsafe)" zapisywany przez `crates/daemon/src/failsafe.rs` do `/etc/bootcontrol/failsafe.cfg` (poziom configu GRUB, budowany wyłącznie z `/proc`, nigdy z zapisywanej konfiguracji) jest **zgodny** z tą decyzją — nie czyni BootControl zależnością bootowania. Termin „Golden Parachute" wycofany z dokumentów jako dwuznaczny; kanoniczne nazwy: „failsafe menu entry" (GRUB, dozwolone/zaimplementowane) vs „EFI-level duplicate entries / chainloader" (zakazane). (2) Stan implementacji: integracja BootCounting **nie jest jeszcze zaimplementowana** — żaden write-path nie ustawia tries-left; do czasu implementacji (bramka G2 w `task-briefs/release-readiness.md`) dokumenty nie przedstawiają auto-rollbacku jako istniejącego.
 
 ### 2026-05-03 — TDD bez wyjątków, pure-function parsers
 **Decyzja:** Żaden production code nie powstaje przed testem. Wszystkie parsery tekstowe = pure functions `&str -> Result<T, BootControlError>`, zero I/O. Każdy code path modyfikujący pliki ma integration test z `tempfile` (mocked filesystem).
@@ -158,6 +160,12 @@ Pierwotny krok 2026-05-23 zostawiał v1 w `docs/` ze względu na ~200 cytatów; 
 **Dlaczego:** D-007 wymaga wyboru mechanizmu per projekt, a ADOPT wprost mówi, że akapit bez sprawdzania daty nie spełnia wymagania — co potwierdziła praktyka: audyt 2026-05-23 przeleżał 50 dni mimo remindera. Pełna ceremonia świadomie (D-004).
 **Status:** aktywna.
 **Jak stosować:** Zabezpieczenia tracone względem hosted CI (wymóg D-007, do świadomej akceptacji): brak gate'ów na zmianach botów/PR-ów zewnętrznych, brak czystego środowiska buildów, brak required checks po stronie serwera — wszystko opiera się na hookach zainstalowanych per clone (`./scripts/install-hooks.sh`). Nowy clone bez hooków nie jest chroniony.
+
+### 2026-07-12 — Cykl wydawniczy: alfa/beta/stable wg ryzyka, wersje publiczne 0.x → 0.9.x → 1.0
+**Decyzja:** Granice etapów wydawniczych definiuje **ryzyko** (kto ryzykuje swoją maszynę), nie liczba feature'ów: alfa = write-path nieprzetestowany na fizycznym sprzęcie (tylko właściciel), beta = write-path zweryfikowany na sprzęcie + czyste instalacje paczek (early adopters, baner ostrzegawczy), stable = N tygodni bety bez buga niszczącego dane. Wersje publiczne: alfa `0.x` (obecnie `0.1.0`), beta `0.9.x` (pierwsze publiczne ogłoszenie = tag `v0.9.0-beta.1`), stable `1.0`. Etykiety faz w `ROADMAP.md` („v1.0"…„v3.0-stable") to **wewnętrzne kamienie milowe**, nie wersje wydań — publicznie nigdy „v3.0". Kanoniczna lista bramek do bety (G1–G7) żyje wyłącznie w [`.claude/task-briefs/release-readiness.md`](../task-briefs/release-readiness.md) — nie kopiować jej do innych plików.
+**Dlaczego:** Dotychczas pojęcia stosowane wybiórczo i sprzecznie: README badge „alpha — v0.1.0", ROADMAP Phase 8 „`v3.0-stable` ✅ Complete", Cargo `0.1.0` — „1.0" znaczyło jednocześnie „zrobiona faza" i „odległe wydanie". Właściciel 2026-07-12 zażądał jednej semantyki, którą operują wszystkie agenty.
+**Status:** aktywna.
+**Jak stosować:** Publiczna komunikacja i tagi używają wyłącznie `0.x`/`0.9.x`/`1.0`. Nie deklarować „stable"/„release" przed spełnieniem bramek z briefu. Agent nie wymyśla własnych definicji alfa/beta — odsyła do tej decyzji. Ujednolicenie istniejących plików (README/ROADMAP) = bramka G1 (doc-honesty pass), osobny commit.
 
 ---
 
