@@ -10,7 +10,7 @@ Read [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`../../AGENTS.md`](..
 
 Every D-Bus method that mutates disk state follows this order. Skipping a step is a critical bug.
 
-1. **Polkit authorization** — `polkit.rs::check_authorized(...)` against the per-intent action (one of five — see [`../../docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7). Reject before any `read()`.
+1. **Polkit authorization** — `polkit.rs::check_authorized(...)` against the per-intent action (one of six — the five from [`../../docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7 plus `restore-snapshot`). Reject before any `read()`.
 2. **ETag check** — caller-supplied SHA-256 must match the current file's hash. Mismatch → `org.bootcontrol.Error.StateMismatch`.
 3. **POSIX `flock()`** — exclusive lock on the target file or its parent directory.
 4. **Snapshot** — write all-files-touched-by-this-op + relevant efivars to `/var/lib/bootcontrol/snapshots/<ts>-<op>/` with `manifest.json`. **Fail the op if snapshot fails.** No exception. Schema and per-backend scope: `docs/GUI_V2_SPEC_v2.md` §6.

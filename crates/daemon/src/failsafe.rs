@@ -1,4 +1,4 @@
-//! Golden-parachute failsafe GRUB entry generator.
+//! Failsafe GRUB menu-entry generator.
 //!
 //! Every time [`crate::grub_manager::set_grub_value`] successfully writes a
 //! new GRUB configuration, this module rewrites

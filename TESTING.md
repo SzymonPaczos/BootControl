@@ -113,7 +113,7 @@ The daemon tests use `tempfile` to write real files without touching the live sy
 cargo test -p bootcontrold
 ```
 
-Covers: `grub_manager` (read/write/ETag/flock), `sanitize` (payload blacklist), `failsafe` (golden-parachute entry), `initramfs` driver detection, `grub_rebuild` invocation.
+Covers: `grub_manager` (read/write/ETag/flock), `sanitize` (payload blacklist), `failsafe` (failsafe menu entry), `initramfs` driver detection, `grub_rebuild` invocation.
 
 ---
 

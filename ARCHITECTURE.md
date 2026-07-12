@@ -48,7 +48,7 @@ Naming in Unix systems is an API. These identifiers are frozen — changing them
 | systemd socket | `bootcontrold.socket` |
 | D-Bus interface | `org.bootcontrol.Manager` |
 | D-Bus error namespace | `org.bootcontrol.Error.<Variant>` |
-| Polkit Action IDs (5, per-intent) | `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk` (see [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md) §7; legacy `org.bootcontrol.manage` deprecated) |
+| Polkit Action IDs (6, per-intent) | `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`, `org.bootcontrol.restore-snapshot` (single source of truth: [`packaging/polkit/org.bootcontrol.policy`](./packaging/polkit/org.bootcontrol.policy) + `crates/daemon/src/polkit.rs`; the base five are specified in [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md) §7, `restore-snapshot` was added with the snapshot work; legacy `org.bootcontrol.manage` deprecated) |
 
 ### D-Bus Error Convention
 
@@ -115,12 +115,19 @@ Protection against race conditions happens at two levels:
 1. **Polkit/UI Level (ETags):** Every write request includes the current file version (hash ETag). If UI is stale, the request is rejected.
 2. **OS/Package Manager Level (POSIX Locks):** D-Bus ETags do not prevent `apt` or `pacman` from modifying `/boot` in the background after Polkit auth. The daemon strictly enforces atomicity by holding an exclusive `flock(LOCK_EX | LOCK_NB)` on target files, writing to a `.tmp` file, calling `fsync()`, and executing an atomic `rename()`. If `flock` fails (used by a package manager), BootControl aborts safely.
 
-### "Primum Non Nocere" — Failsafe via BootCounting
+### "Primum Non Nocere" — Failsafe Strategy
 
-If BootControl crashes or a user explicitly bricks their kernel parameters, the system must recover automatically. BootControl does **not** use custom duplicate boot entries ("Golden Parachutes").
-Instead, BootControl integrates natively with **systemd `BootCounting`** (`systemd-bless-boot`). Every modification sets the "tries left" counter (e.g., `+3`). If the new configuration fails to boot successfully 3 times, the bootloader automatically rolls back to the last known-good snapshot.
+If BootControl crashes or a user explicitly bricks their kernel parameters, the system must recover. Two hard bans define the boundary: BootControl never creates **EFI-level duplicate boot entries**, and creating **chainloaders** (`BootControl.efi` as the first EFI boot entry) is explicitly prohibited. BootControl is always a manager, never a dependency of the actual boot process.
 
-Creating chainloaders (`BootControl.efi` as the first EFI boot entry) is explicitly prohibited. BootControl is always a manager, never a dependency of the actual boot process.
+Within that boundary, the recovery mechanisms are per-bootloader:
+
+| Bootloader | Mechanism | Status |
+|-----------|-----------|--------|
+| GRUB | **Failsafe menu entry** — a minimal known-good `menuentry` written to `/etc/bootcontrol/failsafe.cfg` after every successful GRUB write. Built exclusively from `/proc/version` + `/proc/mounts` (running kernel, `root=<uuid> ro`), never from the config being written. Config-level only — not an EFI entry. | ✅ Implemented (`crates/daemon/src/failsafe.rs`) |
+| systemd-boot / UKI | **systemd `BootCounting`** (`systemd-bless-boot`) — each write should set the "tries left" counter (e.g. `+3`) so the boot loader falls back to the previous entry after repeated boot failures. | ⚠️ Design intent — **not yet implemented**: no write-path sets the counter today (verification/implementation tracked as release gate G2 in `.claude/task-briefs/release-readiness.md`) |
+| All backends | Pre-write **snapshots** (`/var/lib/bootcontrol/snapshots/`) restorable via `RestoreSnapshot`, plus the CLI `--rescue` chroot module. | ✅ Implemented |
+
+Historical terminology note: early documents used "Golden Parachute" both for the banned EFI-level duplicates and for the shipped GRUB failsafe menu entry. The term is retired; the precise names above are canonical.
 
 ---
 
@@ -169,6 +176,8 @@ After rebuilding a UKI, the daemon automatically signs the resulting `.efi` file
 **What it does:** When `SetupMode == 1` (firmware in setup mode), the daemon generates custom keys and merges them with original Microsoft signatures.
 **WARNING:** Due to severely non-compliant UEFI NVRAM implementations from various motherboard vendors, writing manual ASN.1 signature lists can permanently brick the hardware. This mode relies on strictly offline parsing and includes an explicit **dry-run** via `efivar_signature_list` before any hardware NVRAM write is authorized.
 
+**Implementation status (2026-07-12):** the shipped code (`experimental_paranoia`) covers key-set generation and producing a KEK-signed `.auth` payload (`crates/daemon/src/secureboot/paranoia.rs`). The Microsoft-signature merge and the NVRAM write described below are the approved design target and are **not implemented yet** — nothing in the current codebase writes PK/KEK/db to firmware.
+
 **The Microsoft certificate problem — Local NVRAM Dumping:**
 
 Bundling Microsoft certificates in the binary is brittle — Microsoft rotated their UEFI CA in 2023 and will do so again. Fetching them from the internet during a firmware-level operation creates a critical MITM vector and breaks the offline requirement.
@@ -191,4 +200,4 @@ Bundling Microsoft certificates in the binary is brittle — Microsoft rotated t
 | **NixOS Declarative Conflict**| Trying to imperatively modify a NixOS system, which will be wiped in 5 seconds | Strict pre-flight signature check for `ID=nixos`. If detected, strictly refuse all write operations and direct user to `configuration.nix`. |
 | **Immutable Distros** | Write failure on SteamOS/Silverblue (read-only root) | Pre-flight `ostree` structure check. Delegate parameter changes directly to the `rpm-ostree kargs` API |
 | **LUKS Keymap Lockout** | Keyboard mapping lost during UKI recompilation, making it impossible to type the disk password | Validate dependencies from `/etc/vconsole.conf` + dry-run `initramfs` generation to `/tmp` before writing to `/boot` |
-| **Post-Write Kernel Panic** | A new kernel parameter causes an unbootable system | Integration with **systemd `BootCounting`** limits (`+3` tries). If boot fails, firmware auto-reverts to the previous safe entry. No custom failsafe logic. **CLI Rescue:** `--rescue` module operates in `chroot` from a USB drive. |
+| **Post-Write Kernel Panic** | A new kernel parameter causes an unbootable system | GRUB: failsafe menu entry + snapshot restore. systemd-boot/UKI: **systemd `BootCounting`** (`+3` tries) — design intent, not yet wired into any write-path (release gate G2). **CLI Rescue:** `--rescue` module operates in `chroot` from a USB drive. |

@@ -81,8 +81,8 @@ All frontends run in **user space**. Only `bootcontrold` runs as root, activated
 | **GRUB 2** | ✅ Implemented — parser, ETag, atomic write, failsafe |
 | **systemd-boot / UKI** | ✅ Core implemented — loader entry parser, UKI cmdline |
 | **Secure Boot (MOK)** | ✅ Implemented — sbsign, mokutil enrollment |
-| **Secure Boot (Paranoia Mode)** | 🧪 Experimental — full PK/KEK/db key generation (`--features experimental_paranoia`) |
-| **Windows UEFI boot menu (BootOrder/BootNext/Boot####)** | ✅ Core + D-Bus + CLI implemented (Phase 7) — cross-compile scaffold for `x86_64-pc-windows-gnu`; full Windows GUI panel post-v3.0 |
+| **Secure Boot (Paranoia Mode)** | 🧪 Experimental — PK/KEK/db key generation + KEK-signed `.auth` payloads (`--features experimental_paranoia`); NVRAM enrollment **not implemented yet** |
+| **Windows UEFI boot menu (BootOrder/BootNext/Boot####)** | ✅ Core + D-Bus + CLI implemented (Phase 7) — cross-compile scaffold for `x86_64-pc-windows-gnu`; full Windows GUI panel planned post-beta |
 
 ---
 
@@ -251,7 +251,7 @@ short tour stays in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §V.
 - 🔒 **ETag freshness check** — prevents stale-read overwrite and concurrent modification
 - 🔒 **POSIX flock** — exclusive file lock prevents TOCTOU race conditions
 - 🔒 **Payload blacklist** — blocks injection of dangerous kernel parameters (`init=`, `selinux=0`, etc.)
-- 🔒 **Failsafe GRUB entry** — golden-parachute entry written after every successful config change
+- 🔒 **Failsafe menu entry (GRUB)** — a minimal known-good `menuentry` (running kernel, `root=<uuid> ro` only) regenerated after every successful GRUB write; config-level only, never an EFI boot entry
 - 🔒 **Bail-out policy** — any complex Bash in `/etc/default/grub` causes an immediate error, never a partial edit
 - 🔒 **Snapshot before every write** — pre-write contents archived to `/var/lib/bootcontrol/snapshots/`, rollback restores byte-for-byte
 - 🔒 **Atomic-distro pre-flight** — refuses writes on ostree / rpm-ostree / SteamOS / NixOS / Vanilla OS that would either fail or get rolled back

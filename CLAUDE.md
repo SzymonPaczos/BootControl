@@ -5,7 +5,7 @@ This file is loaded automatically by Claude Code. It is a thin shim that points 
 1. [`README.md`](./README.md) — project overview, scope, install
 2. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — approved technical decisions + threat model
 3. [`AGENTS.md`](./AGENTS.md) — coding rules, TDD requirements, commit convention (mandatory)
-4. [`ROADMAP.md`](./ROADMAP.md) — strategic phases. **Note (2026-05-23):** ROADMAP top sekcji jest desynchronizowany z gitem — Phase 6/7 PRs i część Phase 8 są zmergowane mimo "not yet started" w nagłówku. Patrz [`.claude/backlog.md`](./.claude/backlog.md) P2 "ROADMAP top vs tabele per-PR — drift". Granularne TODO/otwarta praca **nie żyje w ROADMAP** — żyje w [`.claude/backlog.md`](./.claude/backlog.md).
+4. [`ROADMAP.md`](./ROADMAP.md) — strategic phases. **Note (2026-07-12):** etykiety wersji przy fazach ("v1.0"…"v3.0-stable") to wewnętrzne milestone'y, nie wersje wydań — publiczna semantyka (alfa `0.x` / beta `0.9.x` / stable `1.0`) w [`.claude/rules/decisions.md`](./.claude/rules/decisions.md) („Cykl wydawniczy"). Granularne TODO/otwarta praca **nie żyje w ROADMAP** — żyje w [`.claude/backlog.md`](./.claude/backlog.md).
 
 Out-of-order reads cause hallucinations at interface definition time. No exceptions.
 
@@ -103,7 +103,7 @@ Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows Phase 7 
 ## Where NOT to look unless explicitly asked
 
 - **`grub-customizer/`** — external C++ reference for the upcoming GUI redesign. Read it only when the task explicitly references "Grub Customizer" or "GUI redesign". **Never modify it. Never add it to the Cargo workspace.** It has its own `.git`, is in `.gitignore`, and `.claudeignore` excludes it from default scans — but you have explicit `Read` permission so you can open files in it without prompts when the task asks.
-- `target/`, `debian/`, `crates/gui/assets/`, `tests/e2e/fixtures/` — build artefacts and binary fixtures.
+- `target/`, `debian/`, `crates/gui/assets/`, `tests/fixtures/` — build artefacts and binary fixtures.
 
 ## Commit & PR convention
 

@@ -24,7 +24,7 @@
 //! | [`interface`] | D-Bus `org.bootcontrol.Manager` interface implementation. |
 //! | [`grub_manager`] | Filesystem read/write with atomic write and flock. |
 //! | [`grub_rebuild`] | Locate and invoke `grub-mkconfig` to regenerate `/boot/grub/grub.cfg`. |
-//! | [`failsafe`] | Golden-parachute GRUB entry generator written after every successful write. |
+//! | [`failsafe`] | Failsafe GRUB menu-entry generator written after every successful write. |
 //! | [`policy_check`] | Startup validation of the polkit policy file (refuse to start on stale policy). |
 //! | [`polkit`] | Polkit authorization (mock or real, feature-gated). |
 //! | [`sanitize`] | Payload blacklist enforcement. |

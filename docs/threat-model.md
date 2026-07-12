@@ -174,8 +174,9 @@ about and either out-of-scope or queued behind a follow-up.
 3. **Failsafe entry assumes a working kernel.** If the user's previous
    GRUB entry is also broken (e.g. they upgraded twice with bad
    kernels), the failsafe just points at the second-to-last bad entry.
-   Systemd `BootCounting` is the deeper mitigation (`+3` tries before
-   fallback); we lean on it rather than reimplementing.
+   Systemd `BootCounting` is the intended deeper mitigation (`+3` tries
+   before fallback) — not yet wired into any write-path (release gate G2);
+   until it lands, snapshots + `--rescue` are the recovery paths.
 
 4. **No defense against firmware that ignores `BootOrder`.** Some OEM
    firmwares hard-pin their boot entry first. Outside our scope.

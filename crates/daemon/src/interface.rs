@@ -106,7 +106,7 @@ fn new_job_id() -> String {
 /// injectable via [`GrubManager::new`] so that integration tests can point
 /// the daemon at a `tempfile` without needing real root access.
 ///
-/// `failsafe_cfg_path` is the path to the golden-parachute GRUB snippet
+/// `failsafe_cfg_path` is the path to the failsafe menu-entry GRUB snippet
 /// written after every successful `SetGrubValue`. It is injectable for tests
 /// via [`GrubManager::with_failsafe_path`].
 ///

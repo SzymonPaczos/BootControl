@@ -292,7 +292,7 @@ Sysadmin red-team correctly noted that `auth_admin_keep` is a polkit-side 5-minu
 
 ### Daemon-side .policy file
 
-`packaging/polkit/org.bootcontrol.policy` is rewritten in PR 0 to declare these five actions. Existing single-action consumers in code are migrated in PR 0.
+`packaging/polkit/org.bootcontrol.policy` is rewritten in PR 0 to declare these five actions. Existing single-action consumers in code are migrated in PR 0. **Update 2026-07-12:** a sixth action `org.bootcontrol.restore-snapshot` (`auth_admin`) was added with the snapshot/restore work (PR 5c); the canonical action list is the policy file + `crates/daemon/src/polkit.rs`.
 
 ---
 

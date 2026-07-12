@@ -5,6 +5,8 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 > **Current status (2026-05-23):** Alpha — v0.1.0 in development. Phases 0–8 are all merged on `main` (Phase 3.5 GUI v2 redesign + Granite visual pass shipped under Phase 3; Phase 6 immutable distros, Phase 7 Windows-aware layer, and Phase 8 release/audit deliverables all landed 2026-05-19/05-20; see per-phase tables for commit hashes). One additional out-of-roadmap stream — internally labelled "Faza A" — exists: `feat(systemd-boot): rename loader entries (Faza A PR #3)` shipped 2026-05-21 (commit `e64dde8`). That stream is not described in this roadmap because it post-dates the original Phase 0–8 plan and its scope is owner-defined — see [`.claude/backlog.md`](./.claude/backlog.md) P2 "Phase A undocumented" for the open clarifying question.
 
+> **Versioning note (2026-07-12):** the `vX.Y` labels on the phase headers below ("v1.0" … "v3.0-stable") are **internal milestone labels** from the original plan — they are *not* public release versions. Public releases follow the risk-based scheme in [`.claude/rules/decisions.md`](./.claude/rules/decisions.md) ("Cykl wydawniczy", 2026-07-12): alpha `0.x` (current), beta `0.9.x`, stable `1.0`. The next public step is the `v0.9.0-beta.1` tag, gated by [`.claude/task-briefs/release-readiness.md`](./.claude/task-briefs/release-readiness.md). There will be no public "v3.0".
+
 ---
 
 ## Phase 0 — Foundation `v0.1` ✅ Complete
@@ -119,10 +121,10 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 |----|--------|------------|--------|
 | 1 | `feat(secureboot): add shim/mok signing mode` | Auto-sign rebuilt UKI with MOK private key; generate MokManager enrollment request | ✅ Done |
 | 2 | `feat(secureboot): add nvram backup utility` | Back up `db` and `KEK` EFI variables to `/var/lib/bootcontrol/certs/` before any key operation | ✅ Done |
-| 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | ✅ Done (`experimental_paranoia` feature flag) |
+| 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | ⚠️ Partial (`experimental_paranoia`) — keyset generation + KEK-signed `.auth` shipped; Microsoft-signature merge and NVRAM write **not implemented** (`crates/daemon/src/secureboot/paranoia.rs` stops at the `.auth` file) |
 | 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | ✅ Done |
 
-**Exit criteria:** A user can enroll BootControl's MOK key (Shim mode) or take full ownership of Secure Boot keys (Paranoia mode) without touching the internet.
+**Exit criteria:** A user can enroll BootControl's MOK key (Shim mode) or take full ownership of Secure Boot keys (Paranoia mode) without touching the internet. ✅ Met for Shim/MOK; ⚠️ the Paranoia ownership flow is partial — see PR 3 status.
 
 ---
 
@@ -153,7 +155,7 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 | 4–6 | `e2f70ca` feat: Phase 7 PR4-6 — Windows scaffold via cross-compile | Windows binary stub, platform-aware feature gating in frontends, CI cross-compile target `x86_64-pc-windows-gnu` (frontends + core; daemon excluded by design) | ✅ Done |
 | (follow-up) | `4e5429b` feat: expose UEFI boot menu management (BootOrder, BootNext, Boot####) | Surface the Phase 7 PR1-3 core helpers through D-Bus + client trait + CLI (`bootcontrol efi list-entries / get-order / set-order / move-entry / get-next / set-next / clear-next`) | ✅ Done |
 
-**Exit criteria:** A Windows user can install BootControl, see their EFI boot entries, reorder them, and set a one-time `BootNext` target. ✅ Met on the API surface; native Windows GUI panel beyond the cross-compile scaffold is post-v3.0 polish.
+**Exit criteria:** A Windows user can install BootControl, see their EFI boot entries, reorder them, and set a one-time `BootNext` target. ✅ Met on the API surface; native Windows GUI panel beyond the cross-compile scaffold is post-beta polish (see versioning note at the top).
 
 ---
 
@@ -168,7 +170,7 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 | 3 | `11dea25` chore(release): local release artifact builder | Local release workflow: tag → build → package → publish artifacts (mirrors the abandoned GitHub Actions pipeline locally per the no-cloud-CI decision) | ✅ Done |
 | 4 | `a033e6e` docs(security): add structured threat model | Internal red-team review of all write paths; structured threat model document at [`docs/threat-model.md`](./docs/threat-model.md) | ✅ Done |
 
-**Exit criteria:** BootControl is stable, documented, packaged for major distros, and installable by a non-developer user in under 5 minutes. ✅ Met for the API + packaging surface; v0.1.0 → v3.0-stable bump pending owner-driven sign-off + tag.
+**Exit criteria:** BootControl is stable, documented, packaged for major distros, and installable by a non-developer user in under 5 minutes. ⚠️ Met for the API + packaging surface in container/session-bus tests only — not yet validated on physical hardware. The public release path is the beta-gate list in [`.claude/task-briefs/release-readiness.md`](./.claude/task-briefs/release-readiness.md) (next tag: `v0.9.0-beta.1`; there is no public "v3.0").
 
 ---
 
@@ -188,6 +190,8 @@ The PR header explicitly numbers itself `#3` of a "Faza A" stream, implying PR #
 
 ## Feature Summary by Version
 
+_Column labels are internal milestone labels (see versioning note at the top), not public release versions._
+
 | Feature | v1.0 | v1.1 | v1.2 | v2.0 | v2.1 | v2.2 | v3.0 |
 |---------|------|------|------|------|------|------|------|
 | GRUB management | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -201,18 +205,18 @@ The PR header explicitly numbers itself `#3` of a "Faza A" stream, implying PR #
 | systemd-boot + UKI (daemon D-Bus) | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | mkinitcpio / dracut / kernel-install | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | Secure Boot (Shim/MOK) | — | — | — | — | ✅ | ✅ | ✅ |
-| Secure Boot (Paranoia/custom PK) | — | — | — | — | ✅ | ✅ | ✅ |
+| Secure Boot (Paranoia/custom PK) | — | — | — | — | 🧪 partial | 🧪 partial | 🧪 partial |
 | Immutable distros (ostree) | — | — | — | — | — | ✅ | ✅ |
 | LUKS keymap protection | — | — | — | — | — | ✅ | ✅ |
 | Windows UEFI management | — | — | — | — | — | — | ✅ |
-| Windows GUI | — | — | — | — | — | — | ✅ |
+| Windows GUI | — | — | — | — | — | — | 🧪 scaffold |
 
 ---
 
 ## Backlog — Future Ideas
 
 Features that are designed and understood but not yet assigned to a release phase.
-These are candidates for post-v3.0 work or earlier if a contributor picks them up.
+These are candidates for post-beta work or earlier if a contributor picks them up.
 
 ---
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Mirror of `.github/workflows/rust.yml`. Run this before pushing to catch
-# fmt / clippy / unit-test / E2E failures locally instead of round-tripping
-# through GitHub Actions.
+# Canonical local CI pipeline — this project has no cloud CI (decision
+# 2026-05-20 in .claude/rules/decisions.md). Run before pushing to catch
+# fmt / clippy / unit-test / E2E failures; the pre-push hook runs it
+# automatically.
 #
 # Usage:
 #   ./scripts/ci-local.sh

@@ -58,7 +58,7 @@ use zbus::connection;
 #[cfg(target_os = "linux")]
 const DEFAULT_GRUB_PATH: &str = "/etc/default/grub";
 
-/// Default path to the golden-parachute failsafe GRUB snippet.
+/// Default path to the failsafe menu-entry GRUB snippet.
 #[cfg(target_os = "linux")]
 const DEFAULT_FAILSAFE_PATH: &str = "/etc/bootcontrol/failsafe.cfg";
 
@@ -97,7 +97,7 @@ fn resolve_grub_path() -> PathBuf {
 /// falling back to [`DEFAULT_FAILSAFE_PATH`].
 ///
 /// This override is used exclusively by the E2E test helper to redirect the
-/// golden-parachute write to a temp directory rather than `/etc/bootcontrol/`.
+/// failsafe menu-entry write to a temp directory rather than `/etc/bootcontrol/`.
 #[cfg(target_os = "linux")]
 fn resolve_failsafe_path() -> PathBuf {
     match std::env::var("BOOTCONTROL_FAILSAFE_PATH") {

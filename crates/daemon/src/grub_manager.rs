@@ -132,7 +132,7 @@ pub fn fetch_etag(path: &Path) -> Result<String, BootControlError> {
 ///
 /// After the atomic write succeeds this function:
 /// 1. Calls [`failsafe::refresh_failsafe_entry`] to regenerate the
-///    golden-parachute GRUB snippet (Step 8).
+///    failsafe menu-entry GRUB snippet (Step 8).
 /// 2. Calls [`grub_rebuild::run_grub_mkconfig`] to regenerate
 ///    `/boot/grub/grub.cfg` so the change becomes active at the next boot
 ///    (Step 9).
@@ -272,7 +272,7 @@ pub fn set_grub_value(
     let tmp_path = build_tmp_path(path);
     write_file_atomically(&tmp_path, path, &config.lines)?;
 
-    // ── Step 8: Refresh golden-parachute failsafe entry ──────────────────
+    // ── Step 8: Refresh failsafe menu entry ──────────────────────────────
     //
     // Done AFTER the successful atomic write so that a failed failsafe write
     // does not roll back the user's intended change. The failsafe entry is

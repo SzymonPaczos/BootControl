@@ -4,7 +4,7 @@ crates/gui/assets/icon.png
 .DS_Store
 grub-customizer/
 debian/
-tests/e2e/fixtures/
+tests/fixtures/
 crates/gui/assets/
 **/*.png
 **/*.jpg

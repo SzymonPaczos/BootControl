@@ -4,7 +4,8 @@
   "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
 <!--
   BootControl polkit actions.
-  Five per-intent actions per docs/GUI_V2_SPEC_v2.md §7.
+  Six per-intent actions: the five from docs/GUI_V2_SPEC_v2.md §7 plus
+  restore-snapshot (added with the snapshot/restore work).
   auth_admin_keep is acceptable for non-irreversible actions; auth_admin
   (every-time) is mandatory for irreversible actions.
 
