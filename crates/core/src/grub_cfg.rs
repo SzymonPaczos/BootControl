@@ -67,8 +67,304 @@ pub struct GrubMenuEntry {
 /// assert_eq!(entries[0].path, "0");
 /// assert!(!entries[0].is_submenu);
 /// ```
-pub fn parse_menu_entries(_cfg: &str) -> Result<Vec<GrubMenuEntry>, BootControlError> {
-    todo!("A1 chunk 1: implement per the work-order and the tests below")
+pub fn parse_menu_entries(cfg: &str) -> Result<Vec<GrubMenuEntry>, BootControlError> {
+    let mut entries: Vec<GrubMenuEntry> = Vec::new();
+    // Every open `submenu` block, innermost last — their children are
+    // parsed, so scanning continues inside them.
+    let mut submenus: Vec<SubmenuFrame> = Vec::new();
+    // Next index at the top level (each submenu numbers its own children).
+    let mut top_next_child: usize = 0;
+    // Brace depth of a block whose *content* is ignored: a `menuentry`
+    // body or a non-menu block like `function ... {`. While > 0, lines
+    // are only scanned for unquoted braces, never for new menu items.
+    let mut opaque_depth: usize = 0;
+
+    for line in cfg.lines() {
+        let trimmed = line.trim();
+        // Full-line comments never affect brace tracking — a commented-out
+        // `menuentry ... {` must not open a block.
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        if opaque_depth > 0 {
+            for brace in unquoted_braces(trimmed) {
+                if brace == '{' {
+                    opaque_depth += 1;
+                } else {
+                    opaque_depth -= 1;
+                    if opaque_depth == 0 {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+
+        let Some(first) = trimmed.split_whitespace().next() else {
+            continue;
+        };
+
+        if first == "menuentry" || first == "submenu" {
+            let parts = parse_menu_line(trimmed)?;
+            let is_submenu = first == "submenu";
+            let depth = submenus.len();
+            let index = match submenus.last_mut() {
+                Some(parent) => {
+                    let i = parent.next_child;
+                    parent.next_child += 1;
+                    i
+                }
+                None => {
+                    let i = top_next_child;
+                    top_next_child += 1;
+                    i
+                }
+            };
+            let mut path = String::new();
+            for frame in &submenus {
+                path.push_str(&frame.index.to_string());
+                path.push('>');
+            }
+            path.push_str(&index.to_string());
+            entries.push(GrubMenuEntry {
+                title: parts.title,
+                id: parts.id,
+                path,
+                depth,
+                is_submenu,
+            });
+            if parts.body_depth > 0 {
+                if is_submenu {
+                    submenus.push(SubmenuFrame {
+                        index,
+                        next_child: 0,
+                    });
+                } else {
+                    opaque_depth = parts.body_depth;
+                }
+            }
+        } else {
+            // Non-menu line at menu level: only its unquoted braces matter.
+            // `function load_video {` opens an opaque block; a bare `}`
+            // closes the innermost submenu.
+            for brace in unquoted_braces(trimmed) {
+                if brace == '{' {
+                    opaque_depth += 1;
+                } else if opaque_depth > 0 {
+                    opaque_depth -= 1;
+                } else {
+                    // Stray `}` at the very top level is tolerated.
+                    submenus.pop();
+                }
+            }
+        }
+    }
+
+    if opaque_depth > 0 || !submenus.is_empty() {
+        return Err(malformed("unexpected end of file: unclosed '{' block"));
+    }
+    Ok(entries)
+}
+
+/// Shorthand for the parser's only error shape.
+fn malformed(reason: impl Into<String>) -> BootControlError {
+    BootControlError::MalformedValue {
+        key: "grub.cfg".into(),
+        reason: reason.into(),
+    }
+}
+
+/// One open `submenu` block during the scan.
+struct SubmenuFrame {
+    /// The submenu's own index at its nesting level (a `path` segment).
+    index: usize,
+    /// Index its next direct child will receive.
+    next_child: usize,
+}
+
+/// What a `menuentry`/`submenu` header line contributes to an entry.
+struct MenuLineParts {
+    title: String,
+    id: Option<String>,
+    /// Brace depth still open at the end of the header line — usually 1;
+    /// 0 when the whole block opened and closed on the same line.
+    body_depth: usize,
+}
+
+/// Extract title, id and brace balance from a menu header line.
+fn parse_menu_line(line: &str) -> Result<MenuLineParts, BootControlError> {
+    let tokens = tokenize_menu_line(line)?;
+    let mut title: Option<String> = None;
+    let mut id: Option<String> = None;
+    let mut saw_open = false;
+    let mut body_depth: usize = 0;
+
+    let mut i = 1; // token 0 is the `menuentry`/`submenu` keyword
+    while let Some(token) = tokens.get(i) {
+        match token {
+            Token::Word { text, quoted } => {
+                // Words after the opening `{` are body content, not options.
+                if !saw_open {
+                    if *quoted && title.is_none() {
+                        title = Some(text.clone());
+                    } else if !*quoted && text == "$menuentry_id_option" {
+                        if let Some(Token::Word { text: id_text, .. }) = tokens.get(i + 1) {
+                            id = Some(id_text.clone());
+                            i += 1;
+                        }
+                    }
+                }
+            }
+            Token::Open => {
+                saw_open = true;
+                body_depth += 1;
+            }
+            Token::Close => body_depth = body_depth.saturating_sub(1),
+        }
+        i += 1;
+    }
+
+    if !saw_open {
+        return Err(malformed(format!(
+            "menu item line has no opening '{{' on the same line: {line}"
+        )));
+    }
+    let Some(title) = title else {
+        return Err(malformed(format!(
+            "menu item line has no quoted title: {line}"
+        )));
+    };
+    Ok(MenuLineParts {
+        title,
+        id,
+        body_depth,
+    })
+}
+
+/// A shell-ish token from a menu header line.
+enum Token {
+    /// A word; `quoted` is true when any part of it was inside quotes,
+    /// which is how titles are told apart from options like `--class`.
+    Word { text: String, quoted: bool },
+    /// An unquoted `{`.
+    Open,
+    /// An unquoted `}`.
+    Close,
+}
+
+/// Split a menu header line into words and unquoted braces.
+///
+/// Quote handling follows what `grub-mkconfig` emits: single and double
+/// quotes take content verbatim, and a backslash outside quotes escapes
+/// the next char — together that decodes the apostrophe idiom `'\''`
+/// (close quote, escaped `'`, reopen) to a literal `'`.
+fn tokenize_menu_line(line: &str) -> Result<Vec<Token>, BootControlError> {
+    enum Mode {
+        Unquoted,
+        Single,
+        Double,
+    }
+
+    fn flush(tokens: &mut Vec<Token>, word: &mut Option<(String, bool)>) {
+        if let Some((text, quoted)) = word.take() {
+            tokens.push(Token::Word { text, quoted });
+        }
+    }
+
+    /// The word being built, started on first use. `.0` = text, `.1` = quoted.
+    fn current(word: &mut Option<(String, bool)>) -> &mut (String, bool) {
+        word.get_or_insert_with(|| (String::new(), false))
+    }
+
+    let mut tokens: Vec<Token> = Vec::new();
+    let mut word: Option<(String, bool)> = None;
+    let mut mode = Mode::Unquoted;
+    let mut chars = line.chars();
+
+    while let Some(c) = chars.next() {
+        match mode {
+            Mode::Unquoted => match c {
+                '\'' => {
+                    mode = Mode::Single;
+                    current(&mut word).1 = true;
+                }
+                '"' => {
+                    mode = Mode::Double;
+                    current(&mut word).1 = true;
+                }
+                '\\' => {
+                    if let Some(escaped) = chars.next() {
+                        current(&mut word).0.push(escaped);
+                    }
+                }
+                '{' => {
+                    flush(&mut tokens, &mut word);
+                    tokens.push(Token::Open);
+                }
+                '}' => {
+                    flush(&mut tokens, &mut word);
+                    tokens.push(Token::Close);
+                }
+                c if c.is_whitespace() => flush(&mut tokens, &mut word),
+                _ => current(&mut word).0.push(c),
+            },
+            Mode::Single => {
+                if c == '\'' {
+                    mode = Mode::Unquoted;
+                } else {
+                    current(&mut word).0.push(c);
+                }
+            }
+            Mode::Double => {
+                if c == '"' {
+                    mode = Mode::Unquoted;
+                } else {
+                    current(&mut word).0.push(c);
+                }
+            }
+        }
+    }
+
+    if !matches!(mode, Mode::Unquoted) {
+        return Err(malformed(format!("unterminated quote: {line}")));
+    }
+    flush(&mut tokens, &mut word);
+    Ok(tokens)
+}
+
+/// Yield the unquoted `{` / `}` chars of a line, in order.
+///
+/// Used for lines whose content is otherwise ignored; an unterminated
+/// quote here is not an error — the scan just stops at end of line.
+fn unquoted_braces(line: &str) -> Vec<char> {
+    let mut braces = Vec::new();
+    let mut chars = line.chars();
+    let mut in_single = false;
+    let mut in_double = false;
+    while let Some(c) = chars.next() {
+        if in_single {
+            if c == '\'' {
+                in_single = false;
+            }
+        } else if in_double {
+            if c == '"' {
+                in_double = false;
+            }
+        } else {
+            match c {
+                '\'' => in_single = true,
+                '"' => in_double = true,
+                '\\' => {
+                    // Escaped char is literal; skip it.
+                    chars.next();
+                }
+                '{' | '}' => braces.push(c),
+                _ => {}
+            }
+        }
+    }
+    braces
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
