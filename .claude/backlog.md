@@ -49,6 +49,14 @@ Dodatkowo (audyt UX 2026-07-12, P1-2): te same przyciski **omijają Confirmation
 Z przeglądu 2026-07-12 ([raport](history/2026-07-12-cli-tui-design-review.md)), każdy zweryfikowany w źródłach: (1) **CLI `get-config` → exit 0 mimo błędu** — gałęzie systemd-boot/UKI robią `eprintln!` bez propagacji (`crates/cli/src/main.rs:295,307`); maskuje awarię w skryptach. (2) **TUI: edycja parametru UKI połyka błąd** — `let _ = remove_kernel_param(...)` + status „✓ Added" mimo możliwej porażki (`crates/tui/src/main.rs:419,423`); może cicho zostawić stary parametr. (3) **Kłamiące stringi**: GUI reklamuje nieistniejącą komendę `bootcontrol grub rebuild` (`crates/gui/src/main.rs:173` — realnie `bootcontrol rebuild`), nagłówek TUI hardkoduje `/etc/default/grub` niezależnie od backendu i ukrywa tryb demo (`crates/tui/src/ui.rs:112`).
 **Źródło:** przegląd projektowy CLI/TUI 2026-07-12. **Status:** otwarte.
 
+### Raport „Boot environment" — przejrzystość detekcji (kolejka #4)
+Wymóg właściciela: program wyraźnie raportuje, co wykrył i skąd — dziś `detect_bootloader` (`crates/core/src/prober.rs:89`) po cichu wybiera backend (loader.conf > grub), TUI hardkoduje nagłówek, GUI pokazuje jedną linię. Kształt: znalezione bootloadery z ścieżkami, wpisy EFI z dyskami, aktywny backend + uzasadnienie; powierzchnie: CLI `detect`, sekcja Overview, nagłówek TUI. Razem z tym: **idle-exit daemona (60 s) + poprawka unitu** (obietnica on-demand).
+**Źródło:** decyzja zakresu 2026-07-12 ([brief](task-briefs/scope-2026-07-12.md)). **Status:** zatwierdzone — czeka na kolejkę (#4).
+
+### Porządny GitHub + animowana strona (kolejka #6–7)
+GitHub przed betą: opis+topics, zrzuty/GIF w README, CONTRIBUTING, issue templates, ruleset main, naprawa placeholderów `YOUR_USERNAME` (README:122, `bootcontrold.socket`), releases (G6). Strona animowana (landing): treść po A1/A2, publikacja przy G7.
+**Źródło:** decyzja zakresu 2026-07-12. **Status:** zatwierdzone — czeka na kolejkę (#6–7).
+
 ## P2 — porządkowe
 
 ### Paranoia: `merge_with_microsoft_signatures` — mylna nazwa i copy w API/GUI
@@ -69,7 +77,8 @@ Runner obsługuje ubuntu/fedora/arch (`SUPPORTED=(ubuntu fedora arch)`); ROADMAP
 
 ### Daemon lifecycle: IdleTimeout / sd_notify / JobId niezaimplementowane
 ARCHITECTURE §II obiecywał 60 s idle shutdown, `sd_notify(EXTEND_TIMEOUT_USEC)` i async `JobId` — w kodzie i unicie nie ma żadnego z tych elementów (oznaczone "design intent" w `9a371ce`). Fix: zaimplementować albo formalnie zdjąć z architektury. Uwaga dodatkowa: `Type=notify` w `bootcontrold.service` bez `sd_notify` w kodzie wymaga weryfikacji na realnym systemie (czy zbus wysyła READY=1) — inaczej start przez systemd może timeoutować; sprawdzić przy bramce G4.
-**Źródło:** recenzja (Codex) 2026-07-12 #8b. **Status:** czeka na decyzję właściciela.
+Uzupełnienie (2026-07-12, pytanie właściciela „po co daemon 24/7"): potwierdzone grepem — brak idle-exit w `crates/daemon/src/main.rs`, więc raz aktywowany daemon żyje do reboota; dodatkowo `bootcontrold.service` ma `[Install] WantedBy=multi-user.target` (zaprasza enable=start przy boocie zamiast czystej aktywacji socket/D-Bus — README instruuje enable tylko socketu). Propozycja: podnieść do przed-bety idle-exit (60 s) + poprawkę `[Install]` unitu — wtedy obietnica „on-demand, nie chodzi w tle" jest prawdziwa.
+**Źródło:** recenzja (Codex) 2026-07-12 #8b; pytanie właściciela 2026-07-12. **Status:** czeka na decyzję właściciela (rekomendacja: idle-exit + unit przed betą).
 
 ### Audit-evidence gate — świeżość audytu wiązać z dowodem, nie samą datą
 `pre-push` preflight (dodany 2026-07-12) sprawdza tylko, czy najnowszy nagłówek `## Audyt YYYY-MM-DD` jest ≤7 dni. Warunek spełnia jednolinijkowy edit daty albo `bash .claude/audit.sh` (stempluje datę bez LLM i bez Security Review). Fix: wymagać w najnowszym wpisie `AUDITED_REVISION: <SHA>` osiągalnego z HEAD oraz `SECURITY_REVIEW: PASS|ACCEPTED_RISK|...`, nie samej daty.
@@ -114,7 +123,8 @@ Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md,
 
 ### CLI/TUI: decyzje projektowe z przeglądu 2026-07-12
 Raport: [`history/2026-07-12-cli-tui-design-review.md`](history/2026-07-12-cli-tui-design-review.md). Do triage'u właściciela: (1) **model bezpieczeństwa CLI/TUI** — GUI wymusza type-to-confirm dla restore/rebuild/set-default, CLI i TUI wykonują je bez żadnej bariery (`--yes`/prompt/diff/dry-run nie istnieją) — ujednolicić albo zapisać świadomą asymetrię w `decisions.md`; (2) **taksonomia CLI** — GRUB płaski top-level vs reszta resource-oriented; grupa `grub` naprawiłaby też rozjazd z GUI; (3) **tożsamość TUI** — konsola zarządzania (duża praca: snapshoty/SB/EFI nieobecne) vs jawny „quick config editor" (mała praca: dopisać do docs + wołać rebuild po edycji GRUB); (4) stabilny output maszynowy CLI (`--json`) i ETag dla `efi *`/`snapshot restore`.
-**Źródło:** przegląd projektowy 2026-07-12 (polecenie właściciela). **Status:** czeka na decyzję właściciela.
+Aktualizacja (2026-07-12, decyzja właściciela): **TUI = docelowo pełna konsola zarządzania** — targetem są serwery („admini nie muszą uczyć się CLI"); kolejność: po becie/rdzeniu GRUB. CLI — właściciel rozważał okrojenie; rekomendacja agenta: nie okrajać (CLI = powierzchnia automatyzacji/skryptów i rescue, TUI jej nie zastąpi; inwestować w jakość, nie rozmiar).
+**Źródło:** przegląd projektowy 2026-07-12 (polecenie właściciela); decyzja TUI 2026-07-12. **Status:** częściowo rozstrzygnięte (TUI); reszta czeka na decyzję właściciela.
 
 _Zasada „najpierw zapisz, potem kontynuuj": zadania odkryte w rozmowie/audycie/review
 lądują tu natychmiast, gdy priorytet nie jest oczywisty. Triage do P0/P1/P2 robi

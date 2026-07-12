@@ -9,6 +9,22 @@ Each version represents a stable, shippable milestone. Work within a version is 
 
 ---
 
+## Current plan — "1.0 GRUB-first" (owner decision 2026-07-12)
+
+The product goal for 1.0 is: **replace Grub Customizer, distribute widely, stay maintainable for 5 years.** The scope decision and full work queue live in [`.claude/rules/decisions.md`](./.claude/rules/decisions.md) ("Zakres i kolejka 1.0") and [`.claude/task-briefs/scope-2026-07-12.md`](./.claude/task-briefs/scope-2026-07-12.md). Summary:
+
+| Tier | Contents |
+|------|----------|
+| **CORE (develop, pre-beta)** | GRUB complete (config ✅ + **menu entries — the one missing core piece** + failsafe wiring + rescue), snapshots/audit, GUI v2 pages (Tor A), CLI quality (taxonomy, `--json`, confirmations), "Boot environment" detection report, daemon idle-exit, deb/rpm/AUR packaging, public GitHub + animated landing page |
+| **KEEP (works today, no new work)** | systemd-boot (list/default/rename), UKI cmdline, EFI BootOrder/BootNext from Linux, immutable-distro pre-flight, LUKS keymap guard, Demo Mode |
+| **POST-BETA** | TUI as a full server management console, sd-boot/UKI completion (`loader.conf` editing, reorder/hide/delete, `reinstall_uki`), MOK GUI panel, openSUSE packaging/matrix |
+| **LAST** | Windows layer (variable backend + GUI panel + Windows-side detection) — deliberately a separate effort |
+| **REMOVED (2026-07-12)** | Paranoia Mode + Strict Mode — half-built, highest hardware risk, smallest audience; git history preserves the code |
+
+The phase tables below are the **historical delivery record** (commit evidence) — they no longer drive priorities.
+
+---
+
 ## Phase 0 — Foundation `v0.1` ✅ Complete
 
 **Goal:** A working Cargo Workspace with CI/CD. No features yet, but the project can be cloned, built, and tested by any contributor.
@@ -123,7 +139,7 @@ GUI v1 ships a flat key=value table; v2 reshapes it into a multi-page app with b
 |----|--------|------------|--------|
 | 1 | `feat(secureboot): add shim/mok signing mode` | Auto-sign rebuilt UKI with MOK private key; generate MokManager enrollment request | ✅ Done |
 | 2 | `feat(secureboot): add nvram backup utility` | Back up `db` and `KEK` EFI variables to `/var/lib/bootcontrol/certs/` before any key operation | ✅ Done |
-| 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | ⚠️ Partial (`experimental_paranoia`) — keyset generation + KEK-signed `.auth` shipped; Microsoft-signature merge and NVRAM write **not implemented** (`crates/daemon/src/secureboot/paranoia.rs` stops at the `.auth` file) |
+| 3 | `feat(secureboot): add paranoia mode` | Generate custom PK/KEK; merge with locally extracted Microsoft signatures; write hybrid db to NVRAM | 🗑 **Removed 2026-07-12** (scope decision "1.0 GRUB-first") — was ⚠️ Partial: keyset generation + KEK-signed `.auth` shipped, Microsoft merge and NVRAM write never implemented. Code preserved in git history |
 | 4 | `test(secureboot): add ovmf-based secure boot tests` | QEMU + OVMF test harness verifying signing and enrollment flows | ⚠️ Smoke harness — boots OVMF with enrolled MOK vars, kills QEMU after 5 s; no boot/serial/enrollment assertion yet (`tests/e2e/src/secureboot_mok.rs`) |
 
 **Exit criteria:** A user can enroll BootControl's MOK key (Shim mode) or take full ownership of Secure Boot keys (Paranoia mode) without touching the internet. ✅ Met for Shim/MOK; ⚠️ the Paranoia ownership flow is partial — see PR 3 status.
@@ -207,7 +223,7 @@ _Column labels are internal milestone labels (see versioning note at the top), n
 | systemd-boot + UKI (daemon D-Bus) | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | mkinitcpio / dracut / kernel-install | — | — | — | ✅ | ✅ | ✅ | ✅ |
 | Secure Boot (Shim/MOK) | — | — | — | — | ✅ | ✅ | ✅ |
-| Secure Boot (Paranoia/custom PK) | — | — | — | — | 🧪 partial | 🧪 partial | 🧪 partial |
+| Secure Boot (Paranoia/custom PK) | — | — | — | — | 🗑 removed 2026-07-12 | 🗑 | 🗑 |
 | Immutable distros (ostree) | — | — | — | — | — | ✅ | ✅ |
 | LUKS keymap protection | — | — | — | — | — | ✅ | ✅ |
 | Windows UEFI management | — | — | — | — | — | — | ✅ |

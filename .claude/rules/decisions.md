@@ -87,7 +87,7 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 ### 2026-05-03 — Trzy initramfs drivers równe (mkinitcpio = first-class)
 **Decyzja:** `dracut`, `kernel-install`, `mkinitcpio` są **równymi priorytetowo** driverami w Phase 4. mkinitcpio nie jest afterthought.
 **Dlaczego:** Arch Linux = największy early-adopter segment dla migracji z GRUB. Driver detection przy starcie daemona, brak hardcoded priority.
-**Status:** aktywna.
+**Status:** zawieszona 2026-07-12 (zakres 1.0 GRUB-first — patrz sekcja „Decyzje zawieszone”).
 **Jak stosować:** Nowy initramfs driver implementuje ten sam trait + `binary_path` detection. Brak fallback chain "spróbuj dracut, potem mkinitcpio". Źródło: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §III, [`AGENTS.md`](../../AGENTS.md) §V.
 
 ### 2026-05-03 — Secure Boot: zero network, zero hardcoded certs
@@ -166,6 +166,24 @@ Pierwotny krok 2026-05-23 zostawiał v1 w `docs/` ze względu na ~200 cytatów; 
 **Dlaczego:** Dotychczas pojęcia stosowane wybiórczo i sprzecznie: README badge „alpha — v0.1.0", ROADMAP Phase 8 „`v3.0-stable` ✅ Complete", Cargo `0.1.0` — „1.0" znaczyło jednocześnie „zrobiona faza" i „odległe wydanie". Właściciel 2026-07-12 zażądał jednej semantyki, którą operują wszystkie agenty.
 **Status:** aktywna.
 **Jak stosować:** Publiczna komunikacja i tagi używają wyłącznie `0.x`/`0.9.x`/`1.0`. Nie deklarować „stable"/„release" przed spełnieniem bramek z briefu. Agent nie wymyśla własnych definicji alfa/beta — odsyła do tej decyzji. Ujednolicenie istniejących plików (README/ROADMAP) = bramka G1 (doc-honesty pass), osobny commit.
+
+### 2026-07-12 — Zakres i kolejka 1.0: GRUB-first, paranoia usunięta
+**Decyzja:** Cel produktu 1.0 = zastąpienie Grub Customizera + dystrybucja + utrzymanie 5 lat. Zakres: **CORE** (rozwijamy do bety) = GRUB kompletny (config + **wpisy menu** + failsafe + rescue), snapshoty/audyt, GUI v2 (Tor A), CLI pełne (jakość: taksonomia/`--json`/potwierdzenia), raport „Boot environment" (przejrzystość detekcji), daemon realnie on-demand (idle-exit + poprawka unitu), packaging deb/rpm/AUR, porządny GitHub + animowana strona (przy becie). **KEEP** (działa, zero nowej pracy do bety) = systemd-boot, UKI cmdline, EFI BootOrder/BootNext z Linuksa, immutable pre-flight, LUKS keymap guard, Demo Mode. **PO BECIE** = TUI jako pełna konsola serwerowa (decyzja właściciela: docelowy interfejs adminów), dokończenie sd-boot/UKI (`loader.conf`, reorder/hide/delete, `reinstall_uki`), panel MOK w GUI, openSUSE. **NA KOŃCU** = Windows (backend zmiennych + panel + windowsowa detekcja); cross-compile Windows przeniesiony z pre-push do audytu tygodniowego. **DELETE** = Paranoia Mode + Strict Mode (kod za flagą `experimental_paranoia`, GUI `security_lab`, CLI `paranoia`, akcje Polkit `generate-keys`/`replace-pk`). Jednolity kontrakt destrukcyjny (potwierdzenie + diff w każdym frontendzie) wchodzi przed betą.
+**Dlaczego:** Właściciel 2026-07-12: projekt za duży. Inwentaryzacja ~40 obietnic wykazała, że **jedyny brak w rdzeniu to wpisy menu GRUB — obietnica z pierwszego zdania README** — a szerokość (UKI/Windows/SB) rozprasza wysiłek. Paranoia: pół-zbudowana najniebezpieczniejsza funkcja (potencjał unieruchomienia płyty), mikroskopijna publiczność, najdroższe testy (OVMF).
+**Status:** aktywna.
+**Jak stosować:** Kolejka jednotorowa — pełny plan i szacunki: [`task-briefs/scope-2026-07-12.md`](../task-briefs/scope-2026-07-12.md). Nic z „po becie" nie blokuje bety ani nie jest reklamowane jako gotowe; nowe pomysły → backlog, nie do kolejki. Bramka G2 w wariancie GRUB: weryfikacja snapshot/restore + failsafe entry na fizycznym sprzęcie (BootCounting wraca razem z sd-boot/UKI po becie).
+
+### 2026-07-12 — Doprecyzowania decyzji istniejących (skutki zakresu 1.0)
+**Decyzja:** (1) „Linux-only z Windows-aware" — Windows-aware pozostaje w wizji, ale na **końcu kolejki**; do tego czasu cross-compile poza pre-push (do audytu tygodniowego). (2) „Polkit per-intent" — liczba akcji spada z 6 do 4 wraz z usunięciem paranoia (`org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk` usunięte z policy); zasada per-intent i single source of truth (`packaging/polkit/org.bootcontrol.policy`) bez zmian. (3) „Secure Boot: zero network, zero hardcoded certs" — obowiązuje nadal dla pozostałych ścieżek SB (MOK sign/enroll, NVRAM backup); sekcje o generacji PK/KEK bezprzedmiotowe po usunięciu paranoia. (4) TDD / zakaz unwrap / komentarze przeżywają — bez zmian w całej kolejce.
+**Status:** aktywna.
+**Jak stosować:** Przy odmrażaniu domen (UKI, Windows, ewentualny powrót paranoia jako świadomy nowy projekt) wrócić do oryginalnych decyzji i zdjąć zawieszenia jawnym wpisem z datą.
+
+---
+
+## Decyzje zawieszone
+
+### 2026-05-03 — Trzy initramfs drivers równe (mkinitcpio = first-class)
+**Zawieszona 2026-07-12:** rozwój UKI wstrzymany do po-becie (zakres 1.0 GRUB-first — decyzja wyżej). Kod driverów zostaje w repo i działa; zasada równości driverów wraca automatycznie przy odmrożeniu prac nad UKI. Oryginalny wpis pozostaje w sekcji aktywnych jako referencja historyczna z niniejszą adnotacją.
 
 ---
 
