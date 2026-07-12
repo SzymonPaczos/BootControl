@@ -38,7 +38,8 @@ Pliki control-plane (`.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, `.
 
 ### GUI Secure Boot: `enroll_mok`/`backup_nvram` przekazują puste ścieżki
 `crates/gui/src/view_model.rs:108-115` woła `sign_and_enroll_uki("")` i `backup_nvram("")`, a daemon wymaga absolutnych ścieżek — oba przyciski panelu Secure Boot zawsze kończą się błędem walidacji. Fix: wykrycie/wybór UKI (file picker) i domyślny `target_dir` backupu, albo wyłączenie przycisków z komunikatem "not implemented". ROADMAP Phase 3 PR5 oznaczone ⚠️ (commit `9a371ce`).
-**Źródło:** recenzja (Codex) 2026-07-12 #4. **Status:** otwarte.
+Dodatkowo (audyt UX 2026-07-12, P1-2): te same przyciski **omijają Confirmation Sheet** — `secure_boot.slint:61-72` woła callbacki wprost, bez preflight/snapshot/type-to-confirm (złamanie destructive-action protocol; jedyna bramka to daemon-side Polkit). Fix przycisków powinien od razu poprowadzić je przez sheet (wzorzec: Snapshots→Restore, `main.rs:262-293`).
+**Źródło:** recenzja (Codex) 2026-07-12 #4; audyt UX 2026-07-12 ([raport](history/2026-07-12-gui-ux-audit.md)). **Status:** otwarte.
 
 ## P2 — porządkowe
 
@@ -110,7 +111,8 @@ właściciel._
 ### GUI v2: strony Boot Entries i Bootloader nigdy nie dostały UX ze spec v2
 `bootloader.slint` to jawny placeholder („Coming in PR 7", 39 linii), a `boot_entries.slint` to port tabeli v1 key=value z per-row Save (komentarz w pliku: „PR 3 is a faithful port"; Inspector/reorder z v2 §3.2 „lands in PR 6"). ROADMAP Phase 3.5 deklaruje PR 6/7 ✅ Done (mega-commit `64e1001`) — naddeklaracja: tokeny/atomy/router/confirmation-sheet istnieją, ale **dwie główne strony robocze zostały przy UX v1**. To prawdopodobnie rdzeń „katastrofy UX" zgłaszanej przez właściciela 2026-07-12. Akcje: (1) sprostować ROADMAP Phase 3.5 (kolejna pozycja doc-honesty), (2) decyzja właściciela: implementacja §3.2/§3.3 przed czy po becie, (3) redesign wizualny (CLAUDE_DESIGN_BRIEF) rozszerzyć — brief zakłada „IA locked, tylko wizualia", a problem jest głębszy.
 Pełny handoff (diagnoza, pipeline zrzutów, tory A/B, prompt startowy): [`task-briefs/gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
-**Źródło:** przegląd UX 2026-07-12 (statyczna analiza `.slint` + spec v2). **Status:** niejasny priorytet — handoff gotowy do startu w nowej rozmowie.
+Audyt wizualny wykonany 2026-07-12 — raport z findingami P0/P1/P2 (w tym: Settings-atrapa odsyłająca do ręcznej edycji TOML, brak per-row expand w Logs, obcięte klucze 180px, per-row Save bez diff preview, niespójne demo stuby): [`history/2026-07-12-gui-ux-audit.md`](history/2026-07-12-gui-ux-audit.md). ROADMAP Phase 3.5 sprostowany.
+**Źródło:** przegląd UX 2026-07-12 (statyczna analiza `.slint` + spec v2); audyt na zrzutach 2026-07-12. **Status:** czeka na decyzję właściciela (tor A/B — porównanie przedstawione w sesji 2026-07-12).
 
 ### `cargo-udeps` exec error w audit.sh (drugi audyt z rzędu)
 `.claude/audit.sh` wywołuje `cargo-udeps --workspace` do dead-code detection — od 2026-05-23 zwraca exec error (toolchain nightly niedostępny/niekompatybilny). Efekt: dead-code layer zdegradowany, weryfikacja greppem zamiast tego. Decyzja: naprawić nightly (`rustup toolchain install nightly` + `cargo install cargo-udeps`) czy usunąć krok ze skryptu i polegać na warstwie greppem.
