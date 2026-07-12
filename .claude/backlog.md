@@ -45,6 +45,10 @@ Dodatkowo (audyt UX 2026-07-12, P1-2): te same przyciski **omijają Confirmation
 `boot_entries.slint` = tabela v1 key=value (per-row Save, bez diff preview), `bootloader.slint` = placeholder „Coming in PR 7", Settings = statyczny tekst. Audyt wizualny 2026-07-12: finding P0-1 + 5×P1 ([raport](history/2026-07-12-gui-ux-audit.md)); ROADMAP Phase 3.5 sprostowany (`04207dd`). **Decyzja właściciela 2026-07-12: Tor A + kick-off B.** Kolejność: A1 Boot Entries §3.2 (brief: [`task-briefs/gui-v2-boot-entries.md`](task-briefs/gui-v2-boot-entries.md)) → A2 Bootloader §3.3 (zależność: typed getters w daemonie) → A3 szybkie wygrane (Settings §10.7, Logs expand, obcięte klucze, demo stuby). Tor B wypchnięty przez DesignSync (projekt „BootControl GUI Redesign"); cykl designu czeka na stabilny layout A1/A2. Handoff macierzysty: [`task-briefs/gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
 **Źródło:** audyt UX 2026-07-12 + decyzja właściciela w sesji. **Status:** zatwierdzone — A1 gotowe do startu w nowej rozmowie (prompt w briefie).
 
+### CLI/TUI: trzy potwierdzone bugi interfejsów (niezależne od decyzji projektowych)
+Z przeglądu 2026-07-12 ([raport](history/2026-07-12-cli-tui-design-review.md)), każdy zweryfikowany w źródłach: (1) **CLI `get-config` → exit 0 mimo błędu** — gałęzie systemd-boot/UKI robią `eprintln!` bez propagacji (`crates/cli/src/main.rs:295,307`); maskuje awarię w skryptach. (2) **TUI: edycja parametru UKI połyka błąd** — `let _ = remove_kernel_param(...)` + status „✓ Added" mimo możliwej porażki (`crates/tui/src/main.rs:419,423`); może cicho zostawić stary parametr. (3) **Kłamiące stringi**: GUI reklamuje nieistniejącą komendę `bootcontrol grub rebuild` (`crates/gui/src/main.rs:173` — realnie `bootcontrol rebuild`), nagłówek TUI hardkoduje `/etc/default/grub` niezależnie od backendu i ukrywa tryb demo (`crates/tui/src/ui.rs:112`).
+**Źródło:** przegląd projektowy CLI/TUI 2026-07-12. **Status:** otwarte.
+
 ## P2 — porządkowe
 
 ### Paranoia: `merge_with_microsoft_signatures` — mylna nazwa i copy w API/GUI
@@ -108,9 +112,9 @@ Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md,
 
 ## Inbox — niejasny priorytet
 
-### Przegląd projektowy CLI i TUI (analiza, bez zmian)
-Właściciel (2026-07-12, sesja gui-ux-redesign): „przeanalizuj również CLI czy mamy dobrze zaprojektowane i TUI". Ocena designu `crates/cli` (struktura komend, spójność z parity ledger spec v2 §17, help/exit codes, konwencje clap) i `crates/tui` (model klawiszy, spójność z backendami). Wynik = raport/ocena, nie implementacja.
-**Źródło:** polecenie właściciela 2026-07-12. **Status:** w trakcie (ta sesja, po domknięciu GUI).
+### CLI/TUI: decyzje projektowe z przeglądu 2026-07-12
+Raport: [`history/2026-07-12-cli-tui-design-review.md`](history/2026-07-12-cli-tui-design-review.md). Do triage'u właściciela: (1) **model bezpieczeństwa CLI/TUI** — GUI wymusza type-to-confirm dla restore/rebuild/set-default, CLI i TUI wykonują je bez żadnej bariery (`--yes`/prompt/diff/dry-run nie istnieją) — ujednolicić albo zapisać świadomą asymetrię w `decisions.md`; (2) **taksonomia CLI** — GRUB płaski top-level vs reszta resource-oriented; grupa `grub` naprawiłaby też rozjazd z GUI; (3) **tożsamość TUI** — konsola zarządzania (duża praca: snapshoty/SB/EFI nieobecne) vs jawny „quick config editor" (mała praca: dopisać do docs + wołać rebuild po edycji GRUB); (4) stabilny output maszynowy CLI (`--json`) i ETag dla `efi *`/`snapshot restore`.
+**Źródło:** przegląd projektowy 2026-07-12 (polecenie właściciela). **Status:** czeka na decyzję właściciela.
 
 _Zasada „najpierw zapisz, potem kontynuuj": zadania odkryte w rozmowie/audycie/review
 lądują tu natychmiast, gdy priorytet nie jest oczywisty. Triage do P0/P1/P2 robi
