@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use zbus::proxy;
+use zbus::{proxy, Connection};
 
 /// D-Bus proxy for the `org.bootcontrol.Manager` interface exposed by `bootcontrold`.
 #[proxy(
@@ -16,4 +16,13 @@ pub trait Manager {
 
     /// Get the current ETag.
     async fn get_etag(&self) -> zbus::Result<String>;
+}
+
+/// Connect to the appropriate D-Bus bus based on the `BOOTCONTROL_BUS` environment variable.
+/// Used to connect to the session bus during E2E/smoke testing.
+pub async fn connect_bus() -> zbus::Result<Connection> {
+    match std::env::var("BOOTCONTROL_BUS").as_deref() {
+        Ok("session") => Connection::session().await,
+        _ => Connection::system().await,
+    }
 }
