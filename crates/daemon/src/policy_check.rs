@@ -21,7 +21,7 @@ use std::path::Path;
 /// Canonical location of the Polkit policy file on a packaged install.
 pub const DEFAULT_POLICY_PATH: &str = "/usr/share/polkit-1/actions/org.bootcontrol.policy";
 
-/// The six per-intent Polkit Action IDs the daemon needs declared. Must be
+/// The four active per-intent Polkit Action IDs the daemon needs declared. Must be
 /// kept in sync with [`packaging/polkit/org.bootcontrol.policy`].
 pub const REQUIRED_ACTIONS: &[&str] = &[
     "org.bootcontrol.rewrite-grub",
@@ -53,7 +53,7 @@ impl std::fmt::Display for PolicyError {
             Self::LegacyManageOnly => write!(
                 f,
                 "polkit policy file declares only the deprecated \
-                 'org.bootcontrol.manage' action. Daemon requires the six \
+                 'org.bootcontrol.manage' action. Daemon requires the four \
                  per-intent actions declared in \
                  packaging/polkit/org.bootcontrol.policy. Refusing to start \
                  — fix the packaging or re-install."
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn partial_policy_lists_missing_actions() {
-        // Three out of six declared.
+        // Three out of four declared.
         let partial = format!(
             r#"<action id="{}"></action>
             <action id="{}"></action>
@@ -185,10 +185,8 @@ mod tests {
         match validate_policy_content(&partial) {
             Err(PolicyError::IncompleteActions { present, missing }) => {
                 assert_eq!(present.len(), 3);
-                assert_eq!(missing.len(), 3);
+                assert_eq!(missing.len(), 1);
                 assert!(missing.contains(&REQUIRED_ACTIONS[3].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[4].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[5].to_string()));
             }
             other => panic!("expected IncompleteActions, got {other:?}"),
         }
