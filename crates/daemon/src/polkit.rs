@@ -60,9 +60,9 @@ pub mod actions {
 ///
 /// # Arguments
 ///
-/// * `caller_uid` — The Unix UID of the D-Bus caller as reported by the
-///   D-Bus daemon via `org.freedesktop.DBus.GetConnectionUnixUser`. Used to
-///   construct the `unix-user` Polkit subject for authorization.
+/// * `caller_bus_name` — The unique D-Bus sender name from the method call
+///   header (for example, `":1.42"`). Polkit resolves this unspoofable name
+///   to the originating process and login session.
 /// * `action` — The per-intent action ID. Must be a constant from [`actions`].
 ///
 /// # Errors
@@ -83,11 +83,14 @@ pub mod actions {
 /// // In polkit-mock mode a known action always succeeds.
 /// let rt = tokio::runtime::Runtime::new().unwrap();
 /// rt.block_on(async {
-///     assert!(authorize_with_polkit(1000, actions::REWRITE_GRUB).await.is_ok());
+///     assert!(authorize_with_polkit(":1.42", actions::REWRITE_GRUB).await.is_ok());
 /// });
 /// # }
 /// ```
-pub async fn authorize_with_polkit(caller_uid: u32, action: &str) -> Result<(), BootControlError> {
+pub async fn authorize_with_polkit(
+    caller_bus_name: &str,
+    action: &str,
+) -> Result<(), BootControlError> {
     // Defensive contract: action must be one of the per-intent IDs. Shared by
     // mock and real paths so packaging drift fails loudly in CI.
     const KNOWN: &[&str] = &[
@@ -103,7 +106,7 @@ pub async fn authorize_with_polkit(caller_uid: u32, action: &str) -> Result<(), 
     #[cfg(feature = "polkit-mock")]
     {
         // Suppress unused-variable warning in mock mode.
-        let _ = caller_uid;
+        let _ = caller_bus_name;
         // Mock implementation: always grants authorization for a known action.
         // Used in tests and CI where a real systemd/Polkit stack is unavailable.
         Ok(())
@@ -114,16 +117,19 @@ pub async fn authorize_with_polkit(caller_uid: u32, action: &str) -> Result<(), 
         use std::collections::HashMap;
         use zbus_polkit::policykit1::{AuthorityProxy, CheckAuthorizationFlags, Subject};
 
-        // Build the Polkit subject: a unix-user identified by UID.
+        // A system-bus-name subject lets Polkit securely resolve the exact
+        // calling process and its active login session. A bare unix-user
+        // subject loses that session association and cannot be challenged by
+        // an authentication agent reliably.
         let mut subject_details: HashMap<String, zbus::zvariant::OwnedValue> = HashMap::new();
         subject_details.insert(
-            "uid".to_string(),
-            zbus::zvariant::Value::from(caller_uid)
+            "name".to_string(),
+            zbus::zvariant::Value::from(caller_bus_name)
                 .try_to_owned()
                 .map_err(|_| BootControlError::PolkitDenied)?,
         );
         let subject = Subject {
-            subject_kind: "unix-user".to_string(),
+            subject_kind: "system-bus-name".to_string(),
             subject_details,
         };
 
@@ -168,17 +174,17 @@ mod tests {
     #[cfg(feature = "polkit-mock")]
     #[tokio::test]
     async fn mock_grants_known_action_for_any_uid() {
-        for uid in [0u32, 1000, u32::MAX] {
-            assert!(authorize_with_polkit(uid, actions::REWRITE_GRUB)
+        for bus_name in [":1.0", ":1.42", ":1.4294967295"] {
+            assert!(authorize_with_polkit(bus_name, actions::REWRITE_GRUB)
                 .await
                 .is_ok());
-            assert!(authorize_with_polkit(uid, actions::WRITE_BOOTLOADER)
+            assert!(authorize_with_polkit(bus_name, actions::WRITE_BOOTLOADER)
                 .await
                 .is_ok());
-            assert!(authorize_with_polkit(uid, actions::ENROLL_MOK)
+            assert!(authorize_with_polkit(bus_name, actions::ENROLL_MOK)
                 .await
                 .is_ok());
-            assert!(authorize_with_polkit(uid, actions::RESTORE_SNAPSHOT)
+            assert!(authorize_with_polkit(bus_name, actions::RESTORE_SNAPSHOT)
                 .await
                 .is_ok());
         }
@@ -190,7 +196,7 @@ mod tests {
     #[tokio::test]
     async fn mock_rejects_reserved_paranoia_actions() {
         for action in [actions::GENERATE_KEYS, actions::REPLACE_PK] {
-            assert!(authorize_with_polkit(1000, action).await.is_err());
+            assert!(authorize_with_polkit(":1.42", action).await.is_err());
         }
     }
 
@@ -200,7 +206,7 @@ mod tests {
     #[cfg(feature = "polkit-mock")]
     #[tokio::test]
     async fn mock_rejects_legacy_manage_action() {
-        let result = authorize_with_polkit(1000, "org.bootcontrol.manage").await;
+        let result = authorize_with_polkit(":1.42", "org.bootcontrol.manage").await;
         assert!(
             result.is_err(),
             "legacy 'manage' action must be rejected at the call boundary"
@@ -211,7 +217,7 @@ mod tests {
     #[tokio::test]
     async fn mock_rejects_typo_action() {
         // Underscore instead of hyphen: catches drift between code and policy XML.
-        let result = authorize_with_polkit(1000, "org.bootcontrol.rewrite_grub").await;
+        let result = authorize_with_polkit(":1.42", "org.bootcontrol.rewrite_grub").await;
         assert!(result.is_err());
     }
 }
