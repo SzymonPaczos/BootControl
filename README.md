@@ -211,9 +211,11 @@ sudo cp packaging/dbus/org.bootcontrol.Manager.service /usr/share/dbus-1/system-
 sudo cp packaging/systemd/bootcontrold.service /etc/systemd/system/
 sudo cp packaging/systemd/bootcontrold.socket /etc/systemd/system/
 
-# 6. Reload systemd and start the socket
+# 6. Install the GRUB failsafe menu hook
+sudo install -m 0755 packaging/grub.d/40_bootcontrol /etc/grub.d/40_bootcontrol
+
+# 7. Reload systemd; D-Bus starts the daemon on the first client request
 sudo systemctl daemon-reload
-sudo systemctl enable --now bootcontrold.socket
 ```
 
 ---
