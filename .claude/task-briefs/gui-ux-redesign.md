@@ -2,6 +2,7 @@
 
 **Task-Id:** gui-ux-redesign
 **Status:** kroki 1–4 wykonane 2026-07-12 (zrzuty ✓, audyt ✓ [raport](../history/2026-07-12-gui-ux-audit.md), ROADMAP ✓ commit `04207dd`, decyzja ✓)
+**Aktualizacja (2026-07-27):** świeży handoff Toru B — 11 zrzutów z Linuksa (w tym light mode), `findings/alignment-findings` (defekty centrowania + inwentarz placeholderów) i zaktualizowany CLAUDE_DESIGN_BRIEF (§3a: mandat krytyki zawartości Keep/Cut/Question — decyzja właściciela) wypchnięte do projektu DesignSync „BootControl GUI Redesign". Decyzja właściciela 2026-07-27: cykl designu rusza **teraz** (przed A1/A2); Tor A czeka. Nowe znalezisko → backlog: stub-owy diff/preflight w Confirmation Sheet poza Demo Mode.
 **Decyzja właściciela (2026-07-12):** **Tor A + kick-off Toru B.** Tor A startuje od A1 (Boot Entries §3.2, osobny brief: [`gui-v2-boot-entries.md`](gui-v2-boot-entries.md)), potem A2 (Bootloader §3.3, zależność: typed getters w daemonie). Tor B: CLAUDE_DESIGN_BRIEF zaktualizowany + materiał wypchnięty przez DesignSync — cykl designu (Phases A–D) czeka, aż A1/A2 ustabilizują layout stron.
 **Zadanie źródłowe:** sesja 2026-07-12 — właściciel zgłosił „katastrofę UX" GUI; wcześniejsza próba (Opus) nie przyniosła rezultatu.
 **Powiązanie:** To zadanie wynikło z przeglądu projektu 2026-07-12, ponieważ statyczna analiza `.slint` wykazała, że problem UX ma techniczną przyczynę (niedokończona implementacja v2), a ocena wizualna była zablokowana brakiem uprawnienia Screen Recording — już nadanego.

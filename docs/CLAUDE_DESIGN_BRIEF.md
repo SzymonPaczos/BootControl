@@ -36,7 +36,9 @@ The IA (sidebar 6+1) and component APIs are locked. The look is what's being red
 - [`crates/gui/ui/components/primary_button.slint`](../crates/gui/ui/components/primary_button.slint) and [`danger_button.slint`](../crates/gui/ui/components/danger_button.slint) — sample atoms
 - [`crates/gui/ui/pages/overview.slint`](../crates/gui/ui/pages/overview.slint) — most visually dense page
 
-**Screenshots**: a full set of 9 (7 pages + Confirmation Sheet + high-contrast) captured 2026-07-12 is delivered alongside this brief via DesignSync. To re-capture: launch `BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-gui` on macOS or Linux, capture each of the 7 pages plus the Confirmation Sheet (open by clicking "Rebuild GRUB" on Boot Entries) and the high-contrast variant (`BOOTCONTROL_HIGH_CONTRAST=1 BOOTCONTROL_DEMO=1 …`).
+**Screenshots**: a full set of 11 captured **2026-07-27 on Linux (X11, 1100×780)** is delivered alongside this brief via DesignSync — 7 pages + Confirmation Sheet + high-contrast Overview + **light-mode** Overview and Boot Entries (light mode triggers via `BOOTCONTROL_THEME=light`). This set supersedes the 2026-07-12 macOS set. To re-capture: launch `BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-gui`, capture each of the 7 pages plus the Confirmation Sheet (open by clicking "Rebuild GRUB" on Boot Entries) and the variants (`BOOTCONTROL_HIGH_CONTRAST=1`, `BOOTCONTROL_THEME=light`).
+
+**Status as of 2026-07-27:** Tor A (engineering rebuild of Boot Entries / Bootloader) has **not started yet** — the instruction above stands: design those two pages from the spec wireframes, not the screenshots. A companion document `alignment-findings` (delivered via DesignSync next to the screenshots) catalogues alignment/centering defects and a placeholder inventory — read it before Phase C.
 
 ---
 
@@ -46,6 +48,8 @@ The IA (sidebar 6+1) and component APIs are locked. The look is what's being red
 > *— "I'm not happy with the look, it should be redesigned"*
 
 Since then, the 2026-07-12 visual audit (`.claude/history/2026-07-12-gui-ux-audit.md`) established that the *primary* cause is unfinished v2 implementation (owned by the engineering track), and separately catalogued purely visual issues that ARE yours: ghost buttons indistinguishable from plain text (header actions, Snapshots links), 55–65 % of page height empty on Overview / Secure Boot, the high-contrast variant visually near-identical to the normal theme (yellow accent visible only on the logo — sidebar/status accents stay light-blue via `accent-info`), inconsistent snapshot-id formats between views, and a generally sterile density/rhythm.
+
+**Owner input (2026-07-26):** a second concrete complaint — *"w niektórych pod-menu niektóre rzeczy są źle wcentrowane"* ("in some submenus some things are badly centered"). Root causes verified in code: data rows centered as a cluster instead of following a column grid (`boot_entries.slint:41` `alignment: center`), 16 manual `x/y: (parent - self) / 2` centerings, mixed per-row alignment on Snapshots, no shared baseline in the Logs filter bar. Full list with file:line references: the `alignment-findings` document delivered via DesignSync. Consequence for Phase C: the spec must define an explicit column grid for data lists and visible resting states for ghost buttons.
 
 Beyond that, **the user has not specified:**
 - What aesthetic direction they want
@@ -57,6 +61,15 @@ Beyond that, **the user has not specified:**
 **Therefore Phase A is mandatory** before you produce any visual proposal: ask the user 5–8 specific questions (template in §7).
 
 ---
+
+## 3a. Content critique mandate (added 2026-07-27, owner decision)
+
+The owner explicitly does NOT want a blind restyle of everything that currently exists. Some on-screen elements may be unnecessary, confusing, or worthless (see the placeholder inventory in `findings/alignment-findings`). Therefore, **in addition to** the visual work:
+
+- For every page you touch in Phase C, include a short **"Keep / Cut / Question" list**: elements you recommend keeping, elements you recommend removing or demoting (with one-line reasons), and elements whose purpose is unclear to you.
+- These are **recommendations only** — the owner decides. Do not silently drop an element from your wireframes without listing it under "Cut" with a reason.
+- The IA constraint in §4 (sidebar 6+1) still holds for your *designs*; if you believe a page itself is unjustified, say so under "Question" — do not redesign the sidebar on your own.
+- Reminder: the missing GRUB menu-entry management the owner expects is engineering work (Tor A, spec §3.2/§3.3) — flag gaps, but do not invent new functionality beyond the spec wireframes.
 
 ## 4. Hard constraints — DO NOT CHANGE
 
