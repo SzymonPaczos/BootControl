@@ -48,12 +48,12 @@ The phase tables below are the **historical delivery record** (commit evidence) 
 | 1 | `feat(core): implement sha-256 stateless file hashing` | Hash computation for `/boot/efi` and `/etc/default/grub`; ETag generation | ✅ Done |
 | 2 | `feat(parser): implement /etc/default/grub parser` | Safe key-value extraction and mutation; user comments preserved exactly | ✅ Done |
 | 3 | `feat(daemon): add d-bus interface and polkit authorization` | Socket-activated daemon; Polkit check before every write; ETag validation | ✅ Done |
-| 4 | `feat(failsafe): add golden parachute and rescue module` | Auto-inject `Linux (Failsafe)` entry on every write; basic `--rescue` CLI module | ⚠️ Partial — snippet generator (`failsafe.rs`) + `--rescue` shipped, but **no `/etc/grub.d/` hook ships to include the snippet in `grub.cfg`** (wiring = release gate G2) |
+| 4 | `feat(failsafe): add golden parachute and rescue module` | Auto-inject `Linux (Failsafe)` entry on every write; basic `--rescue` CLI module | ✅ Done — `40_bootcontrol` installs through DEB/RPM/AUR and is covered by integration tests |
 | 5 | `feat(cli): wire cli frontend to d-bus daemon` | `bootcontrol list`, `bootcontrol set <key> <value>`, `bootcontrol --rescue` | ✅ Done |
 | 6 | `feat(tui): wire tui frontend to d-bus daemon` | Interactive terminal UI (ratatui); end-to-end tests in headless container | ✅ Done |
 | 7 | `test(e2e): add container-based end-to-end test suite` | Full write/verify/rollback cycle tested in isolation without real hardware | ✅ Done |
 
-**Exit criteria:** A user on Fedora, Arch, or Ubuntu can install BootControl, change a GRUB parameter via CLI or TUI, and the system boots correctly. Recovery today = snapshots + `--rescue`; the failsafe menu entry is generated but not yet wired into `grub.cfg` (gate G2).
+**Exit criteria:** A user on Fedora, Arch, or Ubuntu can install BootControl, change a GRUB parameter via CLI or TUI, and the system boots correctly. Recovery includes snapshots, `--rescue`, and the generated failsafe menu entry wired into `grub.cfg`.
 
 ---
 
@@ -84,7 +84,7 @@ The phase tables below are the **historical delivery record** (commit evidence) 
 | 2 | `feat(gui): implement boot entry list view` | Visual list of boot entries with status indicators | ✅ Done |
 | 3 | `feat(gui): implement parameter editor` | Form-based GRUB parameter editing with live validation | ✅ Done |
 | 4 | `feat(gui): implement failsafe status panel` | Shows current Failsafe entry state; one-click rescue launch | ✅ Done |
-| 5 | `feat(gui): implement secure boot panel` | NVRAM backup, MOK enrollment, Paranoia Mode controls | ⚠️ Regression noted 2026-07-12 — panel ships, but `enroll_mok`/`backup_nvram` pass empty paths (`crates/gui/src/view_model.rs:108-115`) and fail daemon validation; fix tracked in backlog P1 |
+| 5 | `feat(gui): implement secure boot panel` | NVRAM backup, MOK enrollment, Paranoia Mode controls | ⚠️ Follow-up deferred by owner — NVRAM backup correctly uses an empty string to select the daemon default directory; MOK enrollment still needs an explicit UKI file picker instead of an empty path |
 | 6 | `test(gui): add gui smoke tests` | Automated UI tests verifying core flows without real hardware | ✅ Done |
 
 **Exit criteria:** A non-technical user can change their GRUB timeout or default OS using a point-and-click interface.
@@ -281,4 +281,3 @@ These are candidates for post-beta work or earlier if a contributor picks them u
 **Representative commit:** `feat(gui): full keyboard-only operation with vim-style power keymap`
 
 **Why it is in backlog:** v2 a11y baseline (UX_BRIEF §8) already requires every action to be keyboard-reachable. This entry tracks the *next layer*: making keyboard the *fast* path, not just the *possible* path. Worth doing only after the GUI is otherwise stable and the keymap can be designed once, in one pass, against the finished IA — not iterated piecemeal during initial implementation.
-
