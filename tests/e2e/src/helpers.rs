@@ -29,6 +29,9 @@ use tempfile::{NamedTempFile, TempDir};
 use tokio::time::{sleep, timeout};
 use zbus::Connection;
 
+/// Serializes daemon E2E tests that share one well-known D-Bus name.
+pub static DAEMON_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /// Well-known D-Bus name that `bootcontrold` registers.

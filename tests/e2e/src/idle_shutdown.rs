@@ -23,6 +23,7 @@ trait BootControlManager {
 #[ignore]
 #[tokio::test]
 async fn daemon_exits_after_idle_timeout() -> anyhow::Result<()> {
+    let _test_guard = crate::helpers::DAEMON_TEST_LOCK.lock().await;
     let mut handle = spawn_daemon_with_idle_timeout(MINIMAL_GRUB, 1).await?;
 
     // Leave the client connected but silent, then wait for the child without
@@ -48,6 +49,7 @@ async fn daemon_exits_after_idle_timeout() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn dbus_activity_resets_idle_timeout() -> anyhow::Result<()> {
+    let _test_guard = crate::helpers::DAEMON_TEST_LOCK.lock().await;
     let mut handle = spawn_daemon_with_idle_timeout(MINIMAL_GRUB, 1).await?;
     let proxy = BootControlManagerProxy::new(&handle.conn).await?;
 
