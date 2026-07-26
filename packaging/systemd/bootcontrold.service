@@ -15,13 +15,13 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=bootcontrold
 BusName=org.bootcontrol.Manager
+ConfigurationDirectory=bootcontrol
+StateDirectory=bootcontrol
 
 # Security constraints
 ProtectSystem=full
 ProtectHome=yes
 RestrictNamespaces=yes
 ReadWritePaths=-/boot
-ReadWritePaths=-/etc/bootcontrol
 ReadWritePaths=-/etc/default
 ReadWritePaths=-/etc/kernel
-ReadWritePaths=-/var/lib/bootcontrol
