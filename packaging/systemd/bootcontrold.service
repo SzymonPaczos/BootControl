@@ -22,6 +22,6 @@ ProtectHome=yes
 RestrictNamespaces=yes
 ReadWritePaths=-/boot
 ReadWritePaths=-/etc/bootcontrol
-ReadWritePaths=-/etc/default/grub
+ReadWritePaths=-/etc/default
 ReadWritePaths=-/etc/kernel
 ReadWritePaths=-/var/lib/bootcontrol
