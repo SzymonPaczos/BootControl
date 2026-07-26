@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::time::{sleep, timeout};
 use zbus::Connection;
@@ -139,7 +139,7 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
 /// Returns an error if the kill signal cannot be sent or the process does not
 /// exit within a reasonable time after SIGTERM.
 pub async fn shutdown_daemon(mut handle: DaemonHandle) -> anyhow::Result<()> {
-    use nix::sys::signal::{Signal, kill};
+    use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
 
     let pid = handle.process.id();

@@ -24,11 +24,11 @@
 //! - **Error popup** — [`crate::popup::error_popup`]
 
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState},
+    Frame,
 };
 
 use crate::app::{App, Mode};
@@ -213,7 +213,7 @@ fn render_footer(frame: &mut Frame, _app: &App, area: ratatui::layout::Rect) {
 mod tests {
     use super::*;
     use crate::app::GrubEntry;
-    use ratatui::{Terminal, backend::TestBackend};
+    use ratatui::{backend::TestBackend, Terminal};
 
     fn make_app(keys: &[(&str, &str)]) -> App {
         let entries = keys

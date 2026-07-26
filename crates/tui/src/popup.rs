@@ -11,11 +11,11 @@
 //! and widget trees; they have no I/O or side effects.
 
 use ratatui::{
-    Frame,
     layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
+    Frame,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ mod tests {
     /// [`edit_popup`] and [`error_popup`] must not panic with a minimal TestBackend.
     #[test]
     fn popups_render_without_panic() {
-        use ratatui::{Terminal, backend::TestBackend};
+        use ratatui::{backend::TestBackend, Terminal};
 
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("TestBackend must not fail");

@@ -1,7 +1,10 @@
 [package]
 name = "bootcontrol-gui-spike"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 publish = false
 description = "PR 0 — Slint a11y framework verification spike. See docs/slint-a11y-findings.md and docs/GUI_V2_SPEC_v2.md §16. Linux-only runtime testing."
 
