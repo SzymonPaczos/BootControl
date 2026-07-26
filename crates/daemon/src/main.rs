@@ -17,7 +17,7 @@
 //! 3. Registers the `org.bootcontrol.Manager` object at
 //!    `/org/bootcontrol/Manager`.
 //! 4. Requests the well-known bus name `org.bootcontrol.Manager`.
-//! 5. Loops forever waiting for D-Bus method calls.
+//! 5. Exits after 60 seconds without D-Bus activity.
 //!
 //! # Environment variables
 //!
@@ -28,6 +28,7 @@
 //! | `BOOTCONTROL_GRUB_PATH` | any path | Override the GRUB config path (E2E tests). |
 //! | `BOOTCONTROL_FAILSAFE_PATH` | any path | Override the failsafe snippet path (E2E tests). |
 //! | `BOOTCONTROL_SNAPSHOT_ROOT` | any path | Override the snapshot root dir (E2E tests). |
+//! | `BOOTCONTROL_IDLE_TIMEOUT_SECS` | positive integer | Override the 60-second idle timeout. |
 //! | `RUST_LOG` | `trace`, `debug`, `info`, `warn`, `error` | Log verbosity filter. |
 
 #[cfg(not(target_os = "linux"))]
@@ -42,6 +43,8 @@ fn main() -> std::process::ExitCode {
 
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 use bootcontrold::interface::GrubManager;
@@ -61,6 +64,10 @@ const DEFAULT_GRUB_PATH: &str = "/etc/default/grub";
 /// Default path to the failsafe menu-entry GRUB snippet.
 #[cfg(target_os = "linux")]
 const DEFAULT_FAILSAFE_PATH: &str = "/etc/bootcontrol/failsafe.cfg";
+
+/// Default period without D-Bus traffic before the on-demand daemon exits.
+#[cfg(target_os = "linux")]
+const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 60;
 
 /// Select the D-Bus connection builder based on the `BOOTCONTROL_BUS`
 /// environment variable.
@@ -119,6 +126,27 @@ fn resolve_snapshot_root() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Parse an optional idle-timeout override, falling back to 60 seconds.
+#[cfg(target_os = "linux")]
+fn parse_idle_timeout(value: Option<&str>) -> Duration {
+    let seconds = value
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+    Duration::from_secs(seconds)
+}
+
+/// Wait until the D-Bus connection has been inactive for `idle_timeout`.
+#[cfg(target_os = "linux")]
+async fn wait_for_idle(conn: &zbus::Connection, idle_timeout: Duration) {
+    loop {
+        let activity = conn.monitor_activity();
+        if tokio::time::timeout(idle_timeout, activity).await.is_err() {
+            return;
+        }
+    }
+}
+
 #[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -129,11 +157,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let grub_path = resolve_grub_path();
     let failsafe_path = resolve_failsafe_path();
+    let idle_timeout = parse_idle_timeout(
+        std::env::var("BOOTCONTROL_IDLE_TIMEOUT_SECS")
+            .ok()
+            .as_deref(),
+    );
 
     info!(
         version = env!("CARGO_PKG_VERSION"),
         grub_path = %grub_path.display(),
         failsafe_path = %failsafe_path.display(),
+        idle_timeout_secs = idle_timeout.as_secs(),
         "bootcontrold starting"
     );
 
@@ -169,7 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         manager = manager.with_snapshot_root(snap);
     }
 
-    let _conn = dbus_connection_builder()
+    let conn = dbus_connection_builder()
         // ── 3. Register the interface object ────────────────────────────────
         .serve_at("/org/bootcontrol/Manager", manager)?
         // ── 4. Request the well-known bus name ──────────────────────────────
@@ -179,10 +213,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("bootcontrold ready — listening on D-Bus");
 
-    // ── 5. Loop forever ──────────────────────────────────────────────────────
-    // `std::future::pending()` suspends forever without consuming CPU.
-    // In Phase 2 this will be replaced with a select! on SIGTERM/SIGINT.
-    std::future::pending::<()>().await;
+    // ── 5. Exit after a full period without connection activity ─────────────
+    wait_for_idle(&conn, idle_timeout).await;
+    info!("bootcontrold idle timeout reached — exiting");
 
     Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::{parse_idle_timeout, DEFAULT_IDLE_TIMEOUT_SECS};
+
+    #[test]
+    fn idle_timeout_defaults_to_sixty_seconds() {
+        assert_eq!(
+            parse_idle_timeout(None).as_secs(),
+            DEFAULT_IDLE_TIMEOUT_SECS
+        );
+    }
+
+    #[test]
+    fn idle_timeout_accepts_positive_override() {
+        assert_eq!(parse_idle_timeout(Some("7")).as_secs(), 7);
+    }
+
+    #[test]
+    fn idle_timeout_rejects_zero_and_malformed_values() {
+        assert_eq!(
+            parse_idle_timeout(Some("0")).as_secs(),
+            DEFAULT_IDLE_TIMEOUT_SECS
+        );
+        assert_eq!(
+            parse_idle_timeout(Some("invalid")).as_secs(),
+            DEFAULT_IDLE_TIMEOUT_SECS
+        );
+    }
 }

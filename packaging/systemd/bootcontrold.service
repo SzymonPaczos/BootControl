@@ -5,7 +5,7 @@ After=dbus.service
 Requires=dbus.service
 
 [Service]
-Type=notify
+Type=dbus
 ExecStart=/usr/bin/bootcontrold
 User=root
 Group=root
@@ -20,7 +20,3 @@ BusName=org.bootcontrol.Manager
 ProtectSystem=full
 ProtectHome=yes
 RestrictNamespaces=yes
-
-[Install]
-WantedBy=multi-user.target
-Also=bootcontrold.socket
