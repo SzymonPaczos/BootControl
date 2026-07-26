@@ -119,7 +119,7 @@ bootcontrol/
 ### Build from source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/bootcontrol.git
+git clone https://github.com/szymonpaczos/bootcontrol.git
 cd bootcontrol
 
 cargo build --workspace
@@ -132,7 +132,7 @@ All three frontends support a **Demo Mode** that uses a `MockBackend` instead of
 ```bash
 BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-tui
 BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-gui
-BOOTCONTROL_DEMO=1 cargo run -p bootcontrol -- get GRUB_TIMEOUT
+BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-cli -- get-config
 ```
 
 ### Run tests
@@ -175,7 +175,7 @@ Individual targets:
 cargo test --workspace
 
 # End-to-end tests (Linux only, requires a running session bus):
-BOOTCONTROL_BUS=session cargo test --test e2e -- --ignored
+BOOTCONTROL_BUS=session cargo test -p bootcontrol-e2e --test e2e -- --ignored
 ```
 
 ### Man pages

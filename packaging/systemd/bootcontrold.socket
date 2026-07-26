@@ -1,6 +1,6 @@
 [Unit]
 Description=BootControl daemon activation socket
-Documentation=https://github.com/YOUR_USERNAME/bootcontrol
+Documentation=https://github.com/szymonpaczos/bootcontrol
 
 [Socket]
 # D-Bus system bus activation — daemon starts when org.bootcontrol.Manager is requested

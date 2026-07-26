@@ -84,8 +84,8 @@ BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-tui
 BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-gui
 
 # CLI with mock data:
-BOOTCONTROL_DEMO=1 cargo run -p bootcontrol -- list
-BOOTCONTROL_DEMO=1 cargo run -p bootcontrol -- get GRUB_TIMEOUT
+BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-cli -- get-config
+BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-cli -- get-backend
 ```
 
 ---
@@ -157,13 +157,13 @@ sudo dnf install dbus-devel
 
 ```bash
 # All E2E tests (requires a session bus):
-BOOTCONTROL_BUS=session cargo test --test e2e -- --ignored
+BOOTCONTROL_BUS=session cargo test -p bootcontrol-e2e --test e2e -- --ignored
 
 # With log output:
-BOOTCONTROL_BUS=session RUST_LOG=bootcontrold=debug cargo test --test e2e -- --ignored --nocapture
+BOOTCONTROL_BUS=session RUST_LOG=bootcontrold=debug cargo test -p bootcontrol-e2e --test e2e -- --ignored --nocapture
 
 # Specific test:
-BOOTCONTROL_BUS=session cargo test --test e2e grub_roundtrip -- --ignored
+BOOTCONTROL_BUS=session cargo test -p bootcontrol-e2e --test e2e grub_roundtrip -- --ignored
 ```
 
 ### E2E Test Suites

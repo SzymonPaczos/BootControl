@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
         info!(
             policy_path = %policy_path.display(),
-            "polkit policy file accepted (all six per-intent actions declared)"
+            "polkit policy file accepted (all four active per-intent actions declared)"
         );
     }
 
