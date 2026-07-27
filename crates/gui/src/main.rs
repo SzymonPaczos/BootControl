@@ -1,5 +1,7 @@
 slint::include_modules!();
 
+mod theme;
+
 use bootcontrol_gui::view_model::ViewModel;
 use slint::Model;
 use tokio::sync::mpsc;
@@ -388,26 +390,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::var("BOOTCONTROL_REDUCED_MOTION")
         .map(|v| v == "1")
         .unwrap_or(false)
-        || gnome_animations_disabled()
+        || theme::gnome_animations_disabled()
     {
         ui.global::<Tokens>().set_reduced_motion(true);
     }
-    if std::env::var("BOOTCONTROL_HIGH_CONTRAST")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-        || kde_high_contrast_active()
-    {
-        apply_high_contrast(&ui);
-    }
 
-    // PR Granite: light-mode opt-in via env var. Settings UI button wiring
-    // lands in a follow-up; persistent storage in
-    // ~/.config/bootcontrol/settings.toml.
-    if std::env::var("BOOTCONTROL_THEME")
-        .map(|v| v == "light")
-        .unwrap_or(false)
-    {
-        apply_light_palette(&ui);
+    // Stacja (v2.1): palette matrix dark/light × normal/high-contrast,
+    // theme follows the system unless BOOTCONTROL_THEME overrides it.
+    // Settings UI wiring + persistence in ~/.config/bootcontrol/settings.toml
+    // land with Tor A.
+    let palette = theme::resolve_from_environment();
+    if palette != theme::Palette::Dark {
+        theme::apply(&ui, palette);
     }
 
     // Initialize Backend (D-Bus on Linux, Mock on others or if BOOTCONTROL_DEMO=1)
@@ -762,144 +756,9 @@ fn register_bundled_fonts() {
     let _ = BUNDLED_FONTS;
 }
 
-// ── PR Granite: light palette swap ─────────────────────────────────────────
-//
-// Hex values mirror tokens.slint `LightPalette` global. The .slint side
-// declares them as `out property` (read-only from Rust); duplicating here
-// keeps the swap a single batch of `set_*` calls without a generated
-// getter dance. Drift risk is mitigated by re-running the design audit
-// (HANDOFF.md §6 light table) when either side changes.
-
-fn apply_light_palette(ui: &AppWindow) {
-    let t = ui.global::<Tokens>();
-    let c = |r: u8, g: u8, b: u8| slint::Color::from_rgb_u8(r, g, b);
-
-    t.set_high_contrast(false);
-
-    // Surfaces
-    t.set_surface(c(0xf6, 0xf6, 0xf8));
-    t.set_surface_container(c(0xec, 0xec, 0xef));
-    t.set_surface_container_high(c(0xe2, 0xe3, 0xe8));
-    t.set_surface_1(c(0xd6, 0xd8, 0xde));
-    t.set_surface_2(c(0xc9, 0xcc, 0xd3));
-    t.set_surface_3(c(0xb8, 0xbb, 0xc3));
-    t.set_surface_error_tint(c(0xf7, 0xe3, 0xdf));
-    t.set_surface_error_tint_strong(c(0xf1, 0xcd, 0xc6));
-
-    // Text
-    t.set_on_surface(c(0x16, 0x18, 0x21));
-    t.set_on_surface_muted(c(0x3d, 0x41, 0x50));
-    t.set_on_surface_dim(c(0x5a, 0x5e, 0x6c));
-    t.set_on_surface_faint(c(0x76, 0x79, 0x88));
-    t.set_on_surface_disabled(c(0x92, 0x95, 0xa0));
-
-    // Accent (darker sapphire on light to keep AA ratios)
-    t.set_accent(c(0x2c, 0x6d, 0xa6));
-    t.set_accent_secondary(c(0x4f, 0x8e, 0xc1));
-    t.set_accent_info(c(0x2c, 0x6d, 0xa6));
-    t.set_on_accent(c(0xff, 0xff, 0xff));
-
-    // Semantic
-    t.set_info(c(0x2c, 0x6d, 0xa6));
-    t.set_success(c(0x2f, 0x7d, 0x4f));
-    t.set_warning(c(0x8a, 0x5e, 0x1c));
-    t.set_warning_soft(c(0xa4, 0x7b, 0x2c));
-    t.set_error(c(0xb0, 0x3a, 0x2c));
-    t.set_on_error(c(0xff, 0xff, 0xff));
-
-    // Focus ring
-    t.set_focus_ring_outer(c(0xff, 0xff, 0xff));
-    t.set_focus_ring_inner(c(0x2c, 0x6d, 0xa6));
-
-    // Hairlines
-    t.set_hairline(c(0xd4, 0xd6, 0xdc));
-    t.set_hairline_strong(c(0xb9, 0xbc, 0xc4));
-}
-
-// ── PR 7b: best-effort desktop a11y hint detection ──────────────────────────
-//
-// GNOME exposes `enable-animations` via gsettings; KDE has no exact
-// equivalent for high contrast (uses ColorScheme), so we read the user
-// kdeglobals directly. Both helpers are best-effort: they probe well-known
-// files / commands and return false on any error, never panicking. Linux
-// runtime spike + the XDG portal SettingChanged watcher are spec_v2 §8
-// follow-ups; this PR ships the hooks so they activate when a user happens
-// to launch the GUI on a configured GNOME/KDE session.
-
-fn gnome_animations_disabled() -> bool {
-    // gsettings get org.gnome.desktop.interface enable-animations → "false"
-    std::process::Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "enable-animations"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "false")
-        .unwrap_or(false)
-}
-
-fn kde_high_contrast_active() -> bool {
-    // KDE: ~/.config/kdeglobals → [General] / ColorScheme=… containing
-    // "HighContrast" (case-insensitive) or "Breeze High Contrast" preset.
-    let home = match std::env::var_os("HOME") {
-        Some(h) => h,
-        None => return false,
-    };
-    let path = std::path::PathBuf::from(home)
-        .join(".config")
-        .join("kdeglobals");
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    content.lines().any(|l| {
-        let lc = l.to_lowercase();
-        lc.starts_with("colorscheme=") && lc.contains("high") && lc.contains("contrast")
-    })
-}
-
-// ── PR 7: high-contrast palette swap ────────────────────────────────────────
-//
-// Slint globals are compile-time singletons; a wholesale swap is not
-// supported. Instead we mutate every property on `Tokens` in one batch.
-// PR 0 spike q7_global_override sanity-confirmed that all bindings update
-// reactively (see docs/slint-a11y-findings.md Q7).
-//
-// The values below come from docs/GUI_V2_SPEC_v2.md §8 high-contrast variant.
-// Every text/background pair clears WCAG AAA (white-on-black or black-on-yellow).
-
-fn apply_high_contrast(ui: &AppWindow) {
-    let t = ui.global::<Tokens>();
-    let c = |r: u8, g: u8, b: u8| slint::Color::from_rgb_u8(r, g, b);
-
-    t.set_high_contrast(true);
-
-    // Surfaces — pure black hierarchy.
-    t.set_surface(c(0x00, 0x00, 0x00));
-    t.set_surface_container(c(0x0a, 0x0a, 0x0a));
-    t.set_surface_container_high(c(0x1a, 0x1a, 0x1a));
-    t.set_surface_1(c(0x2a, 0x2a, 0x2a));
-    t.set_surface_2(c(0x3a, 0x3a, 0x3a));
-
-    // Text — pure white.
-    t.set_on_surface(c(0xff, 0xff, 0xff));
-    t.set_on_surface_muted(c(0xe0, 0xe0, 0xe0));
-    t.set_on_surface_dim(c(0xc0, 0xc0, 0xc0));
-    t.set_on_surface_faint(c(0xa0, 0xa0, 0xa0));
-    t.set_on_surface_disabled(c(0x90, 0x90, 0x90));
-
-    // Accent — bright yellow (high-contrast convention).
-    t.set_accent(c(0xff, 0xd8, 0x6b));
-    t.set_accent_secondary(c(0xff, 0xd8, 0x6b));
-    t.set_accent_info(c(0x6b, 0xc7, 0xff));
-    t.set_on_accent(c(0x00, 0x00, 0x00));
-
-    // Semantic — high-contrast variants.
-    t.set_info(c(0x6b, 0xc7, 0xff));
-    t.set_success(c(0x6b, 0xff, 0x6b));
-    t.set_warning(c(0xff, 0xd8, 0x6b));
-    t.set_error(c(0xff, 0x55, 0x66));
-    t.set_on_error(c(0x00, 0x00, 0x00));
-}
+// Palette application lives in `theme.rs` (Stacja, v2.1): the four palette
+// globals are declared in `ui/tokens.slint` and copied into `Tokens` at
+// runtime — the Rust side never spells a color.
 
 // ── PR 6 helpers ────────────────────────────────────────────────────────────
 

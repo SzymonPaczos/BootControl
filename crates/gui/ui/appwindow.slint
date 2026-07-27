@@ -4,7 +4,7 @@
 // (Overview / Boot Entries / Bootloader / Secure Boot / Snapshots / Logs /
 // Settings) per docs/GUI_V2_SPEC_v2.md §3 IA.
 
-import { Tokens } from "tokens.slint";
+import { Tokens, DarkPalette, LightPalette, HighContrastDark, HighContrastLight } from "tokens.slint";
 import { GrubEntry, DiffLine, PreflightCheck } from "types.slint";
 import { GhostButton } from "components/ghost_button.slint";
 import { Sidebar } from "components/sidebar.slint";
@@ -21,7 +21,7 @@ import { SettingsPage } from "pages/settings.slint";
 
 // Re-export structs and globals so Rust generated bindings expose them.
 export { GrubEntry, DiffLine, PreflightCheck, SnapshotRow, LogRow }
-export { Tokens }
+export { Tokens, DarkPalette, LightPalette, HighContrastDark, HighContrastLight }
 
 // ─── Toast notification (top-level overlay — kept inline) ───────────────────
 //
