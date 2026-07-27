@@ -1,7 +1,9 @@
 // crates/gui/ui/components/ghost_button.slint
 //
-// Secondary / tertiary button. No fill at rest, hover background.
-// Use for non-destructive non-primary actions: Cancel, Refresh, Dismiss, Close.
+// Secondary / tertiary button. Stacja: a visible resting state (fill +
+// interactive outline) so the button is distinguishable from a plain
+// label (fix A3). Use for non-destructive non-primary actions: Cancel,
+// Refresh, Dismiss, Close.
 // Anatomy: see docs/GUI_V2_SPEC_v2.md §13 component public APIs.
 
 import { Tokens } from "../tokens.slint";
@@ -9,13 +11,17 @@ import { Tokens } from "../tokens.slint";
 export component GhostButton inherits Rectangle {
     in-out property <string> text;
     in property <bool> enabled: true;
+    in property <image> icon;
+    in property <bool> has-icon: false;
     callback clicked <=> touch.clicked;
 
     height: Tokens.button-height-md;
-    border-radius: Tokens.radius-md;
+    border-radius: Tokens.radius-sm;
+    border-width: 1px;
+    border-color: Tokens.border-interactive;
     background: touch.pressed
         ? Tokens.surface-1
-        : (touch.has-hover ? Tokens.surface-2 : transparent);
+        : (touch.has-hover ? Tokens.surface-2 : Tokens.surface-container-high);
     opacity: root.enabled ? 1.0 : 0.5;
 
     animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
@@ -24,13 +30,26 @@ export component GhostButton inherits Rectangle {
     accessible-label: root.text;
     accessible-enabled: root.enabled;
 
-    Text {
-        text: root.text;
-        color: Tokens.on-surface;
-        font-size: Tokens.font-body-medium;
-        font-weight: Tokens.weight-medium;
-        horizontal-alignment: center;
-        vertical-alignment: center;
+    HorizontalLayout {
+        padding-left: Tokens.space-md;
+        padding-right: Tokens.space-md;
+        spacing: Tokens.space-sm;
+        alignment: center;
+
+        if root.has-icon : Image {
+            source: root.icon;
+            colorize: Tokens.on-surface-dim;
+            width: Tokens.icon-size-sm;
+            height: Tokens.icon-size-sm;
+        }
+        Text {
+            text: root.text;
+            color: Tokens.on-surface;
+            font-size: Tokens.font-body-medium;
+            font-weight: Tokens.weight-medium;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
     }
     touch := TouchArea {
         enabled: root.enabled;

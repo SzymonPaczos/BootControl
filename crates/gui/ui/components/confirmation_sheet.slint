@@ -66,15 +66,17 @@ export component ConfirmationSheet inherits Rectangle {
     //     makes the danger reading-time-bound")
     //   - Footer status text on the left, Cancel + danger verb on the right
     //   - 640 px wide (was 480; HANDOFF wireframe §5)
-    Rectangle {
+    HorizontalLayout {
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
         width: 640px;
         height: sheet-content.preferred-height;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
         background: Tokens.surface-container;
         border-radius: Tokens.radius-card;
         border-width: 1px;
-        border-color: Tokens.hairline;
+        border-color: Tokens.hairline-strong;
         clip: true;
 
         sheet-content := VerticalLayout {
@@ -89,17 +91,21 @@ export component ConfirmationSheet inherits Rectangle {
                 Rectangle {
                     width: 36px;
                     height: 36px;
-                    border-radius: Tokens.radius-md;
+                    border-radius: Tokens.radius-sm;
                     background: Tokens.surface-error-tint;
                     border-width: 1px;
                     border-color: Tokens.error;
-                    Image {
-                        source: @image-url("../../assets/icons/warning.svg");
-                        width: 18px;
-                        height: 18px;
-                        colorize: Tokens.error;
-                        x: (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
+                    HorizontalLayout {
+                        alignment: center;
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: @image-url("../../assets/icons/warning-fill.svg");
+                                width: Tokens.icon-size-sm;
+                                height: Tokens.icon-size-sm;
+                                colorize: Tokens.error;
+                            }
+                        }
                     }
                 }
 
@@ -157,6 +163,7 @@ export component ConfirmationSheet inherits Rectangle {
                     font-size: Tokens.font-meta;
                 }
                 StyledInput {
+                    mono: true;
                     text <=> root.typed-text;
                 }
             }
@@ -206,6 +213,8 @@ export component ConfirmationSheet inherits Rectangle {
                         && (root.required-confirm-text == "" || root.typed-text == root.required-confirm-text);
                     clicked => { root.confirm(); }
                 }
+            }
+        }
             }
         }
     }

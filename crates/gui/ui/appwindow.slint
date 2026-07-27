@@ -44,17 +44,17 @@ component ToastNotification inherits Rectangle {
     border-radius: Tokens.radius-lg;
     background: Tokens.surface-container-high;
     border-width: 1px;
-    border-color: Tokens.hairline;
+    border-color: Tokens.hairline-strong;
     opacity: root.is_visible ? 1.0 : 0.0;
     clip: true;
 
     animate opacity { duration: Tokens.motion-medium; }
 
-    // 4 px left role strip
+    // 3 px left role strip
     Rectangle {
         x: 0;
         y: 0;
-        width: 4px;
+        width: 3px;
         height: parent.height;
         background: root.strip-color;
     }
@@ -81,13 +81,17 @@ component ToastNotification inherits Rectangle {
             background: close-touch.has-hover ? Tokens.surface-1 : transparent;
             accessible-role: button;
             accessible-label: "Dismiss notification";
-            Image {
-                source: @image-url("../assets/icons/close.svg");
-                width: 12px;
-                height: 12px;
-                colorize: Tokens.on-surface-faint;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
+            HorizontalLayout {
+                alignment: center;
+                VerticalLayout {
+                    alignment: center;
+                    Image {
+                        source: @image-url("../assets/icons/close.svg");
+                        width: 14px;
+                        height: 14px;
+                        colorize: Tokens.on-surface-faint;
+                    }
+                }
             }
             close-touch := TouchArea {
                 clicked => { root.dismiss(); }
@@ -102,8 +106,8 @@ export component AppWindow inherits Window {
     title: "BootControl";
     width: 1100px;
     height: 780px;
-    background: Tokens.surface-container;
-    default-font-family: "Inter, Roboto, sans-serif";
+    background: Tokens.surface;
+    default-font-family: "Inter, Cantarell, Roboto, sans-serif";
 
     // ── Existing state ───────────────────────────────────────────────────────
     in-out property <[GrubEntry]> entries: [];
@@ -212,34 +216,45 @@ export component AppWindow inherits Window {
                                 : (root.active_tab == 4 ? "Snapshots"
                                 : (root.active_tab == 5 ? "Logs"
                                 : "Settings")))));
-                            font-size: 26px;
-                            font-weight: Tokens.weight-strong;
+                            font-size: Tokens.font-display;
+                            font-weight: Tokens.weight-display;
+                            letter-spacing: Tokens.letter-spacing-display;
                             color: Tokens.on-surface;
                         }
                         Text {
                             text: "Backend: " + root.active_backend;
-                            font-size: Tokens.font-label-large;
+                            font-size: Tokens.font-mono-meta;
+                            font-family: Tokens.font-family-mono;
                             color: Tokens.on-surface-faint;
                         }
                     }
 
-                    if root.active_tab == 1 : HorizontalLayout {
-                        spacing: Tokens.space-sm;
+                    // Header actions share the title's baseline (fix A3):
+                    // the inner VerticalLayout bottom-aligns the button row.
+                    if root.active_tab == 0 || root.active_tab == 1 : VerticalLayout {
                         alignment: end;
+                        HorizontalLayout {
+                            spacing: Tokens.space-sm;
+                            alignment: end;
 
-                        GhostButton {
-                            text: "Refresh";
-                            width: 110px;
-                            enabled: !root.show_loading;
-                            clicked => { root.fetch_entries(); }
-                        }
-                        GhostButton {
-                            text: "Rebuild GRUB";
-                            width: 158px;
-                            enabled: !root.show_loading;
-                            clicked => {
-                                root.confirmation_typed_text = "";
-                                root.open_confirmation("rewrite-grub");
+                            GhostButton {
+                                text: "Refresh";
+                                icon: @image-url("../assets/icons/refresh.svg");
+                                has-icon: true;
+                                width: 118px;
+                                enabled: !root.show_loading;
+                                clicked => { root.fetch_entries(); }
+                            }
+                            GhostButton {
+                                text: "Rebuild GRUB";
+                                icon: @image-url("../assets/icons/autorenew.svg");
+                                has-icon: true;
+                                width: 170px;
+                                enabled: !root.show_loading;
+                                clicked => {
+                                    root.confirmation_typed_text = "";
+                                    root.open_confirmation("rewrite-grub");
+                                }
                             }
                         }
                     }

@@ -20,21 +20,12 @@ export component Card inherits Rectangle {
 
     background: Tokens.surface-container;
     border-radius: Tokens.radius-card;
-    // Granite hairline — every card carries a 1 px border so cards no
-    // longer read as undifferentiated voids on the page. HANDOFF.md §4.
+    // Stacja: the group outline is the card's only elevation cue — a
+    // slightly stronger hairline, no gradients. `raised` is kept for API
+    // compatibility but renders identically.
     border-width: 1px;
-    border-color: Tokens.hairline;
+    border-color: Tokens.hairline-strong;
     clip: true;
-
-    // Optional top-edge highlight for raised variant (Slint has no
-    // box-shadow; we layer a gradient strip inside the rounded rect).
-    if root.raised : Rectangle {
-        x: 0;
-        y: 0;
-        width: parent.width;
-        height: 1px;
-        background: @linear-gradient(180deg, #ffffff15, #ffffff00);
-    }
 
     VerticalLayout {
         padding: Tokens.space-lg;

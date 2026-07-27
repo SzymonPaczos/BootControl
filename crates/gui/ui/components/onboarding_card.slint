@@ -79,14 +79,14 @@ export component OnboardingCard inherits Rectangle {
                 width: 220px;
                 clicked => { root.learn-more(); }
             }
-            // Start CTA — arrow-right SVG accents the verb on the right
+            // Start CTA — flat accent (Stacja), arrow-forward glyph
             Rectangle {
                 width: 240px;
                 height: Tokens.button-height-lg;
-                border-radius: Tokens.radius-md;
+                border-radius: Tokens.radius-sm;
                 background: cta-area.pressed
-                    ? @linear-gradient(90deg, Tokens.accent 0%, Tokens.accent-secondary 100%)
-                    : @linear-gradient(90deg, Tokens.accent-secondary 0%, Tokens.accent 100%);
+                    ? Tokens.accent
+                    : (cta-area.has-hover ? Tokens.accent-secondary : Tokens.accent);
 
                 accessible-role: button;
                 accessible-label: "Start with Boot Entries";
@@ -105,12 +105,14 @@ export component OnboardingCard inherits Rectangle {
                         font-weight: Tokens.weight-strong;
                         vertical-alignment: center;
                     }
-                    Image {
-                        source: @image-url("../../assets/icons/arrow-right.svg");
-                        width: 14px;
-                        height: 14px;
-                        colorize: Tokens.on-accent;
-                        y: (parent.height - self.height) / 2;
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            source: @image-url("../../assets/icons/arrow-forward.svg");
+                            width: Tokens.icon-size-sm;
+                            height: Tokens.icon-size-sm;
+                            colorize: Tokens.on-accent;
+                        }
                     }
                 }
                 cta-area := TouchArea {
@@ -129,15 +131,19 @@ export component OnboardingCard inherits Rectangle {
                     height: 16px;
                     border-radius: 3px;
                     border-width: 2px;
-                    border-color: root.never-show-checked ? Tokens.accent-info : Tokens.surface-2;
-                    background: root.never-show-checked ? Tokens.accent-info : transparent;
-                    if root.never-show-checked : Text {
-                        text: "✓";
-                        color: Tokens.on-accent;
-                        font-size: 10px;
-                        font-weight: Tokens.weight-strong;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
+                    border-color: root.never-show-checked ? Tokens.accent : Tokens.border-interactive;
+                    background: root.never-show-checked ? Tokens.accent : transparent;
+                    if root.never-show-checked : HorizontalLayout {
+                        alignment: center;
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                source: @image-url("../../assets/icons/check.svg");
+                                width: 12px;
+                                height: 12px;
+                                colorize: Tokens.on-accent;
+                            }
+                        }
                     }
                 }
                 Text {

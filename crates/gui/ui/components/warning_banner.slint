@@ -25,7 +25,7 @@ export component WarningBanner inherits Rectangle {
         y: 0;
         width: 3px;
         height: parent.height;
-        background: Tokens.error;
+        background: Tokens.warning;
     }
 
     HorizontalLayout {
@@ -37,10 +37,10 @@ export component WarningBanner inherits Rectangle {
         alignment: start;
 
         Image {
-            source: @image-url("../../assets/icons/warning.svg");
-            width: 18px;
-            height: 18px;
-            colorize: Tokens.error;
+            source: @image-url("../../assets/icons/warning-fill.svg");
+            width: Tokens.icon-size;
+            height: Tokens.icon-size;
+            colorize: Tokens.warning;
             y: 1px;
         }
 

@@ -29,15 +29,16 @@ export component RecoveryViewer inherits Rectangle {
         TouchArea {}
     }
 
-    Rectangle {
+    HorizontalLayout {
+        alignment: center;
+        padding-top: 40px;
+        padding-bottom: 40px;
+        Rectangle {
         width: 640px;
-        height: parent.height - 80px;
-        x: (parent.width - self.width) / 2;
-        y: 40px;
         background: Tokens.surface-container;
         border-radius: Tokens.radius-card;
         border-width: 1px;
-        border-color: Tokens.surface-1;
+        border-color: Tokens.hairline-strong;
 
         VerticalLayout {
             padding: Tokens.space-xl;
@@ -79,6 +80,7 @@ export component RecoveryViewer inherits Rectangle {
                     overflow: elide;
                 }
             }
+        }
         }
     }
 }

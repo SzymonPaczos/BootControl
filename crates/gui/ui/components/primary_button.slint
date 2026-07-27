@@ -1,8 +1,8 @@
 // crates/gui/ui/components/primary_button.slint
 //
-// Non-destructive primary action button. Gradient accent fill.
-// Use for: Save, Apply, Continue, Open. Never for destructive ops
-// (those go through Confirmation Sheet's destructive primary).
+// Non-destructive primary action button. Stacja: flat accent fill, no
+// gradient. Use for: Save, Apply, Continue, Open. Never for destructive
+// ops (those go through Confirmation Sheet's destructive primary).
 // Anatomy: see docs/GUI_V2_SPEC_v2.md §13 component public APIs.
 
 import { Tokens } from "../tokens.slint";
@@ -10,14 +10,16 @@ import { Tokens } from "../tokens.slint";
 export component PrimaryButton inherits Rectangle {
     in-out property <string> text;
     in property <bool> enabled: true;
+    in property <image> icon;
+    in property <bool> has-icon: false;
     callback clicked <=> touch.clicked;
 
     height: Tokens.button-height-lg;
-    border-radius: Tokens.radius-md;
+    border-radius: Tokens.radius-sm;
     background: root.enabled
         ? (touch.pressed
-            ? @linear-gradient(90deg, Tokens.accent 0%, Tokens.accent-secondary 100%)
-            : @linear-gradient(90deg, Tokens.accent-secondary 0%, Tokens.accent 100%))
+            ? Tokens.accent
+            : (touch.has-hover ? Tokens.accent-secondary : Tokens.accent))
         : Tokens.surface-1;
     clip: true;
 
@@ -27,23 +29,26 @@ export component PrimaryButton inherits Rectangle {
     accessible-label: root.text;
     accessible-enabled: root.enabled;
 
-    // Granite top-edge highlight — subtle white gradient mimics light
-    // hitting the top of a 3-D button without a real shadow. HANDOFF.md §4.
-    if root.enabled : Rectangle {
-        x: 0;
-        y: 0;
-        width: parent.width;
-        height: parent.height / 2;
-        background: @linear-gradient(180deg, #ffffff14, #ffffff00);
-    }
+    HorizontalLayout {
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-lg;
+        spacing: Tokens.space-sm;
+        alignment: center;
 
-    Text {
-        text: root.text;
-        color: root.enabled ? Tokens.on-accent : Tokens.on-surface-disabled;
-        font-size: Tokens.font-body-medium;
-        font-weight: Tokens.weight-strong;
-        horizontal-alignment: center;
-        vertical-alignment: center;
+        if root.has-icon : Image {
+            source: root.icon;
+            colorize: root.enabled ? Tokens.on-accent : Tokens.on-surface-disabled;
+            width: Tokens.icon-size-sm;
+            height: Tokens.icon-size-sm;
+        }
+        Text {
+            text: root.text;
+            color: root.enabled ? Tokens.on-accent : Tokens.on-surface-disabled;
+            font-size: Tokens.font-body-medium;
+            font-weight: Tokens.weight-strong;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
     }
     touch := TouchArea {
         enabled: root.enabled;
