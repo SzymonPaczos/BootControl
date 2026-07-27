@@ -1,17 +1,13 @@
 // crates/gui/ui/pages/settings.slint
 //
-// User preferences. docs/GUI_V2_SPEC_v2.md §3.7 + §10.7.
-//   - Snapshots: retention preset (Q5 verdict)
-//   - Notifications: auto-dismiss successes (Q8 a11y option)
-//   - Accessibility: high contrast + reduced motion overrides
-//
-// PR 6 ships the page layout. Real RetentionPicker / preset radio /
-// toggle widgets land in PR 7 once we have proper a11y form atoms.
-// Persistence to ~/.config/bootcontrol/settings.toml lives Rust-side
-// and is wired in the integration PR.
+// User preferences. Stacja (Faza C §3.7): row groups with the current
+// value on each row. Interactive controls (preset radios, toggles) are
+// engineering-track work (Tor A / spec §10.7) — until they land the page
+// shows the real current values and says where they are edited, without
+// leaking internal PR numbering into the UI (fix P1-4/B3 wording).
 
 import { Tokens } from "../tokens.slint";
-import { Card } from "../components/card.slint";
+import { Group, GroupLabel, RowSeparator, SettingRow } from "../components/row_group.slint";
 
 export component SettingsPage inherits Rectangle {
     in-out property <string> retention-preset: "default";
@@ -22,62 +18,113 @@ export component SettingsPage inherits Rectangle {
     callback save();
 
     vertical-stretch: 1;
-    background: Tokens.surface-container;
-    border-radius: Tokens.radius-card;
+    background: transparent;
 
     VerticalLayout {
-        padding: Tokens.space-xl;
-        spacing: Tokens.space-lg;
+        spacing: Tokens.group-gap;
+        alignment: start;
 
-        Card {
-            title: "Snapshots";
-            subtitle: "Retention controls how long pre-write snapshots are kept under /var/lib/bootcontrol/snapshots/.";
-
-            Text {
-                text: "Current preset: " + root.retention-preset;
-                color: Tokens.on-surface;
-                font-size: Tokens.font-body-medium;
-                font-weight: Tokens.weight-medium;
-            }
-            Text {
-                text: "Available presets:\n• Conservative — 200 snapshots / 90 days\n• Default — 50 snapshots / 30 days (recommended)\n• Aggressive — 10 snapshots / 7 days";
-                color: Tokens.on-surface-muted;
-                font-size: Tokens.font-label-large;
-                wrap: word-wrap;
-            }
-            Text {
-                text: "(Preset radio picker ships in PR 7. Edit ~/.config/bootcontrol/settings.toml to change.)";
-                color: Tokens.on-surface-faint;
-                font-size: Tokens.font-meta;
+        VerticalLayout {
+            spacing: Tokens.group-label-gap;
+            GroupLabel { text: "Snapshots"; }
+            Group {
+                SettingRow {
+                    icon: @image-url("../../assets/icons/history.svg");
+                    title: "Retention preset";
+                    description: "Conservative 200/90d · Default 50/30d · Aggressive 10/7d";
+                    Text {
+                        text: root.retention-preset;
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-mono-value;
+                        font-family: Tokens.font-family-mono;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
 
-        Card {
-            title: "Notifications";
-            subtitle: "Control how success messages are displayed.";
-
-            Text {
-                text: root.auto-dismiss-successes
-                    ? "Success messages auto-dismiss after 8 seconds."
-                    : "Success messages persist until dismissed (recommended for screen-reader users).";
-                color: Tokens.on-surface;
-                font-size: Tokens.font-label-large;
+        VerticalLayout {
+            spacing: Tokens.group-label-gap;
+            GroupLabel { text: "Notifications"; }
+            Group {
+                SettingRow {
+                    icon: @image-url("../../assets/icons/notifications.svg");
+                    title: "Auto-dismiss success toasts";
+                    description: root.auto-dismiss-successes
+                        ? "Success messages auto-dismiss after 8 seconds"
+                        : "Success messages persist until dismissed (recommended for screen readers)";
+                    Text {
+                        text: root.auto-dismiss-successes ? "on" : "off";
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-mono-value;
+                        font-family: Tokens.font-family-mono;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
 
-        Card {
-            title: "Accessibility";
-            subtitle: "Override OS-level accessibility hints. \"Auto\" follows your desktop session.";
-
-            Text {
-                text: "High contrast: " + root.high-contrast-override;
-                color: Tokens.on-surface-muted;
-                font-size: Tokens.font-label-large;
+        VerticalLayout {
+            spacing: Tokens.group-label-gap;
+            GroupLabel { text: "Accessibility"; }
+            Group {
+                SettingRow {
+                    icon: @image-url("../../assets/icons/contrast.svg");
+                    title: "High contrast";
+                    description: "\"auto\" follows your desktop session";
+                    Text {
+                        text: root.high-contrast-override;
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-mono-value;
+                        font-family: Tokens.font-family-mono;
+                        vertical-alignment: center;
+                    }
+                }
+                RowSeparator {}
+                SettingRow {
+                    icon: @image-url("../../assets/icons/animation.svg");
+                    title: "Reduced motion";
+                    description: "\"auto\" follows your desktop session";
+                    Text {
+                        text: root.reduced-motion-override;
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-mono-value;
+                        font-family: Tokens.font-family-mono;
+                        vertical-alignment: center;
+                    }
+                }
             }
-            Text {
-                text: "Reduced motion: " + root.reduced-motion-override;
-                color: Tokens.on-surface-muted;
-                font-size: Tokens.font-label-large;
+        }
+
+        VerticalLayout {
+            spacing: Tokens.group-label-gap;
+            GroupLabel { text: "Advanced"; }
+            Group {
+                SettingRow {
+                    icon: @image-url("../../assets/icons/folder-open.svg");
+                    title: "Settings file";
+                    description: "Values above are read from this file; in-app controls are coming with the v2 pages";
+                    Text {
+                        text: "~/.config/bootcontrol/settings.toml";
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-mono-meta;
+                        font-family: Tokens.font-family-mono;
+                        vertical-alignment: center;
+                    }
+                }
+                RowSeparator {}
+                SettingRow {
+                    icon: @image-url("../../assets/icons/policy.svg");
+                    title: "Policy file";
+                    description: "System-wide policy consulted by the daemon";
+                    Text {
+                        text: "/etc/bootcontrol/policy.toml";
+                        color: Tokens.on-surface-muted;
+                        font-size: Tokens.font-mono-meta;
+                        font-family: Tokens.font-family-mono;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
     }

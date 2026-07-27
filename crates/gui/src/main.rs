@@ -415,6 +415,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_demo = std::env::var("BOOTCONTROL_DEMO").is_ok() || cfg!(not(target_os = "linux"));
     if is_demo {
         populate_demo_data(&ui);
+
+        // Demo-only: BOOTCONTROL_START_TAB=<0..6> opens the app on a given
+        // sidebar page. Exists for the screenshot pipeline (design reviews
+        // run headless-ish where synthetic clicks are unreliable under
+        // Wayland compositors); ignored outside Demo Mode.
+        if let Some(tab) = std::env::var("BOOTCONTROL_START_TAB")
+            .ok()
+            .and_then(|v| v.parse::<i32>().ok())
+        {
+            ui.set_active_tab(tab.clamp(0, 6));
+        }
     }
 
     // Initial fetch — pull GRUB entries and the snapshot list together so

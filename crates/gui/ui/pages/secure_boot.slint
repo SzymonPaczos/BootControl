@@ -1,13 +1,17 @@
 // crates/gui/ui/pages/secure_boot.slint
 //
-// V1 ported page: Secure Boot status overview + actions. v2 spec §3.4
-// reshapes this with Setup Mode top-page banner, dynamic state from
-// efivarfs, and Strict Mode disclosure — that work lands in PR 6.
+// Secure Boot status + actions. Stacja (Faza C §3.4): explanatory banner,
+// a State group of status rows and a "What you can do" group with the
+// actions next to their descriptions — actions moved OUT of the page
+// header (too easy to hit by accident). NOTE: both actions still call the
+// direct callbacks; routing them through the Confirmation Sheet is the
+// open backlog P1 (together with the empty-path fix) — visual layer only
+// here.
 
 import { Tokens } from "../tokens.slint";
-import { PrimaryButton } from "../components/primary_button.slint";
-import { StatusCard } from "../components/status_card.slint";
-import { SectionHeader } from "../components/section_header.slint";
+import { GhostButton } from "../components/ghost_button.slint";
+import { InfoBar } from "../components/info_bar.slint";
+import { Group, GroupLabel, RowSeparator, SettingRow, StatusPill } from "../components/row_group.slint";
 
 export component SecureBootPage inherits Rectangle {
     in property <string> active-backend;
@@ -18,65 +22,94 @@ export component SecureBootPage inherits Rectangle {
     callback enroll-mok();
 
     vertical-stretch: 1;
-    background: Tokens.surface-container;
-    border-radius: Tokens.radius-card;
+    background: transparent;
 
     VerticalLayout {
-        padding: Tokens.space-xl;
-        spacing: 20px;
+        spacing: Tokens.group-gap;
         alignment: start;
 
-        SectionHeader { text: "STATUS OVERVIEW"; }
+        if root.secure-boot-status == "Disabled" : InfoBar {
+            severity: "warning";
+            message: "Secure Boot is disabled — the system will boot any kernel image. Enabling it requires entering the firmware setup; BootControl cannot do that for you.";
+        }
 
-        HorizontalLayout {
-            spacing: Tokens.space-md;
-
-            StatusCard {
-                label: "SECURE BOOT";
-                value: root.secure-boot-status;
-                status: root.secure-boot-status == "Enabled" ? "good"
-                    : (root.secure-boot-status == "Disabled" ? "bad" : "neutral");
-            }
-            StatusCard {
-                label: "MOK ENROLLED";
-                value: root.mok-status;
-                status: root.mok-status == "Yes" ? "good"
-                    : (root.mok-status == "No" ? "bad" : "neutral");
-            }
-            StatusCard {
-                label: "ACTIVE BACKEND";
-                value: root.active-backend;
-                status: "info";
+        VerticalLayout {
+            spacing: Tokens.group-label-gap;
+            GroupLabel { text: "State"; }
+            Group {
+                SettingRow {
+                    icon: root.secure-boot-status == "Enabled"
+                        ? @image-url("../../assets/icons/gpp-good-fill.svg")
+                        : @image-url("../../assets/icons/gpp-bad-fill.svg");
+                    icon-color: root.secure-boot-status == "Enabled" ? Tokens.success
+                        : (root.secure-boot-status == "Disabled" ? Tokens.error : Tokens.on-surface-faint);
+                    title: "Secure Boot";
+                    description: root.secure-boot-status == "Enabled"
+                        ? "Firmware verifies every boot image"
+                        : (root.secure-boot-status == "Disabled"
+                            ? "The system will boot any kernel image"
+                            : "State could not be determined");
+                    StatusPill {
+                        text: root.secure-boot-status;
+                        dot-color: root.secure-boot-status == "Enabled" ? Tokens.success
+                            : (root.secure-boot-status == "Disabled" ? Tokens.error : Tokens.on-surface-faint);
+                    }
+                }
+                RowSeparator {}
+                SettingRow {
+                    icon: @image-url("../../assets/icons/key.svg");
+                    title: "MOK key";
+                    description: "Machine Owner Key enrolled in firmware";
+                    StatusPill {
+                        text: root.mok-status;
+                        dot-color: root.mok-status == "Yes" ? Tokens.success
+                            : (root.mok-status == "No" ? Tokens.error : Tokens.on-surface-faint);
+                    }
+                }
+                RowSeparator {}
+                SettingRow {
+                    icon: @image-url("../../assets/icons/memory.svg");
+                    icon-color: Tokens.accent-info;
+                    title: "Active backend";
+                    description: "Bootloader currently managed by BootControl";
+                    StatusPill {
+                        text: root.active-backend;
+                        dot-color: Tokens.accent-info;
+                    }
+                }
             }
         }
 
-        Rectangle { height: 4px; }
-
-        SectionHeader { text: "ACTIONS"; }
-
-        HorizontalLayout {
-            spacing: Tokens.space-md;
-            alignment: start;
-
-            PrimaryButton {
-                text: "Backup NVRAM";
-                width: 160px;
-                enabled: !root.show-loading;
-                clicked => { root.backup-nvram(); }
+        VerticalLayout {
+            spacing: Tokens.group-label-gap;
+            GroupLabel { text: "What you can do"; }
+            Group {
+                SettingRow {
+                    icon: @image-url("../../assets/icons/key.svg");
+                    title: "Enroll MOK key";
+                    description: "Signs the UKI image and registers the key for the next reboot";
+                    GhostButton {
+                        text: "Enroll MOK";
+                        width: 130px;
+                        height: Tokens.button-height-sm;
+                        enabled: !root.show-loading;
+                        clicked => { root.enroll-mok(); }
+                    }
+                }
+                RowSeparator {}
+                SettingRow {
+                    icon: @image-url("../../assets/icons/save.svg");
+                    title: "Back up NVRAM";
+                    description: "Saves all EFI Secure Boot variables to /var/lib/bootcontrol/certs/";
+                    GhostButton {
+                        text: "Back up";
+                        width: 110px;
+                        height: Tokens.button-height-sm;
+                        enabled: !root.show-loading;
+                        clicked => { root.backup-nvram(); }
+                    }
+                }
             }
-            PrimaryButton {
-                text: "Enroll MOK";
-                width: 140px;
-                enabled: !root.show-loading;
-                clicked => { root.enroll-mok(); }
-            }
-        }
-
-        Text {
-            text: "Backup NVRAM saves all EFI Secure Boot variables to /var/lib/bootcontrol/certs/. Enroll MOK signs the UKI image and registers the machine owner key for the next reboot.";
-            color: Tokens.on-surface-disabled;
-            font-size: 12px;
-            wrap: word-wrap;
         }
     }
 }

@@ -61,9 +61,13 @@ export component SettingRow inherits Rectangle {
 
     animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
 
-    accessible-role: root.hoverable ? AccessibleRole.button : AccessibleRole.text;
+    // accessible-role must be a compile-time constant in Slint 1.x — the
+    // clickable variant announces its action through the description.
+    accessible-role: text;
     accessible-label: root.title;
-    accessible-description: root.description;
+    accessible-description: root.hoverable
+        ? root.description + " (activatable row)"
+        : root.description;
 
     touch := TouchArea {
         enabled: root.hoverable;
@@ -129,12 +133,13 @@ export component StatusPill inherits Rectangle {
     in property <color> dot-color: Tokens.on-surface-faint;
 
     height: 26px;
-    border-radius: Tokens.radius-pill;
+    width: pill-layout.preferred-width;
+    border-radius: self.height / 2;
     border-width: 1px;
     border-color: Tokens.border-interactive;
     background: transparent;
 
-    HorizontalLayout {
+    pill-layout := HorizontalLayout {
         padding-left: Tokens.space-md;
         padding-right: Tokens.space-md;
         spacing: 6px;

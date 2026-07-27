@@ -277,11 +277,14 @@ export component AppWindow inherits Window {
                     mok-count: root.overview_mok_count;
                     snapshot-count: root.overview_snapshot_count;
                     last-snapshot-ts: root.overview_last_snapshot;
+                    recent-activity: root.log_rows;
                     show-onboarding: root.show_onboarding;
 
                     open-bootloader-page => { root.active_tab = 2; }
                     open-secure-boot-page => { root.active_tab = 3; }
                     open-snapshots-page => { root.active_tab = 4; }
+                    open-logs-page => { root.active_tab = 5; }
+                    open-audit-log(jid) => { root.open_audit_log(jid); }
                     start-with-boot-entries => {
                         root.show_onboarding = false;
                         root.active_tab = 1;

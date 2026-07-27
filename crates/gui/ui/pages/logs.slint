@@ -1,17 +1,15 @@
 // crates/gui/ui/pages/logs.slint
 //
-// Live audit log viewer. Reads journald via `journalctl _SYSTEMD_UNIT=bootcontrold.service
-// --output=json --follow` filtered on the daemon's MESSAGE_ID set
-// (docs/GUI_V2_SPEC_v2.md §3.6 + §5).
-//
-// PR 6 ships the layout. Streaming wiring (the journalctl child process
-// pumping JSON lines into a Slint VecModel via slint::invoke_from_event_loop)
-// lands in the integration PR — non-blocking framework pattern, see
-// spec §5.
+// Audit log viewer. Stacja (Faza C §3.6): filter chips and column headers
+// share one grid and one 30 px baseline (fix A5); rows are compact
+// (row-height-compact) with a RESULT column (semantic dot + label) instead
+// of a fully red row; per-row expand reveals exit code, job id and the
+// stderr tail already present in the model (fix P1-5).
 
 import { Tokens } from "../tokens.slint";
 import { ScrollView } from "std-widgets.slint";
 import { GhostButton } from "../components/ghost_button.slint";
+import { Group, RowSeparator } from "../components/row_group.slint";
 
 export struct LogRow {
     ts: string,
@@ -22,140 +20,257 @@ export struct LogRow {
     stderr_tail: string,
 }
 
+component FilterChip inherits Rectangle {
+    in property <string> text;
+    in property <bool> active: false;
+    in property <color> active-color: Tokens.accent;
+    in property <color> active-text-color: Tokens.on-accent;
+    callback clicked <=> touch.clicked;
+
+    height: Tokens.button-height-sm;
+    border-radius: self.height / 2;
+    border-width: 1px;
+    border-color: root.active ? root.active-color : Tokens.border-interactive;
+    background: root.active ? root.active-color : Tokens.surface-container-high;
+
+    accessible-role: button;
+    accessible-label: root.text;
+
+    animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-md;
+        padding-right: Tokens.space-md;
+        alignment: center;
+        Text {
+            text: root.text;
+            color: root.active ? root.active-text-color : Tokens.on-surface-muted;
+            font-size: Tokens.font-label-large;
+            font-weight: Tokens.weight-medium;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {}
+}
+
 export component LogsPage inherits Rectangle {
     in property <[LogRow]> rows;
     in property <bool> only-failures: false;
     in property <bool> only-mine: false;
     in property <string> time-window: "all";  // "all" | "24h" | "7d"
+    in-out property <int> expanded-row: -1;
     callback toggle-filter(string);
     callback copy-row(string);
     callback save-as();
 
     vertical-stretch: 1;
-    background: Tokens.surface-container;
-    border-radius: Tokens.radius-card;
+    background: transparent;
 
     VerticalLayout {
-        padding: Tokens.space-xl;
         spacing: Tokens.space-md;
 
-        // Filter chips
+        // Filter bar — every control 30 px on a shared baseline (fix A5).
         HorizontalLayout {
             spacing: Tokens.space-sm;
             alignment: start;
-            Rectangle {
-                width: 130px;
-                height: 28px;
-                border-radius: 14px;
-                background: root.only-failures ? Tokens.error : Tokens.surface-1;
-                TouchArea {
-                    clicked => { root.toggle-filter("only-failures"); }
-                }
-                Text {
-                    text: "Only failures";
-                    color: root.only-failures ? Tokens.on-error : Tokens.on-surface-muted;
-                    font-size: Tokens.font-label-large;
-                    font-weight: Tokens.weight-medium;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
+            FilterChip {
+                text: "Only failures";
+                active: root.only-failures;
+                active-color: Tokens.error;
+                active-text-color: Tokens.on-error;
+                clicked => { root.toggle-filter("only-failures"); }
             }
-            Rectangle {
-                width: 110px;
-                height: 28px;
-                border-radius: 14px;
-                background: root.only-mine ? Tokens.accent : Tokens.surface-1;
-                TouchArea {
-                    clicked => { root.toggle-filter("only-mine"); }
-                }
-                Text {
-                    text: "Only mine";
-                    color: root.only-mine ? Tokens.on-accent : Tokens.on-surface-muted;
-                    font-size: Tokens.font-label-large;
-                    font-weight: Tokens.weight-medium;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
+            FilterChip {
+                text: "Only mine";
+                active: root.only-mine;
+                clicked => { root.toggle-filter("only-mine"); }
             }
-            Rectangle {
-                width: 100px;
-                height: 28px;
-                border-radius: 14px;
-                background: root.time-window == "24h" ? Tokens.accent-info : Tokens.surface-1;
-                TouchArea {
-                    clicked => { root.toggle-filter("24h"); }
-                }
-                Text {
-                    text: "Last 24h";
-                    color: root.time-window == "24h" ? Tokens.on-accent : Tokens.on-surface-muted;
-                    font-size: Tokens.font-label-large;
-                    font-weight: Tokens.weight-medium;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
+            FilterChip {
+                text: "Last 24h";
+                active: root.time-window == "24h";
+                clicked => { root.toggle-filter("24h"); }
             }
             Rectangle { horizontal-stretch: 1; }
             GhostButton {
                 text: "Save as…";
-                width: 120px;
+                icon: @image-url("../../assets/icons/save.svg");
+                has-icon: true;
+                width: 130px;
+                height: Tokens.button-height-sm;
                 clicked => { root.save-as(); }
             }
         }
 
-        // Log list
-        if root.rows.length == 0 : Rectangle {
-            background: Tokens.surface-container-high;
-            border-radius: Tokens.radius-md;
-            height: 100px;
-            Text {
-                text: "No events match the current filter.";
-                color: Tokens.on-surface-faint;
-                font-size: Tokens.font-label-large;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+        if root.rows.length == 0 : Group {
+            Rectangle {
+                height: 100px;
+                Text {
+                    text: "No events match the current filter.";
+                    color: Tokens.on-surface-faint;
+                    font-size: Tokens.font-label-large;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
             }
         }
 
-        if root.rows.length > 0 : Rectangle {
-            vertical-stretch: 1;
-            ScrollView {
-                VerticalLayout {
-                    spacing: 2px;
-                    for row in root.rows : Rectangle {
-                        height: 48px;
-                        background: row.exit_code != 0 ? Tokens.surface-error-tint : Tokens.surface-container-high;
-                        border-radius: Tokens.radius-sm;
-                        HorizontalLayout {
-                            padding-left: Tokens.space-md;
-                            padding-right: Tokens.space-md;
-                            spacing: Tokens.space-md;
-                            alignment: stretch;
-                            Text {
-                                text: row.ts;
-                                color: Tokens.on-surface-faint;
-                                font-size: Tokens.font-meta;
-                                width: 160px;
-                                vertical-alignment: center;
+        if root.rows.length > 0 : Group {
+            // Column header — same grid as the data rows.
+            Rectangle {
+                height: Tokens.row-height-compact;
+                background: Tokens.surface-container-high;
+                HorizontalLayout {
+                    padding-left: Tokens.space-lg;
+                    padding-right: Tokens.space-lg;
+                    spacing: Tokens.col-gap;
+                    Text {
+                        text: "TIME";
+                        width: 130px;
+                        color: Tokens.on-surface-faint;
+                        font-size: Tokens.font-meta;
+                        font-weight: Tokens.weight-strong;
+                        letter-spacing: Tokens.letter-spacing-label;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "OPERATION";
+                        horizontal-stretch: 1;
+                        color: Tokens.on-surface-faint;
+                        font-size: Tokens.font-meta;
+                        font-weight: Tokens.weight-strong;
+                        letter-spacing: Tokens.letter-spacing-label;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "RESULT";
+                        width: Tokens.col-status-width;
+                        color: Tokens.on-surface-faint;
+                        font-size: Tokens.font-meta;
+                        font-weight: Tokens.weight-strong;
+                        letter-spacing: Tokens.letter-spacing-label;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { width: Tokens.icon-size-sm; }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                ScrollView {
+                    VerticalLayout {
+                        for row[i] in root.rows : VerticalLayout {
+                            if i > 0 : RowSeparator {}
+                            Rectangle {
+                                height: Tokens.row-height-compact;
+                                background: row-touch.has-hover ? Tokens.surface-container-high : transparent;
+                                animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+                                accessible-role: button;
+                                accessible-label: row.operation + " " + row.phase;
+                                accessible-description: root.expanded-row == i ? "Collapse details" : "Expand details";
+
+                                row-touch := TouchArea {
+                                    clicked => {
+                                        root.expanded-row = root.expanded-row == i ? -1 : i;
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    padding-left: Tokens.space-lg;
+                                    padding-right: Tokens.space-lg;
+                                    spacing: Tokens.col-gap;
+                                    Text {
+                                        text: row.ts;
+                                        width: 130px;
+                                        color: Tokens.on-surface-faint;
+                                        font-size: Tokens.font-mono-meta;
+                                        font-family: Tokens.font-family-mono;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        text: row.operation + " · " + row.phase;
+                                        horizontal-stretch: 1;
+                                        color: Tokens.on-surface;
+                                        font-size: Tokens.font-label-large;
+                                        font-weight: Tokens.weight-medium;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    HorizontalLayout {
+                                        width: Tokens.col-status-width;
+                                        spacing: 6px;
+                                        alignment: start;
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Rectangle {
+                                                width: 7px;
+                                                height: 7px;
+                                                border-radius: 3.5px;
+                                                background: row.exit_code == 0 ? Tokens.success : Tokens.error;
+                                            }
+                                        }
+                                        Text {
+                                            text: row.exit_code == 0 ? "OK" : "Error";
+                                            color: row.exit_code == 0 ? Tokens.on-surface-muted : Tokens.error;
+                                            font-size: Tokens.font-label-large;
+                                            font-weight: Tokens.weight-medium;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: root.expanded-row == i
+                                                ? @image-url("../../assets/icons/expand-more.svg")
+                                                : @image-url("../../assets/icons/chevron-right.svg");
+                                            width: Tokens.icon-size-sm;
+                                            height: Tokens.icon-size-sm;
+                                            colorize: Tokens.on-surface-faint;
+                                        }
+                                    }
+                                }
                             }
-                            Text {
-                                text: row.operation;
-                                color: row.exit_code != 0 ? Tokens.error : Tokens.on-surface;
-                                font-size: Tokens.font-label-large;
-                                font-weight: Tokens.weight-medium;
-                                vertical-alignment: center;
-                                width: 160px;
-                            }
-                            Text {
-                                text: row.phase;
-                                color: Tokens.on-surface-muted;
-                                font-size: Tokens.font-meta;
-                                vertical-alignment: center;
-                                horizontal-stretch: 1;
-                            }
-                            GhostButton {
-                                text: "Copy id";
-                                width: 90px;
-                                clicked => { root.copy-row(row.job_id); }
+
+                            // Per-row expand: exit code, job id, stderr tail (fix P1-5).
+                            if root.expanded-row == i : Rectangle {
+                                background: Tokens.surface-container-high;
+                                VerticalLayout {
+                                    padding: Tokens.space-lg;
+                                    spacing: Tokens.space-sm;
+                                    Text {
+                                        text: "exit_code " + row.exit_code + " · job " + row.job_id;
+                                        color: Tokens.on-surface-muted;
+                                        font-size: Tokens.font-mono-meta;
+                                        font-family: Tokens.font-family-mono;
+                                    }
+                                    if row.stderr_tail != "" : Rectangle {
+                                        background: Tokens.surface;
+                                        border-radius: Tokens.radius-sm;
+                                        VerticalLayout {
+                                            padding: Tokens.space-md;
+                                            Text {
+                                                text: row.stderr_tail;
+                                                color: Tokens.error;
+                                                font-size: Tokens.font-mono-meta;
+                                                font-family: Tokens.font-family-mono;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: Tokens.space-sm;
+                                        alignment: start;
+                                        GhostButton {
+                                            text: "Copy id";
+                                            icon: @image-url("../../assets/icons/content-copy.svg");
+                                            has-icon: true;
+                                            width: 110px;
+                                            height: Tokens.button-height-sm;
+                                            clicked => { root.copy-row(row.job_id); }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
