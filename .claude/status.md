@@ -26,7 +26,8 @@ i sesji planu wydawniczego 2026-07-12:
 0. **P0 z audytu 2026-08-22** — daemon nie kompiluje się na Linuksie, bramki
    lokalne tego nie widzą, `RestoreSnapshot` daje zapis jako root, frontendy
    kłamią bez daemona. Wszystko przed czymkolwiek innym: dopóki daemon się nie
-   buduje, żadna bramka w tym repo nie mówi prawdy. Backlog P0.
+   buduje, żadna bramka w tym repo nie mówi prawdy. Backlog P0; handoff
+   na Linuksa: [`task-briefs/linux-handoff-2026-08-22.md`](task-briefs/linux-handoff-2026-08-22.md).
 1. **Release readiness — 6 otwartych bramek do publicznej bety** (`0.9.0-beta.1`;
    G1 doc-honesty zamknięta 2026-07-12, commit `00a9a9c`) — kanoniczny plan:
    [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md);

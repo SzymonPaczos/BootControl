@@ -98,7 +98,12 @@ None. `experimental_paranoia` was removed 2026-07-12 (scope decision "1.0 GRUB-f
 
 ## Platform
 
-Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1`. Windows Phase 7 scaffold landed (commits `45e9f89`–`e2f70ca`) — UEFI variable read/write i cross-compile target gotowe, GUI panel jeszcze nie. Aktualna lista otwartych Windows-aware items → [`.claude/backlog.md`](./.claude/backlog.md).
+Project is **Linux-only**. macOS dev: use `BOOTCONTROL_DEMO=1` — **ale uwaga**:
+cały `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`, więc na
+macOS crate rozwija się do pustej biblioteki i `cargo test -p bootcontrold`
+wykonuje **zero** testów przy zielonym `ci-local.sh`. Od 2026-08-22 praca toczy
+się na Linuksie — handoff:
+[`.claude/task-briefs/linux-handoff-2026-08-22.md`](./.claude/task-briefs/linux-handoff-2026-08-22.md). Windows Phase 7 scaffold landed (commits `45e9f89`–`e2f70ca`) — UEFI variable read/write i cross-compile target gotowe, GUI panel jeszcze nie. Aktualna lista otwartych Windows-aware items → [`.claude/backlog.md`](./.claude/backlog.md).
 
 ---
 
