@@ -18,17 +18,20 @@ Kontekst w 2-4 liniach — co i dlaczego.
 **Źródło:** skąd (audyt YYYY-MM-DD / decyzja / drift). **Status:** otwarte / w trakcie.
 -->
 
-## 🔴 TOP — aktualizacja toolkitu projektowego do claude-toolkit 2026.08.06
+## 🔴 TOP — dokończenie adopcji toolkitu (claude-toolkit 2026.08.21)
 
-**Zadanie dla agenta tego projektu. Najpierw `git diff` i plan, dopiero potem
-zmiana — nie łataj w locie.** Zakres jest wystarczająco duży, żeby wymagał
-specyfikacji i zielonego światła właściciela.
+Kopie masterów są zsynchronizowane do `2026.08.21` (`toolkit-sync.sh check .`
+→ zielono; decyzja 2026-08-22 w [`rules/decisions.md`](rules/decisions.md)).
+**Zamknięte tym samym commitem:** scalenie kopii lokalnych
+(`security-reviewer.md` = master + sekcja projektowa, zadeklarowana
+w [`toolkit.local`](toolkit.local); `red-team.md`, `ci-cd.md` i pozostałe
+konwencje przejęte z mastera w całości), Krok 00 wpięty w
+[`rules/audit.md`](rules/audit.md), rozdzielenie listy kontroli głębokiej
+(26 punktów floty w `skills/weekly-audit/references/`, konkretyzacja
+BootControl w `rules/audit.md`), `contrib` bez kandydatów do promocji —
+pozycje po stronie projektu są domenowe (D-Bus/GRUB/ESP/Polkit).
 
-Master `claude-toolkit` stał od 2026-07-11. 2026-08-06 dostał naprawę gate'ów,
-mechanizm wersjonowania i nowe konwencje. Kopie reguł w tym repo są już
-zsynchronizowane (`toolkit_version 2026.08.06` w `.claude/toolkit.lock`),
-ale **praca po stronie projektu została celowo zostawiona Tobie** — dotyka
-plików, które należą do projektu, nie do toolkitu.
+Otwarta zostaje **jedna** pozycja, bo dotyka gate'a, nie dokumentu:
 
 ### 1. P0 — gate `pre-push` sprawdza working tree zamiast pushowanego commita
 
@@ -49,49 +52,43 @@ każdy advisory pipeline w `{ ...; } || true`; jeden `exit "$STATUS"` na końcu.
 Drugi antywzorzec do sprawdzenia przy okazji: pod `set -euo pipefail` puste
 dopasowanie grepa albo `head` zamykający potok ubijają hook **w środku**, więc
 kolejne warstwy nie wykonują się, a wynik wygląda na czysty. Opis obu:
-`conventions/rules-as-gates.md`, sekcja „Antywzorce z reprodukcją".
+[`rules/rules-as-gates.md`](rules/rules-as-gates.md), „Antywzorce z reprodukcją".
 
 **Dowód wymagany do zamknięcia:**
 `bash <toolkit>/templates/test-gates.sh .githooks/pre-push` → 6/6.
 Samo „przechodzi na zdrowym repo" nie jest dowodem, że gate blokuje.
+**Źródło:** adopcja toolkitu 2026.08.06, przeniesione 2026-08-22. **Status:** otwarte.
 
-### 2. Kopie do ręcznego scalenia
+### 2. `toolkit-sync.sh check` jako preflight audytu (ratchet)
 
-Trzy kopie mają lokalne nadpisania; `update` ich nie ruszył.
+Krok 00 jest dziś **prozą** w `rules/audit.md` — a ta sama konwencja mówi, że
+proza przegrywa z mechanizmem. `.claude/audit.sh` porównuje już wersję mastera
+z `toolkit.lock` i melduje `ROZJAZD` (ścieżka: `$CLAUDE_TOOLKIT`, fallback
+`~/Projects/dev/claude-toolkit`, brak = jawne „niezlokalizowany"), ale to
+nadal tylko liczba w raporcie. Pozostaje: wołać `toolkit-sync.sh check .`
+w trybie raportowym (`|| true`), a po serii przebiegów bez fałszywych alarmów
+zamienić w warstwę blokującą — zgodnie z ratchetem z `rules-as-gates.md`.
+Dowód do zamknięcia: test negatywny pokazujący, że gate **blokuje** przy
+rozjeździe, nie tylko przechodzi przy zgodności.
+**Źródło:** adopcja toolkitu 2026.08.21. **Status:** otwarte, P2.
 
-- `.claude/agents/security-reviewer.md` — własny model zagrożeń projektu.
-  **Ma zostać**; scal bazę z mastera, zachowaj sekcję projektową.
-- `.claude/rules/ci-cd.md` (+2/−41) — master urósł mocno, warto przejąć całość.
-- `.claude/agents/red-team.md` (+1/−9) — master dodał soczewkę „tool misuse".
+### 3. `DOCS_SOURCE` — brak podłączonego źródła dokumentacji
 
-Po scaleniu uruchom `toolkit-sync.sh check .` — ma być zielono. Jeśli zostawiasz
-treść lokalną, to jest decyzja do zapisania, nie milczące pominięcie.
+Nowy nagłówek dowodowy wymaga pola `DOCS_SOURCE`. Repo nie ma skonfigurowanego
+serwera MCP z dokumentacją (Context7 lub równoważny), więc każdy audyt będzie
+raportował `n/a (pamięć modelu…)`, a twierdzenia o wersjach `zbus`/`slint`/
+`ratatui`/`clap` i statusie toolchaina Rust zostają **niesprawdzone**.
+Decyzja właściciela: podłączyć źródło czy świadomie zaakceptować `n/a`.
+**Źródło:** adopcja toolkitu 2026.08.21. **Status:** czeka na decyzję właściciela.
 
-### 3. Krok 00 audytu — wersja toolkitu przed czytaniem kodu
+### 4. Nowe skille w masterze — czy adoptujemy
 
-`skills/weekly-audit/SKILL.md` ma nowy pierwszy krok: `toolkit-sync.sh check .`
-**przed** wszystkim innym. Audyt na nieaktualnej checkliście sprawdza wczorajsze
-ryzyka i melduje „czysto". Wepnij to w swój `audit.sh` albo preflight.
-
-Reguła przy błędzie w regule: **nie łataj kopii w projekcie.** Poprawka idzie do
-mastera i wraca przez `update`. Załatana kopia to początek następnego dryfu —
-tak powstały trzy równoległe wersje jednego skilla w tej flocie.
-
-### 4. Co odesłać do mastera
-
-Jeśli masz u siebie wzorzec, którego master nie ma — `toolkit-sync.sh promote`,
-w tej samej sesji. Odłożona promocja nie następuje; to również jest sprawdzone
-empirycznie. Kandydaci zgłoszeni z rekonesansu floty czekają w backlogu
-toolkitu.
-
-### Kryteria akceptacji
-
-- `test-gates.sh` na `.githooks/pre-push` → 6/6 (albo jawne `n/a`, gdy repo
-  nie ma hooka);
-- `toolkit-sync.sh check .` → zielono, bez pozycji „do ręcznego scalenia";
-- każda zachowana treść lokalna ma wpis w `decisions.md` z uzasadnieniem;
-- krok 00 wpięty w audyt;
-- zmiany w osobnym commicie, oddzielone od pracy merytorycznej.
+Master ma cztery skille, których repo nie przyjęło: `audyt-naprawczy`
+(audyt kończący się naprawą na gałęzi `audyt/RRRR-MM-DD`, wyłącznie dla klas
+z bramką zdolną udowodnić poprawność), `przeglad-projektow`, `audyt-floty`,
+`toolkit-conventions`. Adopcja skilla jest przyjęciem instrukcji, nie kopią
+pliku — świadoma decyzja, nie automat.
+**Źródło:** adopcja toolkitu 2026.08.21. **Status:** czeka na decyzję właściciela.
 
 ## P0 — krytyczne
 

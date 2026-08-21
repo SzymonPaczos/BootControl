@@ -23,8 +23,14 @@ Out-of-order reads cause hallucinations at interface definition time. No excepti
 | [`.claude/history/`](./.claude/history/) | zamknięte raporty sesji, ukończone pakiety dostawcze | nigdy (archiwum) |
 | [`.claude/agents/`](./.claude/agents/) | definicje ról (security-reviewer, red-team, coordinator, scout, builder, reviewer) | nigdy (trwałe; upgrade masterów = osobny commit) |
 | `.claude/task-briefs/` | dłuższe specyfikacje otwartych zadań — dokładnie jeden link z backlogu; katalog tworzony gdy potrzebny | gdy zadanie zamknięte → `history/task-briefs/` |
+| [`.claude/toolkit.lock`](./.claude/toolkit.lock) | wersja przyjętego `claude-toolkit` + sha256 każdej kopii (generowany, nie edytowany ręcznie) | przy `toolkit-sync.sh update` |
+| [`.claude/toolkit.local`](./.claude/toolkit.local) | świadome, trwałe odstępstwa od masterów — `<ścieżka><TAB><powód>` | gdy odstępstwo przestaje obowiązywać |
 
 Układ wg konwencji `claude-toolkit/conventions/project-state-layout.md` (adopcja 2026-05-23, delta evidence-based delivery 2026-07-12 — decyzje w `decisions.md`).
+
+**Audyt zaczyna się od Kroku 00** — `bash <toolkit>/scripts/toolkit-sync.sh check .`
+przed czytaniem kodu. Audyt na nieaktualnej checkliście sprawdza wczorajsze
+ryzyka i melduje „czysto". Procedura: [`.claude/rules/audit.md`](./.claude/rules/audit.md).
 
 **Najpierw zapisz, potem kontynuuj:** każde nietrywialne zadanie odkryte poza bieżącym scope trafia **natychmiast** do `backlog.md` (niejasny priorytet → sekcja `Inbox`). Zapisanie nie jest zgodą na implementację.
 
