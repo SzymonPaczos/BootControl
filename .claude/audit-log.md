@@ -5,6 +5,303 @@ Pełna procedura: [`.claude/rules/audit.md`](rules/audit.md).
 
 ---
 
+## Audyt 2026-08-22 00:31
+
+_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
+
+### Toolchain
+- rustc: `rustc 1.93.0 (254b59607 2026-01-19)`
+- cargo: `cargo 1.93.0 (083ac5135 2025-12-15)`
+
+### Formatowanie
+- cargo fmt: ✅ czysto
+
+### Clippy (workspace, -D warnings)
+- clippy: ✅ 0 findings
+
+### `unwrap` / `expect` / `panic!` w production (poza mod tests i doctestach)
+
+| Crate | unwrap | expect | panic! | Budżet |
+|-------|--------|--------|--------|--------|
+| core | 0 | 1 | 0 | 0/0/0 (strict) |
+| daemon | 0 | 2 | 0 | 0/0/0 (strict) |
+| client | 2 | 0 | 0 | ≤2/≤2/0 |
+| cli | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| tui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| gui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+
+### TODO / FIXME / HACK / XXX w kodzie
+- łącznie wystąpień: **0** (w 0 plikach)
+
+### `unsafe` blocks
+
+| Crate | unsafe blocks |
+|-------|---------------|
+| core | 0 |
+| daemon | 2 |
+| client | 0 |
+| cli | 0 |
+| tui | 0 |
+| gui | 0 |
+
+_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._
+
+### Testy
+
+| Crate | #[test] | tests/ | doctest | min ratchet |
+|-------|---------|--------|---------|-------------|
+| core | 184 | 0 | 93 | 93 ✅ |
+| daemon | 169 | 0 | 85 | 85 ✅ |
+| client | 20 | 0 | 14 | 14 ✅ |
+| cli | 5 | 0 | 4 | 4 ✅ |
+| tui | 36 | 0 | 30 | 30 ✅ |
+| gui | 0 | 2 | 0 | 0 ✅ |
+
+### Swallowed errors (heurystyka — wymagają weryfikacji greppem)
+- heurystyczna liczba: 46. Każdy wpis → przejrzeć ręcznie (część bywa legalna: `let _ = drop(...)`).
+
+### Dead code / nieużywane deps
+- cargo-udeps: ❌ exec error (sprawdź toolchain nightly)
+
+### Rejestr decyzji (`.claude/rules/decisions.md`)
+- decyzje aktywne: 27
+- decyzje wycofane: 0
+
+### Inwariant: frontendy używają `bootcontrol-client`, nie `bootcontrol-daemon`
+- ✅ żaden frontend nie importuje daemon
+
+### Regression guards (zamknięte audyty)
+- P0.1 per-intent Polkit: ✅ wszystkie wywołania mają action argument
+- P0.2 sanitize rpm-ostree: ✅ `kargs_append` waliduje param
+- P1.1 single blacklist: ✅ 1 definicja (`KERNEL_CMDLINE_BLACKLIST` w `core::security`)
+- P1.2 startup policy validation: ✅ `validate_policy_file` w main.rs
+- P2.1 audit.sh filter: ✅ `count_in_production` aktywne
+- P2.2 no fake polkit action ID: ✅ `"org.bootcontrol.test"` nie istnieje
+
+### Faza A stream signal (informational)
+- commitów z "Faza A PR": 1
+- najnowszy: `e64dde8 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
+
+### Hooki gitowe
+- pre-push: ✅ obecny i executable
+
+### Trend audytów
+- poprzedni audyt: 2026-07-12 01:07
+- łącznie audytów: 6 (włącznie z tym)
+
+### Skille (`.claude/skills/`)
+- skills lokalnie: 1
+- toolkit.lock: 2026.08.21
+- skills w masterze: 6 (`/Users/szymonpaczos/Projects/dev/claude-toolkit`)
+- wersja mastera: 2026.08.21 — zgodna z lockiem
+- Krok 00: `bash /Users/szymonpaczos/Projects/dev/claude-toolkit/scripts/toolkit-sync.sh check .` (nie `git pull` w trakcie audytu)
+
+**Do przeglądu agentem** (warstwa głęboka — patrz `rules/audit.md` Krok 2):
+bezpieczeństwo, slop, jakość testów, architektura, drift, skille/MCP. Lista
+P0/P1/P2 dopisywana ręcznie do tej samej sekcji po Krok 2.
+
+### Nagłówek dowodowy
+
+```text
+AUDITED_REVISION: 3f2eca14d98ad6176aaacea5039a3e15725232ec
+DIFF_RANGE_OR_SCOPE: aaa151a..3f2eca1 (17 commitów od poprzedniego audytu) + standing surface
+PREVIOUS_AUDIT: 2026-07-12 01:07 (41 dni — cykl 7-dniowy przekroczony 5×)
+TOOLKIT_VERSION: 2026.08.21 = master (podniesione w tym samym dniu, commit f42bab5)
+TOOLS: rustc/cargo 1.93.0; cargo check --workspace --all-targets --all-features;
+  cargo check -p bootcontrold --lib --target x86_64-unknown-linux-gnu; cargo audit 0.22;
+  cargo outdated; bash .claude/audit.sh; toolkit-sync.sh check/contrib;
+  check-active-overlap.sh; Security Reviewer + Red Team (read-only, bez Bash)
+DOCS_SOURCE: n/a (pamięć modelu, odcięcie 2026-05) — brak .mcp.json; twierdzenia
+  o wersjach crate'ów oparte wyłącznie na `cargo outdated`, nie na dokumentacji
+DEPENDENCY_CURRENCY: REPORT — cargo audit: 5 vulnerabilities + 10 warnings
+  (2× HIGH 7.5 quick-xml RUSTSEC-2026-0194/0195 przez slint/atspi; crossbeam-epoch
+  RUSTSEC-2026-0204; anyhow RUSTSEC-2026-0190; event-listener RUSTSEC-2026-0221 —
+  jedyny z nich obecny w drzewie bootcontrold). 12 przeterminowanych deps bezpośrednich.
+  Pierwszy pomiar w historii audytów — brak bazy do trendu.
+EXCLUSIONS_OR_NA: SAST = n/a (brak konfiguracji), .github/workflows = n/a
+  (decyzja 2026-05-20), grub-customizer/ i target/ wyłączone.
+  cargo-udeps = BLOCKED (exec error, trzeci audyt z rzędu) — sekcja „Dead code"
+  nie ma liczb i nie wolno jej czytać jako „zero findings".
+THREAT_MODEL_VERSION: docs/threat-model.md + ARCHITECTURE.md §II (2026-05)
+SECURITY_REVIEW: FAIL — 1× CRITICAL (F1 restore traversal), 2× HIGH (F2, F3)
+RED_TEAM: FINDINGS — 2× HIGH nowe (toolkit.local bez pinu treści; audyt egzekwowany
+  samym regexem daty), 1× HIGH rozszerzone (pre-push A1), 1× MEDIUM-HIGH, 1× MEDIUM
+SAST: n/a (not configured — decyzja 2026-05-20)
+CODE_HEALTH_DELTA: n/a (no tooling) — porównanie liczników z 2026-07-12 wykonane ręcznie
+BACKLOG_WRITE: recorded (P0: A/B/C/D; P1: E/F/G/H; P2: I/J/K/L)
+```
+
+### Warstwa głęboka (osąd agenta)
+
+**Kontekst.** Od poprzedniego audytu 17 commitów; jedyna zmiana kodu to
+`4fcf14c refactor(secureboot): remove experimental paranoia mode`. Reszta to
+`.claude/` i dokumenty. Ta jedna zmiana kodu jest źródłem najpoważniejszego
+znaleziska tego audytu.
+
+- **Bezpieczeństwo (Security Reviewer, verdict FAIL).** `RestoreSnapshot`
+  przyjmuje `id: String` z D-Bus i podaje je do `root.join(id)`
+  (`crates/daemon/src/snapshot.rs:305`) bez żadnej walidacji — `Path::join`
+  ze ścieżką absolutną **podmienia bazę**, a `../` traversuje. Dalej daemon
+  deserializuje manifest spod ścieżki atakującego i wykonuje
+  `fs::write(&target, …)` gdzie `target = PathBuf::from(&f.path)` pochodzi
+  z tego manifestu (`snapshot.rs:317-325`). Wołający z autoryzacją
+  `org.bootcontrol.restore-snapshot` zapisuje dowolny plik jako root
+  (np. `/etc/sudoers.d/`). Sanitizer, ETag i flock nie są na tej ścieżce
+  wołane w ogóle. Potwierdzone odczytem kodu.
+- **Bezpieczeństwo — kontrole nienaruszone.** Polkit per-intent przed operacją
+  dyskową (spot-check: `interface.rs:1302-1310` — pre-flight, uid, polkit,
+  dopiero potem I/O), jedna blacklista `core::security::KERNEL_CMDLINE_BLACKLIST`,
+  sanitize `kargs_append` dla rpm-ostree, SB offline (zero trafień
+  `reqwest|hyper|curl`), brak sekretów (`*.key/*.pem/*.crt` — zero plików),
+  2× `unsafe` z komentarzem `SAFETY:`, żaden frontend nie importuje daemona,
+  `polkit-mock` nie jest cechą domyślną i packaging buduje bez `--all-features`.
+- **Slop.** Zero `unimplemented!()`/`todo!()` w produkcji. Ale: `resolve_backend()`
+  (`crates/client/src/lib.rs:783-795`) na Linuksie po nieudanym `connect_bus()`
+  **po cichu** zwraca `MockBackend`, bez logu i bez sygnału dla użytkownika.
+  `MockBackend::set_value` zwraca `Ok(())`, więc `bootcontrol set GRUB_TIMEOUT 10`
+  na maszynie bez daemona wypisuje `Successfully set GRUB_TIMEOUT=10`
+  (`crates/cli/src/main.rs:322-326`) i nie zapisuje nic. GUI wylicza `is_demo`
+  niezależnie (`gui/src/main.rs:421`, wyłącznie z env + `cfg!`), więc w tym
+  scenariuszu nie pokazuje baneru demo — dwie derywacje jednego stanu, które
+  się rozjeżdżają. Zachowanie jest opisane jako celowe w doc-komentarzu
+  (`lib.rs:766-769`), ale nie ma wpisu w `decisions.md` ani sygnału w UI.
+- **Jakość testów.** `#[ignore]` wszędzie z uzasadnieniem (e2e = session bus,
+  GUI smoke = display). Realny problem gdzie indziej: patrz „Architektura".
+- **Architektura / drift.** (a) **Cały `crates/daemon` jest
+  `#[cfg(target_os = "linux")]`** — `-Zunpretty=expanded` na macOS daje pustą
+  bibliotekę. Skutek: na maszynie właściciela `cargo test -p bootcontrold`
+  wykonuje **0 testów** (zmierzone), a `audit.sh` raportuje „daemon | 169
+  #[test] | 85 doctest | ratchet ✅", bo liczy greppem po źródłach. (b) Drift
+  liczby akcji Polkit: kod ma 4 (`polkit.rs`, `policy_check.rs`, `.policy`),
+  a `ARCHITECTURE.md:51`, `AGENTS.md:160`, `crates/daemon/CLAUDE.md:40`,
+  `docs/UX_BRIEF.md:109`, `main.rs:157` i komentarz w samym pliku policy nadal
+  mówią „sześć" i wymieniają usunięte `generate-keys`/`replace-pk`.
+  `crates/daemon/CLAUDE.md` jest **auto-ładowany** — to instrukcja dla agenta,
+  żeby przywrócić usuniętą akcję.
+- **Dead code.** `cargo-udeps` = exec error trzeci audyt z rzędu → `BLOCKED`,
+  brak liczb. `crates/gui-spike` nadal jest członkiem workspace (`Cargo.toml:8`)
+  i ciągnie zależności widoczne w drzewach `cargo audit`.
+- **Zgodność z `decisions.md`.** Złamane: „Stateless daemon, ETag + flock"
+  (ścieżka restore pisze `fs::write` bez ETag, bez flock, bez atomic rename —
+  `snapshot.rs:324`); „`unwrap`/`expect` zakazane w production" (`daemon/src/main.rs:78-79`,
+  budżet 0, stan 2 — startup, przed jakimkolwiek zapisem). Respektowane:
+  Linux-only, GPL-3.0 w każdym `Cargo.toml`, naming POSIX, per-intent Polkit,
+  sanityzacja, pre-flight sub-arch (poza `SignAndEnrollUki`/`BackupNvram`),
+  SB offline, frontendy przez `client`, Conventional Commits.
+- **Provenance.** 17/17 commitów od poprzedniego audytu ma `Intent`, `Task-Ref`
+  i `Gates`. Zero atrybucji AI w całej historii (D-006 respektowane). Zero
+  zakazanych typów commitów na `main`. **Ale**: `Gates:` jest pisany przez
+  autora zmiany o samym sobie, a `commit-msg` traktuje go WARN-only —
+  `.claude/reviews/` i `.claude/work-graphs/` nie istnieją, więc nie ma
+  niezależnego dowodu (Red Team F5). Konkretny przykład: `Gates:` commita
+  `f42bab5` nie zawiera `cargo test`, bo autor go nie uruchomił — i to jest
+  dokładnie ten przebieg, który wykryłby niekompilujący się daemon.
+- **Higiena repo.** 2 commity ahead of origin (ten audyt). Zero stashy, zero
+  prunable worktree. 2,1 GB na dysku vs 1,97 MiB pack — cały ciężar to `target/`,
+  nie historia. **7 niescalonych gałęzi zdalnych**, w tym cztery z 2026-05-19
+  (95 dni) i trzy lipcowe; `origin/feat/gui-v2-boot-entries` niesie **6 commitów
+  dotykających `crates/`** (parser menu-entry GRUB, `ListGrubEntries`,
+  `fix(daemon): drop dangling refs to removed paranoia polkit actions` —
+  czyli prawdopodobnie naprawa znaleziska P0-A leży już na gałęzi),
+  `origin/ratunek/stash-gui-smoke-tests` niesie packaging deb + AUR i jest
+  112 commitów za `main`. Konwencja mówi: cel życia gałęzi <1 dzień, sygnał
+  ostrzegawczy po 3.
+- **Gotowość publikacyjna.** **Brak pliku `LICENSE`** przy `license = "GPL-3.0"`
+  w każdym `Cargo.toml`, badge'u GPL-3.0 w README i planowanym packagingu
+  deb/rpm/AUR. Brak `SECURITY.md` / prywatnego runbooka disclosure (znane,
+  Inbox).
+- **Bramki (Red Team).** `toolkit.local` wycisza plik control-plane **bez
+  przypięcia treści** — `check` przy zadeklarowanym odstępstwie pomija
+  porównanie z lockiem, nie inkrementuje drift i kończy `✅` z kodem 0
+  (zweryfikowane: `EXIT=0`). Egzekwowanie całego cyklu audytowego to jeden
+  regex daty w `pre-push` czytany z **working tree**, więc niezacommitowana
+  linia `## Audyt <data>` odblokowuje push i nigdy nie opuszcza maszyny.
+  `audit.sh` nie ma `set -e` i **nie potrafi zwrócić kodu ≠ 0** — dlatego
+  `cargo-udeps: ❌ exec error` przeszło jako zielony przebieg. `audit.sh:58`
+  gubi top-5 findings clippy w subshellu (`… | while … done`).
+- **Skille / MCP.** Kopie toolkitu zsynchronizowane (2026.08.21). Brak
+  `.mcp.json` → `DOCS_SOURCE` będzie `n/a` przy każdym audycie do decyzji
+  właściciela. Cztery skille mastera nieprzyjęte (`audyt-naprawczy`,
+  `przeglad-projektow`, `audyt-floty`, `toolkit-conventions`).
+- **Vulnerability response.** Kanał disclosure nadal nieokreślony (Inbox).
+  `cargo audit` uruchomiony po raz pierwszy — patrz `DEPENDENCY_CURRENCY`.
+
+### P0 — krytyczne
+
+1. **`RestoreSnapshot`: path traversal + dowolny zapis pliku jako root**
+   ([`snapshot.rs:305`](../crates/daemon/src/snapshot.rs), `:317-325`;
+   [`interface.rs:1291-1329`](../crates/daemon/src/interface.rs))
+   - Źródło: Security Reviewer 2026-08-22 F1 (CRITICAL), potwierdzone odczytem kodu.
+   - Akcja: walidacja `id` (odrzuć absolutne, `..`, separatory) + ograniczenie
+     `manifest.files[].path` do zbioru ścieżek zarządzanych przez daemona.
+     Test: `restore(root, "/tmp/evil")` → `NotFound`, `/tmp/evil` nietknięte.
+
+2. **`crates/daemon` nie kompiluje się na Linuksie od 41 dni**
+   ([`polkit.rs:85-86`](../crates/daemon/src/polkit.rs))
+   - Dowód: `cargo check -p bootcontrold --lib --target x86_64-unknown-linux-gnu`
+     → `error[E0425]: cannot find value 'GENERATE_KEYS' in module 'actions'`
+     + to samo dla `REPLACE_PK`. Wprowadzone przez `4fcf14c` (2026-07-12).
+   - Akcja: usunąć obie pozycje z `KNOWN` i z testu `polkit.rs:171,174`;
+     naprawić `policy_check.rs:177-195` (indeksy `[4]`/`[5]` na 4-elementowej
+     tablicy, `assert_eq!(missing.len(), 3)` przy realnym 1). **Nie** przywracać
+     stałych — to reanimacja akcji usuniętych decyzją 2026-07-12.
+
+3. **Bramki lokalne są ślepe na cały daemon** (`crates/daemon/src/lib.rs`
+   — `#[cfg(target_os = "linux")]` na całej treści crate'a)
+   - Dowód: `-Zunpretty=expanded` na macOS = pusta biblioteka;
+     `cargo test -p bootcontrold` → `0 passed` ×3. `audit.sh` raportuje
+     „daemon 169 #[test] ✅" licząc greppem po źródłach.
+   - Akcja: `ci-local.sh` i `audit.sh` muszą wołać
+     `cargo check/clippy --target x86_64-unknown-linux-gnu` dla daemona
+     (target jest zainstalowany) i raportować `BLOCKED`, gdy target brakuje.
+     Ratchet: liczniki testów per crate liczone z realnego przebiegu, nie greppem.
+
+4. **Frontendy pokazują dane `MockBackend` jako prawdziwe, gdy daemon jest
+   nieosiągalny** ([`client/src/lib.rs:783-795`](../crates/client/src/lib.rs))
+   - Dowód: `Err(_) => Arc::new(MockBackend)` bez logu; `MockBackend::set_value`
+     → `Ok(())`; CLI wypisuje `Successfully set …`. GUI liczy `is_demo` osobno,
+     więc baner demo się nie pokazuje.
+   - Akcja: albo błąd połączenia propagowany do frontendu, albo jawny,
+     widoczny tryb „daemon niedostępny — dane demonstracyjne". Decyzja do
+     `decisions.md`. Definicja P0 projektu: „kod kłamiący użytkownika".
+
+### P1 — ważne
+
+5. **Ścieżka restore bez ETag, flock i atomic rename** (`snapshot.rs:317-325`)
+   — złamanie aktywnej decyzji 2026-05-03. Źródło: SR F3 (HIGH).
+6. **`toolkit.local` wycisza plik control-plane bez przypięcia treści** —
+   `check` kończy zielono mimo dowolnej zmiany w zadeklarowanym pliku.
+   Dotyczy też mastera (7 projektów floty). Źródło: RT F1 (HIGH).
+7. **Cykl audytowy egzekwowany samym regexem daty z working tree** —
+   `audit.sh` nie umie zwrócić `BLOCKED`; `audit.sh:58` gubi findings clippy
+   w subshellu. Źródło: RT F2 (HIGH). Rozszerza P2 „audit-evidence gate".
+8. **Drift dokumentacji control-plane: „sześć akcji Polkit"** w
+   `ARCHITECTURE.md:51`, `AGENTS.md:160`, `crates/daemon/CLAUDE.md:40`
+   (auto-ładowany), `docs/UX_BRIEF.md:109`, `main.rs:157`, komentarz
+   w `.policy`. Źródło: SR F6. To jest instrukcja przywrócenia P0-2 „na skróty".
+
+### P2 — porządkowe
+
+9. **Brak pliku `LICENSE`** przy GPL-3.0 w każdym `Cargo.toml` i badge'u README;
+   blokuje packaging deb/rpm/AUR. Brak `SECURITY.md` (znane, Inbox).
+10. **7 niescalonych gałęzi zdalnych**, 4 po 95 dni; `feat/gui-v2-boot-entries`
+    ma 6 commitów w `crates/` (w tym prawdopodobna naprawa P0-2),
+    `ratunek/stash-gui-smoke-tests` ma packaging deb+AUR i 112 commitów długu.
+    Aktualizuje nieaktualny wpis „4 lokalne branche z 2026-05-19".
+11. **`cargo audit`: 5 vulnerabilities + 10 warnings**; `cargo-udeps` niesprawny
+    trzeci audyt z rzędu. Podnosi P2 „`cargo --locked` + `cargo deny/audit`".
+12. **`SignAndEnrollUki`/`BackupNvram` bez `enforce_writable_distro()`**
+    i bez walidacji `uki_path` (SR F4); **`Bash(cargo clean *)`** w allowliście
+    dopuszcza `--target-dir` (SR F5); **Reviewer/Security Reviewer bez żadnego
+    niezależnego dowodu** — brak CI, brak `Bash`, brak `.claude/reviews/` (RT F5);
+    `expect()` ×2 w `daemon/src/main.rs:78-79` przy budżecie 0 (SR NOTE-B);
+    `threat-model.md:94` deklaruje `Subject::SystemBusName`, kod używa
+    `unix-user` (SR NOTE-A); test-only override'y env w binarce produkcyjnej
+    (SR NOTE-C).
+
+
+
 ## Audyt 2026-07-12 01:07
 
 _Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
