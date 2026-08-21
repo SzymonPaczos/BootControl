@@ -1,0 +1,4 @@
+# Świadome odstępstwa od masterów toolkitu — `<ścieżka><TAB><powód>`.
+# Czytane przez toolkit-sync.sh (check/update). Wpis = decyzja, nie wyciszenie.
+#
+.claude/agents/security-reviewer.md	master WYMAGA sekcji „Co sprawdzać w tym projekcie" — kopia = master 2026.08.21 + sekcja BootControl (Polkit 4 akcje, ETag/flock, SB offline). Odstępstwo trwałe z definicji; przy update mastera scalać ręcznie głowę pliku.
