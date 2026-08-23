@@ -32,10 +32,6 @@ pub mod message_ids {
     pub const SET_GRUB_VALUE: &str = "0a8c2b9d-3e5f-4471-aa9d-12c4e7f3b2a8";
     /// `enroll_mok` — Machine Owner Key signing + enrollment.
     pub const ENROLL_MOK: &str = "1b2d3e4f-5a6b-7c8d-9e0f-aabbccddeeff";
-    /// `replace_pk` — Platform Key replacement (Strict Mode).
-    pub const REPLACE_PK: &str = "2c3d4e5f-6a7b-8c9d-0e1f-aabbccddeef0";
-    /// `generate_keys` — custom PK/KEK/db generation (Strict Mode).
-    pub const GENERATE_KEYS: &str = "3d4e5f6a-7b8c-9d0e-1f2a-aabbccddeef1";
     /// `restore_snapshot` — snapshot restoration.
     pub const RESTORE_SNAPSHOT: &str = "4e5f6a7b-8c9d-0e1f-2a3b-aabbccddeef2";
     /// `set_loader_default` — systemd-boot default change.
@@ -205,8 +201,6 @@ mod tests {
             message_ids::REWRITE_GRUB,
             message_ids::SET_GRUB_VALUE,
             message_ids::ENROLL_MOK,
-            message_ids::REPLACE_PK,
-            message_ids::GENERATE_KEYS,
             message_ids::RESTORE_SNAPSHOT,
             message_ids::SET_LOADER_DEFAULT,
             message_ids::ADD_KERNEL_PARAM,

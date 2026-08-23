@@ -175,20 +175,20 @@ mod tests {
 
     #[test]
     fn partial_policy_lists_missing_actions() {
-        // Three out of six declared.
-        let partial = format!(
-            r#"<action id="{}"></action>
-            <action id="{}"></action>
-            <action id="{}"></action>"#,
-            REQUIRED_ACTIONS[0], REQUIRED_ACTIONS[1], REQUIRED_ACTIONS[2]
-        );
+        // All but the last declared — derived from the list rather than
+        // hardcoded indices so the test survives the list changing length.
+        let (last, declared) = REQUIRED_ACTIONS
+            .split_last()
+            .expect("REQUIRED_ACTIONS must not be empty");
+        let partial = declared
+            .iter()
+            .map(|a| format!(r#"<action id="{a}"></action>"#))
+            .collect::<Vec<_>>()
+            .join("\n");
         match validate_policy_content(&partial) {
             Err(PolicyError::IncompleteActions { present, missing }) => {
-                assert_eq!(present.len(), 3);
-                assert_eq!(missing.len(), 3);
-                assert!(missing.contains(&REQUIRED_ACTIONS[3].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[4].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[5].to_string()));
+                assert_eq!(present.len(), declared.len());
+                assert_eq!(missing, vec![last.to_string()]);
             }
             other => panic!("expected IncompleteActions, got {other:?}"),
         }
