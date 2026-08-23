@@ -384,7 +384,7 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     // Without it, cargo interprets `--features bootcontrold/polkit-mock` as
     // belonging to the current package (this test crate), which does not
     // expose that feature and rejects the build.
-    let features = vec!["polkit-mock".to_string()];
+    let features = ["polkit-mock".to_string()];
 
     let status = Command::new(env!("CARGO"))
         .args([
