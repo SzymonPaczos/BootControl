@@ -4,8 +4,10 @@
   "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
 <!--
   BootControl polkit actions.
-  Six per-intent actions: the five from docs/GUI_V2_SPEC_v2.md §7 plus
-  restore-snapshot (added with the snapshot/restore work).
+  Four per-intent actions: rewrite-grub, write-bootloader, enroll-mok
+  (docs/GUI_V2_SPEC_v2.md §7) plus restore-snapshot, added with the
+  snapshot/restore work. generate-keys and replace-pk were removed on
+  2026-07-12 with Paranoia Mode (scope decision "1.0 GRUB-first").
   auth_admin_keep is acceptable for non-irreversible actions; auth_admin
   (every-time) is mandatory for irreversible actions.
 

@@ -15,9 +15,14 @@
 
 use bootcontrol_core::error::BootControlError;
 
-/// The six per-intent Polkit Action IDs declared in
+/// The four per-intent Polkit Action IDs declared in
 /// `packaging/polkit/org.bootcontrol.policy`. Single source of truth for
 /// callers — every `authorize_with_polkit` call site picks one of these.
+///
+/// Was six until 2026-07-12, when the scope decision "1.0 GRUB-first"
+/// removed Paranoia Mode along with `generate-keys` and `replace-pk`.
+/// [`KNOWN_ACTIONS`] pins this set against
+/// [`crate::policy_check::REQUIRED_ACTIONS`].
 pub mod actions {
     /// Modify `/etc/default/grub`, `/etc/kernel/cmdline`, or rpm-ostree kargs.
     pub const REWRITE_GRUB: &str = "org.bootcontrol.rewrite-grub";

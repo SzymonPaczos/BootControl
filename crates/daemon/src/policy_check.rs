@@ -21,8 +21,9 @@ use std::path::Path;
 /// Canonical location of the Polkit policy file on a packaged install.
 pub const DEFAULT_POLICY_PATH: &str = "/usr/share/polkit-1/actions/org.bootcontrol.policy";
 
-/// The six per-intent Polkit Action IDs the daemon needs declared. Must be
-/// kept in sync with [`packaging/polkit/org.bootcontrol.policy`].
+/// The four per-intent Polkit Action IDs the daemon needs declared. Must be
+/// kept in sync with [`packaging/polkit/org.bootcontrol.policy`] and with
+/// `polkit::KNOWN_ACTIONS`, which a regression test pins against this list.
 pub const REQUIRED_ACTIONS: &[&str] = &[
     "org.bootcontrol.rewrite-grub",
     "org.bootcontrol.write-bootloader",
@@ -53,7 +54,7 @@ impl std::fmt::Display for PolicyError {
             Self::LegacyManageOnly => write!(
                 f,
                 "polkit policy file declares only the deprecated \
-                 'org.bootcontrol.manage' action. Daemon requires the six \
+                 'org.bootcontrol.manage' action. Daemon requires the four \
                  per-intent actions declared in \
                  packaging/polkit/org.bootcontrol.policy. Refusing to start \
                  — fix the packaging or re-install."
@@ -196,7 +197,7 @@ mod tests {
 
     #[test]
     fn policy_with_extra_actions_still_passes() {
-        // Forward-compatibility: a future packaging might add a 7th action.
+        // Forward-compatibility: a future packaging might add a 5th action.
         let mut policy = full_policy();
         policy.push_str(r#"<action id="org.bootcontrol.future-action"></action>"#);
         assert!(validate_policy_content(&policy).is_ok());
