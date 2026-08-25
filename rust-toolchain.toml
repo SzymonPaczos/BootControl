@@ -1,0 +1,18 @@
+# Toolchain pinned for the whole workspace.
+#
+# Every quality gate in this project runs `-D warnings` (pre-commit,
+# scripts/ci-local.sh, pre-push), so a new clippy release can turn the repo
+# red without a single line of code changing. That is not hypothetical: on
+# 2026-08-23 a `rustup update stable` mid-session moved the toolchain
+# 1.96 -> 1.98, and the new `chunks_exact_to_as_chunks` lint blocked every
+# commit on main until the parser was migrated.
+#
+# rustup reads this file automatically, so `cargo`/`clippy` use this exact
+# version in every clone — the compiler stops being ambient state. Bumping it
+# is a deliberate, reviewed change: raise `channel`, run
+# `scripts/ci-local.sh`, fix whatever the newer lints find, and land it as its
+# own commit.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]
+targets = ["x86_64-pc-windows-gnu"]
