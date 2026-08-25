@@ -42,7 +42,8 @@ funkcji sanityzacji i ich obowiązkowe miejsca użycia, wzorce niebezpiecznego
 raw SQL per język, endpointy przyjmujące URL/upload, helper rate-limitu i
 gdzie jest wymagany, rejestr rzeczy już naprawionych (żeby ich nie
 powtarzać). Wzorzec dobrej konkretyzacji: security-reviewer projektu
-JawnePanstwo. Kopia bez tej sekcji = adopcja niekompletna.
+z produkcyjną bazą i publicznym wydaniem. Kopia bez tej sekcji = adopcja
+niekompletna.
 
 Uwaga o narzędziach: rola jest read-only. Jeśli projekt chce dać jej `Bash`
 do skanerów/testów, wolno to zrobić WYŁĄCZNIE z allowlistą komend
@@ -61,19 +62,25 @@ sterowany przez D-Bus z user-space. Model zagrożeń: `docs/` (threat-model) +
   re-eksportują. Każdy nowy D-Bus write-path MUSI re-walidować payload w
   daemonie — walidacja w GUI/CLI to wygoda, nie obrona. Druga definicja
   blacklisty gdziekolwiek = finding (konsolidacja to zamknięte P1.1).
-- **Polkit per-intent:** 5 action IDs (`org.bootcontrol.{rewrite-grub,
-  write-bootloader,enroll-mok,generate-keys,replace-pk}`). Każda mutująca
-  metoda w `interface.rs` woła CheckAuthorization z WŁAŚCIWYM action ID
-  *przed* operacją dyskową. Nowa metoda bez per-intent check = CRITICAL.
+- **Polkit per-intent:** 4 action IDs (`org.bootcontrol.{rewrite-grub,
+  write-bootloader,enroll-mok,restore-snapshot}`) — single source of truth:
+  `packaging/polkit/org.bootcontrol.policy` + `crates/daemon/src/polkit.rs`,
+  walidacja startowa w `policy_check.rs`. Każda mutująca metoda w
+  `interface.rs` woła CheckAuthorization z WŁAŚCIWYM action ID *przed*
+  operacją dyskową. Nowa metoda bez per-intent check = CRITICAL.
+  (`generate-keys` i `replace-pk` zniknęły razem z Paranoia Mode —
+  decyzja „Zakres i kolejka 1.0" 2026-07-12; ich powrót w kodzie bez nowej
+  decyzji to finding, nie regresja do naprawienia po cichu.)
 - **ETag + flock:** każda mutacja waliduje ETag przed dotknięciem dysku;
   zapis = `.tmp` → `fsync()` → atomic `rename()` pod `flock(LOCK_EX|LOCK_NB)`.
   Pominięcie ETag/flock w nowym write-path = HIGH.
 - **Pre-flight sub-arch:** `/etc/os-release` check (NixOS refuse, ostree
   delegacja do `rpm-ostree kargs` — parametry przechodzą przez sanitizer,
   multi-Linux ESP restrict). Nowy write-path bez pre-flight = HIGH.
-- **Secure Boot offline:** żadnego `reqwest`/`curl`/`hyper` w SB code paths;
-  certyfikaty tylko z `/sys/firmware/efi/efivars/`. Sieć w firmware-level
-  operacji = CRITICAL.
+- **Secure Boot offline:** żadnego `reqwest`/`curl`/`hyper` w pozostałych
+  ścieżkach SB (MOK sign/enroll, backup NVRAM); certyfikaty wyłącznie
+  lokalne, z `/sys/firmware/efi/efivars/`. Sieć w firmware-level operacji
+  = CRITICAL.
 - **Sekrety:** brak `*.key`/`*.pem`/MOK private w repo; backup certów do
   `/var/lib/bootcontrol/certs/` nigdy do gita.
 - **Rust hygiene jako defense:** `unwrap`/`expect`/`panic!` w production

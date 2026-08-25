@@ -18,11 +18,100 @@ Kontekst w 2-4 liniach — co i dlaczego.
 **Źródło:** skąd (audyt YYYY-MM-DD / decyzja / drift). **Status:** otwarte / w trakcie.
 -->
 
+## 🔴 TOP — dokończenie adopcji toolkitu (claude-toolkit 2026.08.21)
+
+Kopie masterów są zsynchronizowane do `2026.08.21` (`toolkit-sync.sh check .`
+→ zielono; decyzja 2026-08-22 w [`rules/decisions.md`](rules/decisions.md)).
+**Zamknięte tym samym commitem:** scalenie kopii lokalnych
+(`security-reviewer.md` = master + sekcja projektowa, zadeklarowana
+w [`toolkit.local`](toolkit.local); `red-team.md`, `ci-cd.md` i pozostałe
+konwencje przejęte z mastera w całości), Krok 00 wpięty w
+[`rules/audit.md`](rules/audit.md), rozdzielenie listy kontroli głębokiej
+(26 punktów floty w `skills/weekly-audit/references/`, konkretyzacja
+BootControl w `rules/audit.md`), `contrib` bez kandydatów do promocji —
+pozycje po stronie projektu są domenowe (D-Bus/GRUB/ESP/Polkit).
+
+Otwarta zostaje **jedna** pozycja, bo dotyka gate'a, nie dokumentu:
+
+### 1. P0 — gate `pre-push` sprawdza working tree zamiast pushowanego commita
+
+Dotyczy tego repo: `.githooks/pre-push` nie czyta refów ze stdin i nie
+odtwarza pushowanego commita — sprawdza working tree.
+
+Reprodukcja: zacommituj plik z sekretem, popraw go **tylko w working tree** bez
+commitowania, wypchnij. Gate melduje „czysto", a sekret trafia na origin.
+Potwierdzone w **7 z 7** repozytoriów floty — wszystkie skopiowały ten sam
+wadliwy szablon z toolkitu, więc to nie jest błąd autora tego repo.
+
+Naprawiony wzorzec: `claude-toolkit/NEW-PROJECT.md` §4.2. Kluczowe elementy:
+czyta `<local ref> <local sha> <remote ref> <remote sha>` ze stdin; zakres
+z `remote_sha..local_sha` (nowa gałąź: `local_sha --not --remotes`); odtwarza
+commit przez `git worktree add --detach` i sprawdza pliki tam, nie na dysku;
+każdy advisory pipeline w `{ ...; } || true`; jeden `exit "$STATUS"` na końcu.
+
+Drugi antywzorzec do sprawdzenia przy okazji: pod `set -euo pipefail` puste
+dopasowanie grepa albo `head` zamykający potok ubijają hook **w środku**, więc
+kolejne warstwy nie wykonują się, a wynik wygląda na czysty. Opis obu:
+[`rules/rules-as-gates.md`](rules/rules-as-gates.md), „Antywzorce z reprodukcją".
+
+**Dowód wymagany do zamknięcia:**
+`bash <toolkit>/templates/test-gates.sh .githooks/pre-push` → 6/6.
+Samo „przechodzi na zdrowym repo" nie jest dowodem, że gate blokuje.
+**Źródło:** adopcja toolkitu 2026.08.06, przeniesione 2026-08-22. **Status:** otwarte.
+
+### 2. `toolkit-sync.sh check` jako preflight audytu (ratchet)
+
+Krok 00 jest dziś **prozą** w `rules/audit.md` — a ta sama konwencja mówi, że
+proza przegrywa z mechanizmem. `.claude/audit.sh` porównuje już wersję mastera
+z `toolkit.lock` i melduje `ROZJAZD` (ścieżka: `$CLAUDE_TOOLKIT`, fallback
+`~/Projects/dev/claude-toolkit`, brak = jawne „niezlokalizowany"), ale to
+nadal tylko liczba w raporcie. Pozostaje: wołać `toolkit-sync.sh check .`
+w trybie raportowym (`|| true`), a po serii przebiegów bez fałszywych alarmów
+zamienić w warstwę blokującą — zgodnie z ratchetem z `rules-as-gates.md`.
+Dowód do zamknięcia: test negatywny pokazujący, że gate **blokuje** przy
+rozjeździe, nie tylko przechodzi przy zgodności.
+**Źródło:** adopcja toolkitu 2026.08.21. **Status:** otwarte, P2.
+
+### 3. `DOCS_SOURCE` — brak podłączonego źródła dokumentacji
+
+Nowy nagłówek dowodowy wymaga pola `DOCS_SOURCE`. Repo nie ma skonfigurowanego
+serwera MCP z dokumentacją (Context7 lub równoważny), więc każdy audyt będzie
+raportował `n/a (pamięć modelu…)`, a twierdzenia o wersjach `zbus`/`slint`/
+`ratatui`/`clap` i statusie toolchaina Rust zostają **niesprawdzone**.
+Decyzja właściciela: podłączyć źródło czy świadomie zaakceptować `n/a`.
+**Źródło:** adopcja toolkitu 2026.08.21. **Status:** czeka na decyzję właściciela.
+
+### 4. Nowe skille w masterze — czy adoptujemy
+
+Master ma cztery skille, których repo nie przyjęło: `audyt-naprawczy`
+(audyt kończący się naprawą na gałęzi `audyt/RRRR-MM-DD`, wyłącznie dla klas
+z bramką zdolną udowodnić poprawność), `przeglad-projektow`, `audyt-floty`,
+`toolkit-conventions`. Adopcja skilla jest przyjęciem instrukcji, nie kopią
+pliku — świadoma decyzja, nie automat.
+**Źródło:** adopcja toolkitu 2026.08.21. **Status:** czeka na decyzję właściciela.
+
 ## P0 — krytyczne
+
+> **Praca przenosi się na Linuksa.** Kolejność, pierwsze komendy, kryteria
+> akceptacji i gotowy prompt startowy:
+> [`task-briefs/linux-handoff-2026-08-22.md`](task-briefs/linux-handoff-2026-08-22.md).
+> Nie zaczynaj od tej listy — zacznij od briefu, bo kolejność P0 nie jest dowolna.
+
+### `RestoreSnapshot`: path traversal + dowolny zapis pliku jako root
+`interface.rs:1291-1329` przekazuje `id: String` z D-Bus bez walidacji do `snapshot::restore`; `snapshot.rs:305` robi `root.join(id)` — ścieżka absolutna podmienia bazę, `../` traversuje. Dalej `snapshot.rs:317-325` deserializuje manifest atakującego i wykonuje `fs::write(&target, …)`, gdzie `target = PathBuf::from(&f.path)` pochodzi z tego manifestu. Wołający z `org.bootcontrol.restore-snapshot` zapisuje dowolny plik jako root (np. `/etc/sudoers.d/`). Sanitizer, ETag i flock na tej ścieżce nie są wołane. Fix: walidacja `id` (odrzuć absolutne, `..`, separatory) + ograniczenie `manifest.files[].path` do ścieżek zarządzanych przez daemona. Test zamykający: `restore(root, "/tmp/evil")` → `NotFound`, `/tmp/evil` nietknięte.
+**Źródło:** audyt 2026-08-22, Security Reviewer F1 (CRITICAL). **Status:** otwarte.
+
+### Bramki lokalne są ślepe na cały `crates/daemon`
+Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`. Na macOS `-Zunpretty=expanded` daje pustą bibliotekę, a `cargo test -p bootcontrold` wykonuje **0 testów** (zmierzone) — przy czym `.claude/audit.sh` raportuje „daemon | 169 #[test] | 85 doctest | ratchet ✅", bo liczy greppem po źródłach. Dlatego P0 wyżej przeżył 41 dni i pięć pominiętych audytów. Fix: `ci-local.sh` i `audit.sh` wołają `cargo check`/`clippy` dla `--target x86_64-unknown-linux-gnu` (target zainstalowany) i raportują `BLOCKED`, gdy go brakuje; liczniki testów z realnego przebiegu, nie z grepa.
+**Źródło:** audyt 2026-08-22 (warstwa głęboka). **Status:** **częściowo domknięte 2026-08-23** — `audit.sh` ma fail-closed `cargo build -p bootcontrold` (`97421a1`), a non-Linux raportuje `n/a`, nie pass. **Otwarte pozostaje sedno tego wpisu:** liczniki testów w `audit.sh` nadal pochodzą z grepa po źródłach, nie z realnego przebiegu — na macOS `cargo test -p bootcontrold` wykonuje 0 testów, a raport pokazuje „169 #[test]”. Do naprawy razem z pozycją o „top 5 findings”.
+
+### Frontendy pokazują dane `MockBackend` jako prawdziwe, gdy daemon jest nieosiągalny
+`client/src/lib.rs:783-795`: na Linuksie po nieudanym `connect_bus()` `resolve_backend()` zwraca `MockBackend` — bez logu, bez sygnału. `MockBackend::set_value` zwraca `Ok(())`, więc `bootcontrol set GRUB_TIMEOUT 10` wypisuje `Successfully set GRUB_TIMEOUT=10` (`cli/src/main.rs:322-326`) i nie zapisuje nic. GUI wylicza `is_demo` niezależnie (`gui/src/main.rs:421`, tylko env + `cfg!`), więc baner demo się nie pokazuje — dwie derywacje jednego stanu. Zachowanie opisane jako celowe w doc-komentarzu (`lib.rs:766-769`), ale bez wpisu w `decisions.md` i bez sygnału w UI. Definicja P0 projektu: „kod kłamiący użytkownika".
+**Źródło:** audyt 2026-08-22 (warstwa głęboka). **Status:** otwarte — wariant naprawy do decyzji właściciela (propagacja błędu vs jawny tryb degradacji).
 
 ### Daemon nie kompiluje się na Linuksie — niekompletne usunięcie paranoia (`polkit.rs`)
 `crates/daemon/src/polkit.rs:85-86` (produkcyjna tablica `KNOWN` w `authorize_with_polkit`) i `:171,174` (test) odwołują się do `actions::GENERATE_KEYS`/`actions::REPLACE_PK` usuniętych z modułu `actions` (`polkit.rs:21-32`) commitem `4fcf14c` — błąd E0425 ×4, daemon (crate autoryzacji) niebudowalny na natywnym Linuksie od 2026-07-12. Dodatkowo `policy_check.rs:189-191` indeksuje `REQUIRED_ACTIONS[4]/[5]` przy 4-elementowej liście (panic po naprawie buildu; `assert_eq!(missing.len(),3)` vs realne 1). Obecne na `main` **i** na tipie `feat/gui-v21-stacja`. **Uwaga bezpieczeństwa:** NIE przywracać usuniętych stałych by skompilować — reaktywuje `replace-pk`/`generate-keys` w `KNOWN` mimo braku w policy (implicit-yes fallthrough, docstring `polkit.rs:38-41`). Fix: usunąć 2 pozycje z `KNOWN`, 2 asercje z testu, naprawić indeksy/asercje `policy_check.rs`, usunąć osierocone komentarze `polkit.rs:28-30`. Regresja: test pinujący `KNOWN` == `REQUIRED_ACTIONS` (single source) + `cargo build -p bootcontrold` jako gate. Istniejący fix na gałęzi `origin/feat/gui-v2-boot-entries` (`6a3fd03`) — do przeglądu/cherry-pick.
-**Źródło:** Audyt 2026-08-23 (clippy 4 errors) + Security Reviewer F1 (HIGH, verdict FAIL) + Red Team F1. **Status:** zatwierdzone 2026-08-23 — naprawy w pętli Opusa, brief: [`task-briefs/audit-2026-08-23-fixes.md`](task-briefs/audit-2026-08-23-fixes.md) (obejmuje też P1 hooki/audit.sh i P2: ANSI injection, doc-drifty, dead message IDs).
+**Źródło:** Audyt 2026-08-23 (clippy 4 errors) + Security Reviewer F1 (HIGH, verdict FAIL) + Red Team F1 — **oraz niezależnie audyt 2026-08-22, Security Reviewer F2 (HIGH)**, który zmierzył to cross-compilem (`cargo check -p bootcontrold --target x86_64-unknown-linux-gnu` → 2× `error[E0425]`) i doszedł do tej samej konkluzji: usunąć obie pozycje, nie przywracać stałych. Dwa audyty, jedna usterka — wpisy scalone przy mergu 2026-08-23. **Status:** zatwierdzone 2026-08-23 — naprawy w pętli Opusa, brief: [`task-briefs/audit-2026-08-23-fixes.md`](task-briefs/audit-2026-08-23-fixes.md) (obejmuje też P1 hooki/audit.sh i P2: ANSI injection, doc-drifty, dead message IDs).
 
 ## P1 — ważne
 **Naprawione 2026-08-23** w pętli napraw — commit `d0d2c93` na gałęzi `fix/audit-2026-08-23`, **czeka na merge** (wpis znika po mergu). Kierunek zgodny z ostrzeżeniem: `KNOWN` zwężone do 4 akcji, stałych NIE przywracano. Dodany test `known_actions_match_required_policy_actions` pinujący `polkit::KNOWN_ACTIONS` do `policy_check::REQUIRED_ACTIONS` (zweryfikowany mutacją) + fail-closed `cargo build -p bootcontrold` w `audit.sh` (`97421a1`). `policy_check.rs` przepisany z indeksów na `split_last()`.
@@ -65,6 +154,22 @@ Wymóg właściciela: program wyraźnie raportuje, co wykrył i skąd — dziś 
 GitHub przed betą: opis+topics, zrzuty/GIF w README, CONTRIBUTING, issue templates, ruleset main, naprawa placeholderów `YOUR_USERNAME` (README:122, `bootcontrold.socket`), releases (G6). Strona animowana (landing): treść po A1/A2, publikacja przy G7.
 **Źródło:** decyzja zakresu 2026-07-12. **Status:** zatwierdzone — czeka na kolejkę (#6–7).
 
+### Ścieżka restore bez ETag, flock i atomic rename
+`snapshot.rs:317-325` pisze `fs::write(&target, …)` bez `flock(LOCK_EX|LOCK_NB)`, bez weryfikacji ETag i bez `.tmp → fsync → rename`. `RestoreSnapshot` nie przyjmuje nawet parametru ETag; ograniczenie jest przyznane w komentarzu `interface.rs:1269-1273`, ale nigdy nie trafiło do rejestru ryzyk. Łamie aktywną decyzję 2026-05-03 „Stateless daemon, ETag + flock". Dla kontrastu `grub_manager.rs:188-296` realizuje pełny wzorzec. Dodatkowo `ManifestFile.mode` nie jest przywracany — restore może rozluźnić uprawnienia pliku bootowego. Test: trzymaj `flock(LOCK_EX)` na pliku docelowym, wywołaj `RestoreSnapshot` → `ConcurrentModification`, plik niezmieniony.
+**Źródło:** audyt 2026-08-22, Security Reviewer F3 (HIGH). **Status:** otwarte.
+
+### `toolkit.local` wycisza plik control-plane bez przypięcia treści
+W `toolkit-sync.sh` gałąź `🔒 LOKALNY (zadeklarowany)` robi `continue` **przed** inkrementacją drift i przed porównaniem z lockiem, więc dowolna zmiana w zadeklarowanym pliku (np. `agents/reviewer.md`, `rules/multi-agent-delivery.md`) przechodzi jako `✅ kopie zgodne z masterem`, exit 0. Zweryfikowane na tym repo. Fix należy do **mastera** (`claude-toolkit`, dotyczy 7 projektów floty), nie do kopii: kolumna `sha256` w `toolkit.local`, werdykt `🔒 ZADEKLAROWANY, ALE ZMIENIONY` + `drift++`, test negatywny „mutacja bajtu → exit 1". Kolejność: **przed** wpięciem `check` jako preflightu (TOP #2) — inaczej preflight utrwali kłamstwo.
+**Źródło:** audyt 2026-08-22, Red Team F1 (HIGH). **Status:** otwarte, do promocji do mastera.
+
+### Cykl audytowy egzekwowany samym regexem daty; `audit.sh` nie umie `BLOCKED`
+`pre-push:33-49` sprawdza wyłącznie datę `^## Audyt YYYY-MM-DD` i czyta ją z **working tree** — niezacommitowana linia odblokowuje push i nigdy nie opuszcza maszyny. `audit.sh` ma `set -uo pipefail` **bez `-e`** i żadnej ścieżki wyjścia ≠ 0, więc `cargo-udeps: ❌ exec error` przeszedł jako zielony przebieg; nowa reguła „przebieg, który padł, nie ma prawa podać liczb" (`rules/audit.md` Krok 0) opisuje sygnał, którego skrypt nie potrafi wyemitować. Osobno `audit.sh:58` gubi top-5 findings clippy w subshellu (`… | while … done`). Fix: preflight parsuje najnowszą sekcję (`AUDITED_REVISION` + niepuste `SECURITY_REVIEW`/`RED_TEAM`) z **commita**, nie z dysku; `audit.sh` akumuluje `STATUS` i kończy `exit 2`; `while … done < <(…)`.
+**Źródło:** audyt 2026-08-22, Red Team F2 (HIGH). Scala i podnosi P2 „Audit-evidence gate" z 2026-07-12. **Status:** otwarte.
+
+### Drift dokumentacji control-plane: „sześć akcji Polkit"
+Kod ma 4 akcje (`polkit.rs`, `policy_check.rs:26-31`, `packaging/polkit/org.bootcontrol.policy`). Nadal mówią „sześć" i wymieniają usunięte `generate-keys`/`replace-pk`: `ARCHITECTURE.md:51`, `AGENTS.md:160`, **`crates/daemon/CLAUDE.md:40` (auto-ładowany przy pracy w crate'cie)**, `docs/UX_BRIEF.md:109`, `crates/daemon/src/main.rs:157` (log „all six per-intent actions declared"), `polkit.rs:18`, komentarz w `.policy:6-8`, `packaging/rpm/bootcontrol.spec:47`. To jest instrukcja dla agenta, żeby „naprawić" P0 (daemon nie kompiluje) przez przywrócenie skasowanych stałych. Ratchet po naprawie: grep-gate w `audit.sh` — liczba `<action id=` == liczba stałych w `polkit::actions` == `REQUIRED_ACTIONS.len()`, zero wystąpień `generate-keys|replace-pk` poza `history/` i `decisions.md`.
+**Źródło:** audyt 2026-08-22, Security Reviewer F6. Rozszerza zamknięty P2 „polkit 5→6 drift" z 2026-07-12. **Status:** otwarte.
+
 ## P2 — porządkowe
 
 ### Terminal ANSI/control-char injection przez wartości boot-configu w CLI
@@ -106,19 +211,15 @@ Uzupełnienie (2026-07-12, pytanie właściciela „po co daemon 24/7"): potwier
 
 ### Audit-evidence gate — świeżość audytu wiązać z dowodem, nie samą datą
 `pre-push` preflight (dodany 2026-07-12) sprawdza tylko, czy najnowszy nagłówek `## Audyt YYYY-MM-DD` jest ≤7 dni. Warunek spełnia jednolinijkowy edit daty albo `bash .claude/audit.sh` (stempluje datę bez LLM i bez Security Review). Fix: wymagać w najnowszym wpisie `AUDITED_REVISION: <SHA>` osiągalnego z HEAD oraz `SECURITY_REVIEW: PASS|ACCEPTED_RISK|...`, nie samej daty.
-**Źródło:** Red Team 2026-07-12 (Finding 2, LOW). **Status:** czeka na decyzję właściciela.
+**Źródło:** Red Team 2026-07-12 (Finding 2, LOW). **Status:** ⬆️ podniesione do P1 audytem 2026-08-22 — patrz „Cykl audytowy egzekwowany samym regexem daty"; ten wpis zostaje jako ślad pierwszego zgłoszenia.
 
 ### `cargo --locked` + `cargo deny/audit` w ci-local.sh
 `scripts/ci-local.sh` uruchamia cargo bez `--locked` (nie wykrywa driftu `Cargo.toml`↔`Cargo.lock`) i nie ma kroku skanującego CVE zależności. Ograniczone ryzyko (Cargo.lock committed, zero git-deps, tylko crates.io). Fix: `--locked` do wszystkich wywołań cargo + krok `cargo deny check` (advisory→blocking wg ratchetu). `ci-cd.md §3` to zaleca.
-**Źródło:** Red Team 2026-07-12 (Finding 3, LOW). **Status:** czeka na decyzję właściciela.
+**Źródło:** Red Team 2026-07-12 (Finding 3, LOW). **Status:** otwarte — audyt 2026-08-22 uruchomił `cargo audit` po raz pierwszy: 5 vulnerabilities + 10 warnings, „ograniczone ryzyko" przestało być hipotezą (szczegóły w osobnym wpisie P2).
 
 ### `BackupNvram` — symlink hardening target_dir (defense-in-depth)
 `BackupNvram` (`crates/daemon/src/interface.rs:734` → `secureboot/nvram.rs:103`) pisze do caller-supplied `target_dir` bez `O_NOFOLLOW`/`O_EXCL`; root podąża za podłożonym symlinkiem `PK-<guid>.efivar` i truncuje cel. NIE jest to eskalacja (treść = bajty własnego PK/KEK hosta, wołający ma `auth_admin` = root-equiv) — czysty DoS/corruption. Fix: confine `target_dir` pod `/var/lib/bootcontrol/certs` + `canonicalize`, albo `O_EXCL|O_NOFOLLOW`; test regresyjny: symlink → /tmp/victim nie może nadpisać celu.
 **Źródło:** Security Reviewer 2026-07-12 (NOTE-1). **Status:** czeka na decyzję właściciela.
-
-### 4 lokalne branche z 2026-05-19 niezmergowane
-`fix/core-doc-overindented-list-item`, `fix/daemon-tests-etxtbsy-aarch64`, `fix/e2e-compile-errors` są patch-equivalent z `main` (`git cherry` → `-`) i mogą zostać skasowane. `chore/cargo-fmt-workspace` (`git cherry` → `+`) niesie realny diff — wymaga przeglądu czy merge czy drop. Wiek ~54 dni.
-**Źródło:** Audyt 2026-07-12 (delivery). **Status:** czeka na decyzję właściciela.
 
 ### `crates/gui-spike` — historyczny verification crate, kandydat na archiwizację
 [`crates/gui-spike/`](../crates/gui-spike/) został utworzony jako Phase 3.5 PR 0 ([commit `473a4a0`](https://github.com/SzymonPaczos/BootControl/commit/473a4a0) — *"chore(gui): slint a11y framework verification spike (PR 0)"*). Crate sam siebie deklaruje *"This crate is not shipped — it exists only to answer 'does Slint do X?' before PR 1 begins."* Wyniki zapisane w [`docs/slint-a11y-findings.md`](../docs/slint-a11y-findings.md); Phase 3.5 dawno zamknięta.
@@ -142,6 +243,22 @@ ROADMAP.md ma sekcję "Out-of-roadmap streams" → "Faza A" z PR #3 (commit `e64
 
 Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md, plus dopisać jasny "Goal:" + "Exit criteria:" jak inne Phase'y.
 **Źródło:** pre-adopcja + audit 2026-05-23 P2.4. **Status:** czeka na decyzję właściciela.
+
+### Brak pliku `LICENSE` przy deklarowanym GPL-3.0
+`license = "GPL-3.0"` jest w każdym `Cargo.toml`, README ma badge GPL-3.0, a decyzja 2026-05-03 mówi „GPL-3.0 dla całego workspace" — ale w repo nie ma pliku `LICENSE`/`COPYING` (`git ls-files | grep -i licen` = pusto). Blokuje packaging deb/rpm/AUR (każdy wymaga pliku licencji) i jest deklaracją bez pokrycia w repo docelowo publicznym.
+**Źródło:** audyt 2026-08-22 (higiena repo, punkt 14f). **Status:** otwarte.
+
+### 7 niescalonych gałęzi zdalnych, w tym praca kodowa i packaging
+`chore/cargo-fmt-workspace`, `fix/core-doc-overindented-list-item`, `fix/daemon-tests-etxtbsy-aarch64`, `fix/e2e-compile-errors` (wszystkie 2026-05-19, 95 dni), `feat/gui-v2-boot-entries` (2026-07-12, **6 commitów dotykających `crates/`**: parser menu-entry GRUB, `ListGrubEntries`, `fix(daemon): drop dangling refs to removed paranoia polkit actions` — prawdopodobna naprawa P0 „daemon nie kompiluje"), `ratunek/stash-gui-smoke-tests` (2026-07-22, packaging deb + AUR, 112 commitów za `main`, commit typu `wip:`), `feat/gui-v21-stacja` (2026-07-27). Konwencja: cel życia gałęzi <1 dzień, ostrzeżenie po 3. Zastępuje nieaktualny wpis „4 lokalne branche z 2026-05-19" (lokalnych już nie ma).
+**Źródło:** audyt 2026-08-22 (higiena repo, punkt 14a). **Status:** otwarte — decyzja per gałąź: scalić, przenieść pracę, czy skasować.
+
+### `cargo audit`: 5 vulnerabilities + 10 warnings (pierwszy pomiar)
+2× HIGH 7.5 w `quick-xml` (RUSTSEC-2026-0194/0195, DoS) przez `slint → accesskit → atspi → zbus_xml` oraz `wayland-scanner`; `crossbeam-epoch` RUSTSEC-2026-0204 przez `slint-macros` (build-time); warningi unmaintained (`bincode`, `paste`, `rustybuzz`, `ttf-parser`) i unsound (`anyhow` RUSTSEC-2026-0190, `event-listener` RUSTSEC-2026-0221 — jako jedyny obecny w drzewie `bootcontrold`). Do tego 12 przeterminowanych zależności bezpośrednich (`zbus` 5.14→5.19, `nix` 0.29→0.31, `tokio` 1.52→1.53, `sha2` 0.10→0.11, …). `cargo-udeps` = exec error trzeci audyt z rzędu, więc metryka dead-code nie istnieje.
+**Źródło:** audyt 2026-08-22 (punkt 15). Podnosi istniejący P2 „`cargo --locked` + `cargo deny/audit` w ci-local.sh". **Status:** otwarte.
+
+### Drobne findingi bezpieczeństwa i control-plane z audytu 2026-08-22
+(1) `SignAndEnrollUki` (`interface.rs:826-899`) i `BackupNvram` (`:728-799`) jako jedyne metody mutujące **nie wołają** `enforce_writable_distro()`; `uki_path` z D-Bus trafia bez walidacji do `sbsign --output <uki> <uki>` (`secureboot/mok.rs:163-171`) — brak `O_NOFOLLOW`, brak ograniczenia do ESP (SR F4, MEDIUM). (2) `.claude/settings.json` dopuszcza `Bash(cargo clean *)` — wildcard obejmuje `--target-dir /dowolna/ścieżka`, czyli rekurencyjne kasowanie poza `target/` bez promptu (SR F5, MEDIUM). (3) Reviewer i Security Reviewer nie mają żadnego niezależnego dowodu bramek: brak CI (decyzja 2026-05-20), brak `Bash`, a `.claude/reviews/` i `.claude/work-graphs/` nie istnieją mimo `multi-agent-delivery.md §2.1` — jedynym dowodem jest `Gates:` pisany przez autora zmiany o samym sobie (RT F5, MEDIUM; decyzja właściciela: allowlista read-only `Bash` dla obu ról albo obowiązkowy review record). (4) `expect()` ×2 w `daemon/src/main.rs:78-79` przy budżecie 0 (startup, przed jakimkolwiek zapisem — SR NOTE-B). (5) `docs/threat-model.md:94` deklaruje `Subject::SystemBusName`, kod używa `unix-user` z UID (`polkit.rs:108-118`) — nie jest spoofowalne, ale rozjeżdża rozumowanie o `auth_admin_keep` (SR NOTE-A). (6) Test-only override'y env w binarce produkcyjnej: `BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE` potrafi wyłączyć pre-flight, `BOOTCONTROL_MOK_KEY`/`_CERT` przekierowują klucz podpisujący (SR NOTE-C).
+**Źródło:** audyt 2026-08-22. **Status:** otwarte.
 
 ## Inbox — niejasny priorytet
 

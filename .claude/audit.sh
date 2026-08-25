@@ -387,12 +387,29 @@ if [ -d .claude/skills ]; then
 else
     add "- .claude/skills/: BRAK"
 fi
-TOOLKIT="$HOME/DevProjects/claude-toolkit"
-if [ -d "$TOOLKIT" ]; then
+# Wersja toolkitu (Krok 00 procedury). Ścieżka konfigurowalna — zaszyta na
+# sztywno działała tylko na jednej maszynie i cicho raportowała „niezlokalizowany".
+TOOLKIT="${CLAUDE_TOOLKIT:-}"
+if [ -z "$TOOLKIT" ]; then
+    for cand in "$HOME/Projects/dev/claude-toolkit" "$HOME/DevProjects/claude-toolkit"; do
+        [ -d "$cand" ] && { TOOLKIT="$cand"; break; }
+    done
+fi
+LOCK_VER=""
+[ -f .claude/toolkit.lock ] && LOCK_VER=$(awk '$1=="toolkit_version"{print $2}' .claude/toolkit.lock)
+add "- toolkit.lock: ${LOCK_VER:-BRAK — projekt nigdy nie stemplowany}"
+if [ -n "$TOOLKIT" ] && [ -d "$TOOLKIT" ]; then
     TOOLKIT_SKILLS=$(find "$TOOLKIT/skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-    add "- skills w toolkit: $TOOLKIT_SKILLS — refresh: \`cd $TOOLKIT && git pull\`, potem skopiuj do \`.claude/skills/\`"
+    MASTER_VER=$(tr -d '[:space:]' < "$TOOLKIT/VERSION" 2>/dev/null || echo "?")
+    add "- skills w masterze: $TOOLKIT_SKILLS (\`$TOOLKIT\`)"
+    if [ "$LOCK_VER" = "$MASTER_VER" ]; then
+        add "- wersja mastera: $MASTER_VER — zgodna z lockiem"
+    else
+        add "- wersja mastera: $MASTER_VER vs lock ${LOCK_VER:-brak} — **ROZJAZD**, uruchom Krok 00"
+    fi
+    add "- Krok 00: \`bash $TOOLKIT/scripts/toolkit-sync.sh check .\` (nie \`git pull\` w trakcie audytu)"
 else
-    add "- toolkit: niezlokalizowany (oczekiwany: \`$TOOLKIT\`)"
+    add "- toolkit: **niezlokalizowany** — ustaw \`CLAUDE_TOOLKIT=<ścieżka>\`; bez tego Krok 00 jest niewykonany, a nie zaliczony"
 fi
 add ""
 
