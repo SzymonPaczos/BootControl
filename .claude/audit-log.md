@@ -5,6 +5,157 @@ Pełna procedura: [`.claude/rules/audit.md`](rules/audit.md).
 
 ---
 
+## Audyt 2026-08-23 20:02
+
+_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
+
+### Toolchain
+- rustc: `rustc 1.96.0 (ac68faa20 2026-05-25)`
+- cargo: `cargo 1.96.0 (30a34c682 2026-05-25)`
+
+### Formatowanie
+- cargo fmt: ✅ czysto
+
+### Clippy (workspace, -D warnings)
+- clippy: ❌ warnings=1 errors=4
+  - top 5 findings:
+
+### `unwrap` / `expect` / `panic!` w production (poza mod tests i doctestach)
+
+| Crate | unwrap | expect | panic! | Budżet |
+|-------|--------|--------|--------|--------|
+| core | 0 | 1 | 0 | 0/0/0 (strict) |
+| daemon | 0 | 2 | 0 | 0/0/0 (strict) |
+| client | 2 | 0 | 0 | ≤2/≤2/0 |
+| cli | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| tui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| gui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+
+### TODO / FIXME / HACK / XXX w kodzie
+- łącznie wystąpień: **0** (w 0 plikach)
+
+### `unsafe` blocks
+
+| Crate | unsafe blocks |
+|-------|---------------|
+| core | 0 |
+| daemon | 2 |
+| client | 0 |
+| cli | 0 |
+| tui | 0 |
+| gui | 0 |
+
+_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._
+
+### Testy
+
+| Crate | #[test] | tests/ | doctest | min ratchet |
+|-------|---------|--------|---------|-------------|
+| core | 184 | 0 | 93 | 93 ✅ |
+| daemon | 169 | 0 | 85 | 85 ✅ |
+| client | 20 | 0 | 14 | 14 ✅ |
+| cli | 5 | 0 | 4 | 4 ✅ |
+| tui | 36 | 0 | 30 | 30 ✅ |
+| gui | 0 | 2 | 0 | 0 ✅ |
+
+### Swallowed errors (heurystyka — wymagają weryfikacji greppem)
+- heurystyczna liczba: 46. Każdy wpis → przejrzeć ręcznie (część bywa legalna: `let _ = drop(...)`).
+
+### Dead code / nieużywane deps
+- cargo-udeps: ⚠️  niezainstalowane (`cargo install cargo-udeps --locked` żeby aktywować).
+
+### Rejestr decyzji (`.claude/rules/decisions.md`)
+- decyzje aktywne: 26
+- decyzje wycofane: 0
+
+### Inwariant: frontendy używają `bootcontrol-client`, nie `bootcontrol-daemon`
+- ✅ żaden frontend nie importuje daemon
+
+### Regression guards (zamknięte audyty)
+- P0.1 per-intent Polkit: ✅ wszystkie wywołania mają action argument
+- P0.2 sanitize rpm-ostree: ✅ `kargs_append` waliduje param
+- P1.1 single blacklist: ✅ 1 definicja (`KERNEL_CMDLINE_BLACKLIST` w `core::security`)
+- P1.2 startup policy validation: ✅ `validate_policy_file` w main.rs
+- P2.1 audit.sh filter: ✅ `count_in_production` aktywne
+- P2.2 no fake polkit action ID: ✅ `"org.bootcontrol.test"` nie istnieje
+
+### Faza A stream signal (informational)
+- commitów z "Faza A PR": 1
+- najnowszy: `e64dde8 2026-05-21 feat(systemd-boot): rename loader entries (Faza A PR #3) (#28)`
+- jeśli pojawi się PR powyżej tych zarejestrowanych w `ROADMAP.md` "Out-of-roadmap streams" → back-fill (backlog P2).
+
+### Hooki gitowe
+- pre-push: ✅ obecny i executable
+
+### Trend audytów
+- poprzedni audyt: 2026-07-12 01:07
+- łącznie audytów: 6 (włącznie z tym)
+
+### Skille (`.claude/skills/`)
+- skills lokalnie: 1
+- toolkit: niezlokalizowany (oczekiwany: `/home/szymon-paczos/DevProjects/claude-toolkit`)
+
+**Do przeglądu agentem** (warstwa głęboka — patrz `rules/audit.md` Krok 2):
+bezpieczeństwo, slop, jakość testów, architektura, drift, skille/MCP. Lista
+P0/P1/P2 dopisywana ręcznie do tej samej sekcji po Krok 2.
+
+### Nagłówek dowodowy
+
+```text
+AUDITED_REVISION: c5fb3f3b334923c3e2c26acffe2e9c04e95821c5 (feat/gui-v21-stacja)
+DIFF_RANGE_OR_SCOPE: aaa151a..c5fb3f3 (16 commitów od poprz. audytu) + standing surface daemona
+PREVIOUS_AUDIT: 2026-07-12
+TOOLS: cargo/rustc 1.96.0; cargo fmt (pass); cargo clippy --workspace --all-targets --all-features (❌ 4 errors E0425 + 1 warning); bash .claude/audit.sh; git cherry/branch; grep sweep; security-reviewer + red-team (osobny read-only kontekst)
+EXCLUSIONS_OR_NA: SAST n/a i .github/workflows n/a (brak cloud CI — decyzja 2026-05-20); grub-customizer/ poza zakresem; cargo-udeps niezainstalowane (dead-code layer greppem)
+THREAT_MODEL_VERSION: docs/threat-model.md @ c5fb3f3
+SECURITY_REVIEW: FAIL (F1 build daemona / gate bypass; F2/F3 doc-drift + dead code = NOTE)
+RED_TEAM: FINDINGS (F1 MEDIUM = ten sam build/gate; F2 LOW terminal ANSI injection CLI; 1 doc-drift blacklist)
+BACKLOG_WRITE: recorded — P0 build-fix polkit, P1 hooki niezainstalowane + audit.sh build-gate, P2 (ANSI injection CLI, doc-drift six→four, doc-drift blacklist, dead message IDs)
+```
+
+### Warstwa głęboka (osąd agenta)
+
+- **Bezpieczeństwo:** standing surface daemona czysty — wszystkie 12 metod mutujących w `interface.rs` woła `authorize_with_polkit` z per-intent akcją przed dyskiem; sanitizer jednym źródłem (`core::security::KERNEL_CMDLINE_BLACKLIST`); ETag/flock/snapshot na GRUB write-path; SB offline (zero `reqwest`/`hyper`/`curl`); brak sekretów (`*.key`/`*.pem`); `unsafe` (2 w `uefi_vars_linux.rs`) z komentarzem SAFETY. **Ale** oceniany SHA **nie kompiluje daemona na Linuksie** — patrz P0.1.
+- **Slop:** brak nowego. Znane stuby GUI (Confirmation Sheet diff/preflight, secure boot puste ścieżki) już zbacklogowane — bez pogorszenia; restyle „stacja" nie tknął Confirmation Sheet ani nie dodał wywołań mutujących.
+- **Testy:** ratchet doctestów utrzymany (core 93 / daemon 85 / client 14 / cli 4 / tui 30). Ubyło 5 `#[test]` w daemon (169 vs 174) i 2 w client (20 vs 22) — spójne z usunięciem paranoia. **Ale** testy daemona nie wykonywały się od 4fcf14c (crate niebudowalny); w tym test `policy_check.rs` indeksuje `REQUIRED_ACTIONS[4]/[5]` przy liście 4-elementowej (panic out-of-bounds po naprawie buildu) — patrz P0.1.
+- **Architektura/drift:** inwariant „frontend nie importuje daemona" ✅. Policy XML (4 akcje) ↔ `REQUIRED_ACTIONS` (4) zgodne. Drift dokumentacji „six actions" (`polkit.rs:18`, `policy_check.rs:24,56-58`, `packaging/polkit/…:7`, `crates/daemon/CLAUDE.md`) — P2. Drift blacklisty w `crates/daemon/CLAUDE.md` (obiecuje `module_blacklist=`/`efi=disable_early_pci_dma`, których nie ma na liście) — P2.
+- **Dead code:** martwe `message_ids::REPLACE_PK`/`GENERATE_KEYS` w `audit.rs:35-38` (tylko test) — P2. Osierocone doc-komentarze PK/KEK w `polkit.rs:28-30`.
+- **Zgodność z `decisions.md`:** per-intent Polkit, stateless ETag, sanitizer, zero-network SB, zakaz unwrap — wszystkie respektowane w kodzie (26 aktywnych decyzji). Usunięcie paranoia zgodne z decyzją „Zakres 1.0 GRUB-first" **co do intencji**, ale wykonanie niekompletne (build break).
+- **Delivery/provenance:** 16/16 commitów niesie `Intent`/`Task-Ref`/`Gates`; zero atrybucji AI (`Co-Authored-By`/`AI-Contribution`) — zgodne z D-006. **Ale** trailery `Gates:` w tym zakresie są niewiarygodne — deklarują „build/test pass", a daemon nie kompilował się na Linuksie (patrz P1.1: hooki niezainstalowane + gate vacuously-green na non-Linux targetach).
+- **Skille/toolkit:** toolkit niezlokalizowany (`~/DevProjects/claude-toolkit` nieobecny) — porównanie masterów (Krok 5) odłożone.
+
+### P0 — krytyczne
+
+1. **Daemon nie kompiluje się na Linuksie od `4fcf14c` (2026-07-12) — niekompletne usunięcie paranoia.**
+   - `crates/daemon/src/polkit.rs:85-86` — produkcyjna tablica `KNOWN` odwołuje się do `actions::GENERATE_KEYS`/`actions::REPLACE_PK`, usuniętych z modułu `actions` (`polkit.rs:21-32`). Błąd E0425 ×2 w kodzie produkcyjnym + ×2 w teście (`polkit.rs:171,174`). Dodatkowo `policy_check.rs:189-191` indeksuje `REQUIRED_ACTIONS[4]/[5]` przy 4-elementowej liście (panic po naprawie kompilacji, `assert_eq!(missing.len(),3)` vs realne 1).
+   - Źródło: audyt statyczny (clippy 4 errors), Security Reviewer F1, Red Team F1. Obecne na `main` (`7eb327f`) i na tipie `feat/gui-v21-stacja`.
+   - Skala: najbardziej security-critical crate (autoryzacja) niebudowalny i nietestowany przez cały zakres 16 commitów. Kłamiący sygnał „kod kłamie użytkownika/procesowi" — trailery `Gates: pass` przy czerwonym buildzie.
+   - Uwaga do naprawy: **nie** przywracać usuniętych stałych, by „skompilować" — reaktywowałoby to action-stringi `replace-pk`/`generate-keys` w zbiorze `KNOWN`, mimo że policy ich nie deklaruje (docstring `polkit.rs:38-41` ostrzega o implicit-yes fallthrough). Poprawny fix = usunąć dwie pozycje z `KNOWN`, dwie asercje z testu, naprawić indeksy/asercje w `policy_check.rs`, usunąć osierocone komentarze.
+   - Istniejący fix: gałąź `origin/feat/gui-v2-boot-entries` niesie `6a3fd03 fix(daemon): drop dangling refs to removed paranoia polkit actions` — do przeglądu/zmergowania (uwaga: to gałąź z inną pracą A1, nie da się jej po prostu wlać).
+
+### P1 — ważne
+
+1. **Hooki gitowe niezainstalowane w tym klonie → jedyna warstwa CI (local-first) była martwa.**
+   - `git config core.hooksPath` pusty; `.githooks/{pre-commit,commit-msg,pre-push}` obecne, ale nieaktywne. Efekt: preflight świeżości audytu nie zadziałał (42 dni bez audytu vs 7-dniowy próg), a zepsuty build trafił na `main`. `./scripts/install-hooks.sh` nigdy nie uruchomiony w tym klonie (albo `--no-verify`).
+   - Powiązane: gate `ci-local.sh` jest **vacuously green** na macOS i na cross-compile Windows, bo `crates/daemon/src/lib.rs:11` ma `#![cfg(target_os = "linux")]` — daemon kompiluje się do pustki na non-Linux targecie, więc build break `polkit.rs` przechodzi niezauważony wszędzie poza natywnym `cargo build` na Linuksie. Deklarowany krok „Windows cross-compile" w `ci-local.sh:39` NIE chroni daemona.
+   - Fix: (a) wymusić `install-hooks.sh` w onboardingu (README) + sprawdzić, czemu tip powstał bez hooków; (b) dodać do `.claude/audit.sh` fail-closed `cargo build -p bootcontrold` (natywny Linux) — build breakage ma blokować, nie być liczbą w logu; (c) rozważyć, by pre-push liczył build/test natywnie na Linuksie (już to robi przez `cargo test --workspace`, o ile hook działa).
+   - Źródło: audyt (proces), Security Reviewer F1, Red Team DISCOVERED_TASK 2.
+
+### P2 — porządkowe
+
+1. **Terminal ANSI/control-char injection przez wartości boot-configu w CLI.** Read-path nie filtruje znaków kontrolnych: `crates/core/src/grub.rs:223-230` (`extract_value` verbatim) i CLI drukuje surowo (`crates/cli/src/main.rs:263,289,351,354,360`). Złośliwy `title`/`options` w `/boot/loader/entries/*.conf` (drugi OS na współdzielonym ESP / pakiet post-install) z `\x1b[…`/`\r` może sfałszować widok `bootcontrol list` — podważa raport „Boot environment", którego celem jest przejrzystość detekcji. Fix: `escape_debug`/allowlist printable przy renderze niezaufanych wartości + property test. Źródło: Red Team F2 (LOW).
+2. **Doc-drift „six actions" po redukcji do 4.** Komentarze i komunikat błędu startowego nadal mówią o 6 akcjach: `crates/daemon/src/polkit.rs:18`, `policy_check.rs:24,56-58` (błąd widziany przez operatora), `packaging/polkit/org.bootcontrol.policy:7`, `crates/daemon/CLAUDE.md` (sekcja „Adding a new D-Bus method" wymienia `generate-keys`/`replace-pk`). Kod poprawny (4), dokumentacja kłamie. Źródło: Security Reviewer F2.
+3. **Doc-drift blacklisty sanitizera.** `crates/daemon/CLAUDE.md:46` twierdzi, że blacklist odrzuca `module_blacklist=` i `efi=disable_early_pci_dma` — nie ma ich w `KERNEL_CMDLINE_BLACKLIST` (`core/src/security.rs:43-51`: `init=`, `selinux=0`, `apparmor=0`, `systemd.unit=`, `rd.break`, `single`, `emergency`). Blacklist jest z założenia niepełna (decisions.md), ale dokument obiecuje ochronę, której nie ma. Źródło: Red Team (soczewka privilege escalation).
+4. **Martwe `message_ids::REPLACE_PK`/`GENERATE_KEYS`** w `crates/daemon/src/audit.rs:35-38` (używane tylko w teście `:204-214`) — usunąć razem z P0.1. Źródło: Security Reviewer F3.
+
+### Regresja / nieaktywne narzędzia
+
+- `cargo-udeps` niezainstalowane (trzeci audyt z rzędu bez dead-code layer) — pozycja w Inbox backlogu.
+- toolkit `~/DevProjects/claude-toolkit` nieobecny — Krok 5 (porównanie masterów) niewykonany.
+- Windows cross-compile (`x86_64-pc-windows-gnu`) uruchomiony w tym audycie (toolchain + mingw obecne) — wynik nie zmienia obrazu daemona (excluded/`cfg(linux)`).
+
+---
+
 ## Audyt 2026-07-12 01:07
 
 _Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._

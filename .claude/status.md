@@ -11,13 +11,26 @@ Bieżący stan zepsutych / niekompletnych funkcji BootControl. Co naprawić →
 
 | Funkcja | Stan | Czego brakuje | Źródło |
 |---------|------|---------------|--------|
+| **Build daemona (Linux)** | **naprawione na gałęzi `fix/audit-2026-08-23` (`d0d2c93`) — czeka na merge; na `main` nadal zepsute** | merge gałęzi napraw do `main` (decyzja właściciela po przeglądzie) | Audyt 2026-08-23 → backlog **P0**; pętla napraw 2026-08-23 |
 | GUI Secure Boot panel (MOK enroll, NVRAM backup) | zepsute — przyciski zawsze failują walidację daemona | GUI przekazuje puste ścieżki (`view_model.rs:108-115`) | recenzja Codex 2026-07-12 #4 → backlog P1 |
 | Failsafe menu entry (GRUB) | nieskuteczny — snippet generowany, ale nie trafia do `grub.cfg` | hook `/etc/grub.d/` w packagingu + test VM | recenzja Codex 2026-07-12 #1 → backlog P1, bramka G2 |
 
 ## Priorytety (kolejność prac)
 
-Pełna lista → [`.claude/backlog.md`](backlog.md). Stan po audycie 2026-07-12
-i sesji planu wydawniczego 2026-07-12:
+Pełna lista → [`.claude/backlog.md`](backlog.md). Stan po audycie 2026-08-23:
+
+0. **[P0] Build daemona** — **naprawiony** w pętli napraw 2026-08-23 na gałęzi
+   `fix/audit-2026-08-23` (`d0d2c93`): lista akcji zwężona do 4 zamiast
+   przywracania usuniętych stałych, plus test pinujący `polkit::KNOWN_ACTIONS`
+   do `policy_check::REQUIRED_ACTIONS`. **Na `main` nadal zepsute** — znika
+   dopiero po mergu. Pozostała praca: przegląd właściciela + merge.
+0b. **[P1] Hooki gitowe** — zainstalowane w tym klonie 2026-08-23
+   (`core.hooksPath` = `.githooks`). Otwarte pozostaje wymuszenie
+   `install-hooks.sh` w onboardingu dla nowych klonów oraz to, że
+   `ci-local.sh` jest vacuously green na non-Linux — częściowo domknięte
+   fail-closed build gate'em w `audit.sh` (`97421a1`).
+
+Stan po audycie 2026-07-12 i sesji planu wydawniczego 2026-07-12:
 
 1. **Release readiness — 6 otwartych bramek do publicznej bety** (`0.9.0-beta.1`;
    G1 doc-honesty zamknięta 2026-07-12, commit `00a9a9c`) — kanoniczny plan:
