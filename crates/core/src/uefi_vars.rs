@@ -371,9 +371,14 @@ pub fn parse_boot_order(payload: &[u8]) -> Result<Vec<u16>, BootControlError> {
             reason: format!("payload length {} is not a multiple of 2", payload.len()),
         });
     }
+    // `as_chunks` returns (complete chunks, remainder). The remainder is
+    // provably empty here — the length guard above rejects odd payloads — so
+    // taking `.0` drops nothing. Keep the guard and this call together.
     Ok(payload
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
         .collect())
 }
 
@@ -607,6 +612,39 @@ mod tests {
             result,
             Err(BootControlError::MalformedValue { .. })
         ));
+    }
+
+    #[test]
+    fn boot_order_never_truncates_a_trailing_odd_byte() {
+        // Guards the shape of the parser, not just its happy path: a payload
+        // with a dangling byte must be REJECTED, never silently parsed as the
+        // complete pairs with the remainder dropped. `as_chunks` hands the
+        // remainder back separately, so dropping the length guard would turn
+        // a malformed BootOrder into a plausible-looking short boot order —
+        // the firmware would boot something the user never chose.
+        let truncated = &[0x01, 0x00, 0x02, 0x00, 0x03];
+        assert!(
+            matches!(
+                parse_boot_order(truncated),
+                Err(BootControlError::MalformedValue { .. })
+            ),
+            "odd-length payload must be rejected, not truncated to its complete pairs"
+        );
+
+        // Same bytes without the dangling one parse fine — proves the
+        // rejection above is about the odd byte, not about the content.
+        assert_eq!(parse_boot_order(&truncated[..4]).unwrap(), vec![1u16, 2u16]);
+    }
+
+    #[test]
+    fn boot_order_preserves_little_endian_high_bytes() {
+        // High bytes exercise the per-element byte order: a parser that read
+        // big-endian would return 0x0102 here instead of 0x0201.
+        let payload = &[0x01, 0x02, 0xFF, 0xFF, 0x00, 0x80];
+        assert_eq!(
+            parse_boot_order(payload).unwrap(),
+            vec![0x0201u16, 0xFFFFu16, 0x8000u16]
+        );
     }
 
     #[test]
