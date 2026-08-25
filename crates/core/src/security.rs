@@ -32,6 +32,7 @@
 //! | `emergency` | Emergency target (even more minimal than `rescue`). |
 
 use crate::error::BootControlError;
+use std::borrow::Cow;
 
 /// Blacklisted substrings for kernel command-line / GRUB config payloads.
 ///
@@ -137,6 +138,64 @@ pub fn validate_grub_payload(key: &str, value: &str) -> Result<(), BootControlEr
         });
     }
     Ok(())
+}
+
+/// Render `s` safe to print to a terminal by escaping control characters.
+///
+/// Boot configuration is attacker-influenceable text: an entry title, a
+/// kernel parameter or a loader option travels from disk through the daemon
+/// to the frontend verbatim. A value containing `\x1b[2K` or `\r` does not
+/// merely look odd — it rewrites the line the user already saw, so a listing
+/// can be made to show a different default entry than the one that will boot.
+/// Escaping happens at the point of *display*; parsers and write paths keep
+/// operating on the real bytes.
+///
+/// Every `char` for which [`char::is_control`] holds is replaced by its
+/// Rust escape form (`\r`, `\n`, `\0`, `\u{1b}`, …). Tab is the single
+/// exception: it is already used for alignment and cannot erase what is on
+/// screen. Printable text — including non-ASCII, which this project has
+/// plenty of — is returned untouched and unallocated.
+///
+/// # Arguments
+///
+/// * `s` — Untrusted text about to be printed.
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_core::security::escape_control_chars;
+///
+/// // Ordinary text is passed through unchanged, without allocating.
+/// assert_eq!(escape_control_chars("Ubuntu 24.04"), "Ubuntu 24.04");
+///
+/// // Non-ASCII survives byte-identical.
+/// assert_eq!(escape_control_chars("Zażółć gęślą jaźń"), "Zażółć gęślą jaźń");
+///
+/// // A title that would erase the line above it is neutralised.
+/// assert_eq!(escape_control_chars("Ubuntu\r\x1b[2K"), "Ubuntu\\r\\u{1b}[2K");
+///
+/// // Tab is kept — it aligns, it cannot overwrite.
+/// assert_eq!(escape_control_chars("a\tb"), "a\tb");
+/// ```
+pub fn escape_control_chars(s: &str) -> Cow<'_, str> {
+    fn needs_escaping(c: char) -> bool {
+        c.is_control() && c != '\t'
+    }
+
+    if !s.chars().any(needs_escaping) {
+        return Cow::Borrowed(s);
+    }
+
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        if needs_escaping(c) {
+            // `escape_debug` gives the familiar Rust forms: \r, \n, \u{1b}.
+            out.extend(c.escape_debug());
+        } else {
+            out.push(c);
+        }
+    }
+    Cow::Owned(out)
 }
 
 #[cfg(test)]
@@ -267,5 +326,110 @@ mod tests {
         let val_msg = val_err.to_string();
         assert!(key_msg.contains("key"), "{key_msg}");
         assert!(val_msg.contains("value"), "{val_msg}");
+    }
+
+    // ── Control-character escaping ───────────────────────────────────────────
+
+    #[test]
+    fn escape_leaves_ordinary_text_borrowed() {
+        // No allocation for the overwhelmingly common case.
+        for safe in [
+            "quiet splash",
+            "Ubuntu 24.04 LTS",
+            "GRUB_TIMEOUT=5",
+            "/boot/vmlinuz-6.8.0-31-generic",
+            "",
+        ] {
+            let out = escape_control_chars(safe);
+            assert!(
+                matches!(out, std::borrow::Cow::Borrowed(_)),
+                "{safe:?} should pass through without allocating"
+            );
+            assert_eq!(out, safe);
+        }
+    }
+
+    #[test]
+    fn escape_preserves_non_ascii_text_unchanged() {
+        // The project ships Polish strings; mangling them would be a
+        // regression, not hardening. Nothing here is a control character.
+        for text in [
+            "Zażółć gęślą jaźń",
+            "Windows Boot Manager — dysk główny",
+            "Пример",
+            "日本語",
+            "emoji 🐧 ok",
+        ] {
+            let out = escape_control_chars(text);
+            assert_eq!(out, text, "non-ASCII text must survive byte-identical");
+            assert!(matches!(out, std::borrow::Cow::Borrowed(_)));
+        }
+    }
+
+    #[test]
+    fn escape_neutralises_terminal_control_sequences() {
+        // Table of the shapes that actually forge terminal output.
+        let cases: &[(&str, &str)] = &[
+            // CSI erase-line: hides everything printed before it on the row.
+            ("\x1b[2K", "\\u{1b}[2K"),
+            // Carriage return: overwrites the line the user already saw.
+            ("Ubuntu\rWindows", "Ubuntu\\rWindows"),
+            // Bell.
+            ("ding\x07", "ding\\u{7}"),
+            // OSC window-title injection.
+            ("\x1b]0;pwned\x07", "\\u{1b}]0;pwned\\u{7}"),
+            // Bare ESC.
+            ("\x1b", "\\u{1b}"),
+            // NUL and backspace (backspace can erase the marker next to it).
+            ("a\0b", "a\\0b"),
+            ("real\u{8}\u{8}fake", "real\\u{8}\\u{8}fake"),
+            // Newline: a value spanning lines can fake an extra entry.
+            ("line1\nline2", "line1\\nline2"),
+            // DEL.
+            ("x\u{7f}", "x\\u{7f}"),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(
+                escape_control_chars(raw),
+                *expected,
+                "input {raw:?} was not neutralised as expected"
+            );
+        }
+    }
+
+    #[test]
+    fn escape_keeps_tab_literal() {
+        // Tab is the one control character worth keeping: it is already used
+        // for alignment and cannot rewrite what is on screen.
+        assert_eq!(escape_control_chars("a\tb"), "a\tb");
+        assert!(matches!(
+            escape_control_chars("a\tb"),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
+
+    #[test]
+    fn escape_output_contains_no_control_characters() {
+        // The property that matters, stated directly: whatever goes in, the
+        // result is safe to hand to a terminal.
+        for raw in [
+            "\x1b[31mred",
+            "a\rb\nc\0d",
+            "\x1b]0;title\x07",
+            "Zażółć\x1b[2K",
+            "plain",
+        ] {
+            let out = escape_control_chars(raw);
+            assert!(
+                !out.chars().any(|c| c.is_control() && c != '\t'),
+                "escaped output still carries a control character: {out:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn escape_is_idempotent_on_already_escaped_text() {
+        let once = escape_control_chars("\x1b[2K").into_owned();
+        assert_eq!(escape_control_chars(&once), once);
     }
 }

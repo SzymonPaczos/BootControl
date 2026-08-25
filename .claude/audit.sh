@@ -31,6 +31,44 @@ add "- rustc: \`$(rustc --version 2>/dev/null || echo 'BRAK')\`"
 add "- cargo: \`$(cargo --version 2>/dev/null || echo 'BRAK')\`"
 add ""
 
+# === 1b. Build gate — fail-closed (P1b, audyt 2026-08-23) =====================
+# Daemon jest Linux-only (`crates/daemon/src/lib.rs` = `#![cfg(target_os =
+# "linux")]`): na macOS i na cross-compile Windows crate kompiluje się do
+# pustki, więc każdy gate przechodzi *vacuously*. Dokładnie tak złamany build
+# daemona przeżył 42 dni niezauważony (audyt 2026-08-23, P0) — mimo trailerów
+# `Gates: cargo build --workspace (pass)` w historii.
+#
+# To jedyny krok w tym skrypcie, który BLOKUJE: porażka = niezerowy exit i
+# głośny komunikat, nie „liczba w logu". Wpis audytu i tak zostaje zapisany —
+# blokada nie może kasować dowodu, że audyt się odbył.
+BUILD_GATE_FAILED=0
+add "### Build gate: \`cargo build -p bootcontrold\` (fail-closed)"
+if [ "${SKIP_BUILD_GATE:-0}" = "1" ]; then
+    add "- ⚠️ **POMINIĘTY** przez \`SKIP_BUILD_GATE=1\` — escape hatch awaryjny (\`rules/rules-as-gates.md\` §7), nie stan normalny. Wynik audytu w tym obszarze jest **nieznany**, nie zielony."
+    echo "audit.sh: OSTRZEŻENIE — build gate daemona POMINIĘTY (SKIP_BUILD_GATE=1)." >&2
+elif [ "$(uname -s)" != "Linux" ]; then
+    add "- ⚠️ **n/a** — host \`$(uname -s)\`, nie Linux. Daemon kompiluje się tu do pustki, więc zielony wynik nic nie znaczy. **To nie jest pass** — pełny audyt wymaga przebiegu natywnie na Linuksie."
+elif ! command -v cargo >/dev/null 2>&1; then
+    add "- ❌ **BLOKADA** — brak \`cargo\`, gate nie może się wykonać. Fail-closed: brak narzędzia to awaria gate'a, nie cichy pass (\`rules/ci-cd.md\` §1). Instalacja: https://rustup.rs"
+    BUILD_GATE_FAILED=1
+else
+    BUILD_TMP="$(mktemp)"
+    if cargo build -p bootcontrold >"$BUILD_TMP" 2>&1; then
+        add "- ✅ daemon kompiluje się natywnie na Linuksie"
+    else
+        add "- ❌ **BLOKADA — daemon NIE kompiluje się natywnie na Linuksie.**"
+        add "  - pierwsze błędy:"
+        # Process substitution, nie pipe: `... | while` uruchamia pętlę w
+        # podpowłoce i dopisania do `$section` przepadają.
+        while IFS= read -r line; do
+            add "    - \`$line\`"
+        done < <(grep -E "^error" "$BUILD_TMP" | head -5)
+        BUILD_GATE_FAILED=1
+    fi
+    rm -f "$BUILD_TMP"
+fi
+add ""
+
 # === 2. Format ================================================================
 add "### Formatowanie"
 if command -v cargo >/dev/null 2>&1; then
@@ -386,3 +424,20 @@ awk 'BEGIN{after_first=0}
 mv "$tmp" "$LOG"
 echo ""
 echo "Zapisano sekcję do: $LOG"
+
+# === Fail-closed exit =========================================================
+# Po zapisaniu wpisu — audyt się odbył i ma zostać udokumentowany — ale kończy
+# się błędem, żeby porażka build gate'a nie utonęła w kilkuset linijkach
+# raportu.
+if [ "$BUILD_GATE_FAILED" -ne 0 ]; then
+    {
+        echo ""
+        echo "════════════════════════════════════════════════════════════════"
+        echo " AUDYT ZAKOŃCZONY BŁĘDEM: build gate daemona nie przeszedł."
+        echo ""
+        echo " Wpis audytu zapisany w $LOG (sekcja „Build gate\")."
+        echo " Napraw zanim cokolwiek dołożysz:  cargo build -p bootcontrold"
+        echo "════════════════════════════════════════════════════════════════"
+    } >&2
+    exit 1
+fi

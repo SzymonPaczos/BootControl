@@ -10,7 +10,7 @@ Read [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) and [`../../AGENTS.md`](..
 
 Every D-Bus method that mutates disk state follows this order. Skipping a step is a critical bug.
 
-1. **Polkit authorization** — `polkit.rs::check_authorized(...)` against the per-intent action (one of six — the five from [`../../docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7 plus `restore-snapshot`). Reject before any `read()`.
+1. **Polkit authorization** — `polkit.rs::authorize_with_polkit(...)` against the per-intent action (one of four: `rewrite-grub`, `write-bootloader`, `enroll-mok` from [`../../docs/GUI_V2_SPEC_v2.md`](../../docs/GUI_V2_SPEC_v2.md) §7, plus `restore-snapshot`). Reject before any `read()`.
 2. **ETag check** — caller-supplied SHA-256 must match the current file's hash. Mismatch → `org.bootcontrol.Error.StateMismatch`.
 3. **POSIX `flock()`** — exclusive lock on the target file or its parent directory.
 4. **Snapshot** — write all-files-touched-by-this-op + relevant efivars to `/var/lib/bootcontrol/snapshots/<ts>-<op>/` with `manifest.json`. **Fail the op if snapshot fails.** No exception. Schema and per-backend scope: `docs/GUI_V2_SPEC_v2.md` §6.
@@ -37,13 +37,19 @@ Steps 1, 2, 4, 8, 11 are non-negotiable. Steps 3, 7, 10 are required for the fil
    - `initramfs/` — dracut / mkinitcpio / kernel-install drivers
 3. **Error mapping** → every new error variant in `bootcontrol-core::error::BootControlError` needs a corresponding D-Bus name in [`src/dbus_error.rs`](./src/dbus_error.rs) using the namespace `org.bootcontrol.Error.<Variant>`. The frontend matches on the **name**, never the message string.
 4. **Test** → integration test in the same manager file using `tempfile::TempDir`. End-to-end test in [`../../tests/e2e/`](../../tests/e2e/) if the change crosses the D-Bus boundary.
-5. **Polkit action** → every D-Bus method that mutates state must call `authorize_with_polkit(uid, action)` with one of the per-intent Action IDs declared in [`crate::polkit::actions`](./src/polkit.rs) (mirror of [`../../packaging/polkit/org.bootcontrol.policy`](../../packaging/polkit/org.bootcontrol.policy) — six actions: `rewrite-grub`, `write-bootloader`, `enroll-mok`, `generate-keys`, `replace-pk`, `restore-snapshot`). The legacy single-action `org.bootcontrol.manage` is rejected by both the policy file and `authorize_with_polkit` (defensive contract). Adding a new authorization scope means: (a) new constant in `polkit::actions`, (b) new `<action id="...">` in the policy XML, (c) sync the `REQUIRED_ACTIONS` list in [`policy_check.rs`](./src/policy_check.rs) so the startup validation accepts the new file.
+5. **Polkit action** → every D-Bus method that mutates state must call `authorize_with_polkit(uid, action)` with one of the per-intent Action IDs declared in [`crate::polkit::actions`](./src/polkit.rs) (mirror of [`../../packaging/polkit/org.bootcontrol.policy`](../../packaging/polkit/org.bootcontrol.policy) — four actions: `rewrite-grub`, `write-bootloader`, `enroll-mok`, `restore-snapshot`). `generate-keys` and `replace-pk` were removed on 2026-07-12 together with Paranoia Mode (scope decision "1.0 GRUB-first"). The legacy single-action `org.bootcontrol.manage` is rejected by both the policy file and `authorize_with_polkit` (defensive contract). Adding a new authorization scope means all three at once: (a) new constant in `polkit::actions` **and** an entry in `polkit::KNOWN_ACTIONS`, (b) new `<action id="...">` in the policy XML, (c) sync the `REQUIRED_ACTIONS` list in [`policy_check.rs`](./src/policy_check.rs) so the startup validation accepts the new file. A regression test pins (a) against (c), so half a change fails the build rather than shipping an action the policy never declares.
 
 ---
 
 ## Sanitization rules (`src/sanitize.rs`)
 
-Any method that writes kernel cmdline or GRUB env **must** route through the sanitizer. The blacklist rejects parameters that can disable security or alter init: `init=`, `selinux=0`, `apparmor=0`, `module_blacklist=`, `efi=disable_early_pci_dma`, and similar. Adding a new mutator without going through sanitize is a code-review reject.
+Any method that writes kernel cmdline or GRUB env **must** route through the sanitizer. Adding a new mutator without going through sanitize is a code-review reject.
+
+`sanitize.rs` holds no logic of its own — it re-exports [`bootcontrol_core::security`](../core/src/security.rs), the single source of truth, so the daemon and `core::backends::uki` cannot drift apart. The check is a **case-sensitive substring** match, not a parse: a payload containing any of these anywhere is rejected.
+
+The list is exactly seven entries — `init=`, `selinux=0`, `apparmor=0`, `systemd.unit=`, `rd.break`, `single`, `emergency` — and nothing else. Treat that as closed, not as examples: this paragraph used to say "`module_blacklist=`, `efi=disable_early_pci_dma`, and similar", neither of which the sanitizer has ever rejected. Read `KERNEL_CMDLINE_BLACKLIST` before claiming a parameter is blocked.
+
+Whether the list *should* cover module loading and DMA-protection parameters is an open question for the owner, not something to settle by editing this file — a wider blacklist changes what the daemon refuses at runtime. See `.claude/backlog.md`.
 
 ## Bash bail-out
 

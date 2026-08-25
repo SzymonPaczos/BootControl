@@ -15,9 +15,14 @@
 
 use bootcontrol_core::error::BootControlError;
 
-/// The six per-intent Polkit Action IDs declared in
+/// The four per-intent Polkit Action IDs declared in
 /// `packaging/polkit/org.bootcontrol.policy`. Single source of truth for
 /// callers — every `authorize_with_polkit` call site picks one of these.
+///
+/// Was six until 2026-07-12, when the scope decision "1.0 GRUB-first"
+/// removed Paranoia Mode along with `generate-keys` and `replace-pk`.
+/// [`KNOWN_ACTIONS`] pins this set against
+/// [`crate::policy_check::REQUIRED_ACTIONS`].
 pub mod actions {
     /// Modify `/etc/default/grub`, `/etc/kernel/cmdline`, or rpm-ostree kargs.
     pub const REWRITE_GRUB: &str = "org.bootcontrol.rewrite-grub";
@@ -25,11 +30,28 @@ pub mod actions {
     pub const WRITE_BOOTLOADER: &str = "org.bootcontrol.write-bootloader";
     /// Enroll a Machine Owner Key (MOK / shim path) or back up NVRAM keys.
     pub const ENROLL_MOK: &str = "org.bootcontrol.enroll-mok";
-    /// Generate custom Secure Boot keys (PK, KEK, db).
-    /// Replace the Platform Key with a user-generated one (irreversible).
     /// Restore boot configuration from a previously captured snapshot.
     pub const RESTORE_SNAPSHOT: &str = "org.bootcontrol.restore-snapshot";
 }
+
+/// The closed set of action IDs [`authorize_with_polkit`] will accept.
+///
+/// Defensive contract shared by the mock and real paths so packaging drift
+/// fails loudly in CI. Must stay identical (as a set) to
+/// [`crate::policy_check::REQUIRED_ACTIONS`] — the startup validation list —
+/// which the `known_actions_match_required_policy_actions` test pins.
+///
+/// Widening this list re-enables authorization for an action the policy file
+/// no longer declares: on a system whose Polkit configuration defaults to
+/// implicit-yes that is an authorization bypass, not a missing prompt. Add an
+/// entry here only together with its `<action id="…">` in
+/// `packaging/polkit/org.bootcontrol.policy` and its `REQUIRED_ACTIONS` entry.
+pub(crate) const KNOWN_ACTIONS: &[&str] = &[
+    actions::REWRITE_GRUB,
+    actions::WRITE_BOOTLOADER,
+    actions::ENROLL_MOK,
+    actions::RESTORE_SNAPSHOT,
+];
 
 /// Verify that the calling process is authorized to perform `action` via Polkit.
 ///
@@ -78,15 +100,7 @@ pub mod actions {
 pub async fn authorize_with_polkit(caller_uid: u32, action: &str) -> Result<(), BootControlError> {
     // Defensive contract: action must be one of the per-intent IDs. Shared by
     // mock and real paths so packaging drift fails loudly in CI.
-    const KNOWN: &[&str] = &[
-        actions::REWRITE_GRUB,
-        actions::WRITE_BOOTLOADER,
-        actions::ENROLL_MOK,
-        actions::GENERATE_KEYS,
-        actions::REPLACE_PK,
-        actions::RESTORE_SNAPSHOT,
-    ];
-    if !KNOWN.contains(&action) {
+    if !KNOWN_ACTIONS.contains(&action) {
         return Err(BootControlError::PolkitDenied);
     }
 
@@ -168,12 +182,6 @@ mod tests {
             assert!(authorize_with_polkit(uid, actions::ENROLL_MOK)
                 .await
                 .is_ok());
-            assert!(authorize_with_polkit(uid, actions::GENERATE_KEYS)
-                .await
-                .is_ok());
-            assert!(authorize_with_polkit(uid, actions::REPLACE_PK)
-                .await
-                .is_ok());
             assert!(authorize_with_polkit(uid, actions::RESTORE_SNAPSHOT)
                 .await
                 .is_ok());
@@ -199,5 +207,29 @@ mod tests {
         // Underscore instead of hyphen: catches drift between code and policy XML.
         let result = authorize_with_polkit(1000, "org.bootcontrol.rewrite_grub").await;
         assert!(result.is_err());
+    }
+
+    /// The authorization gate and the startup policy validation must describe
+    /// the same closed set of actions. Two independent lists drifted apart
+    /// once already (audit 2026-08-23: `4fcf14c` dropped two constants and
+    /// left dangling references); this pins them to one another so a future
+    /// edit to either side fails here instead of at runtime, where the
+    /// failure mode is either a daemon that refuses to start or an action
+    /// authorized without a policy declaration.
+    ///
+    /// Runs without the `polkit-mock` feature — the invariant is about the
+    /// lists themselves, not about the authorization backend.
+    #[test]
+    fn known_actions_match_required_policy_actions() {
+        let mut known: Vec<&str> = super::KNOWN_ACTIONS.to_vec();
+        let mut required: Vec<&str> = crate::policy_check::REQUIRED_ACTIONS.to_vec();
+        known.sort_unstable();
+        required.sort_unstable();
+        assert_eq!(
+            known, required,
+            "polkit::KNOWN_ACTIONS and policy_check::REQUIRED_ACTIONS diverged — \
+             every accepted action must also be declared in \
+             packaging/polkit/org.bootcontrol.policy"
+        );
     }
 }

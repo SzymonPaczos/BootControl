@@ -30,6 +30,7 @@
 //! | `efi clear-next`      | Clear `BootNext`. Idempotent. |
 
 use bootcontrol_client::{dbus_error_message, resolve_backend};
+use bootcontrol_core::security::escape_control_chars as esc;
 use clap::{Parser, Subcommand};
 use tracing::error;
 
@@ -255,12 +256,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let default_marker = if e.is_default { " [default]" } else { "" };
                             println!(
                                 "  {}{}  —  {}",
-                                e.id,
+                                esc(&e.id),
                                 default_marker,
-                                e.title.as_deref().unwrap_or("(no title)")
+                                e.title
+                                    .as_deref()
+                                    .map(esc)
+                                    .unwrap_or_else(|| "(no title)".into())
                             );
                             if let Some(opts) = &e.options {
-                                println!("    options: {opts}");
+                                println!("    options: {}", esc(opts));
                             }
                         }
                     }
@@ -273,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("ETag: {}", etag);
                         println!("\nKernel Parameters:");
                         for p in &params {
-                            println!("  {p}");
+                            println!("  {}", esc(p));
                         }
                     }
                     Err(e) => eprintln!("error: {}", dbus_error_message(&e)),
@@ -286,7 +290,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut keys: Vec<_> = config.keys().collect();
                 keys.sort();
                 for key in keys {
-                    println!("{}={}", key, config[key]);
+                    println!("{}={}", esc(key), esc(&config[key]));
                 }
             }
         }
@@ -346,18 +350,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Loader Entries ({} total):", entries.len());
                     for e in &entries {
                         let default_marker = if e.is_default { " [default]" } else { "" };
-                        println!("  {}{}", e.id, default_marker,);
+                        println!("  {}{}", esc(&e.id), default_marker,);
                         if let Some(title) = &e.title {
-                            println!("    title:   {title}");
+                            println!("    title:   {}", esc(title));
                         }
                         if let Some(linux) = &e.linux {
-                            println!("    linux:   {linux}");
+                            println!("    linux:   {}", esc(linux));
                         }
                         if let Some(initrd) = &e.initrd {
-                            println!("    initrd:  {initrd}");
+                            println!("    initrd:  {}", esc(initrd));
                         }
                         if let Some(opts) = &e.options {
-                            println!("    options: {opts}");
+                            println!("    options: {}", esc(opts));
                         }
                         println!("    etag:    {}", e.etag);
                     }
@@ -367,21 +371,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .read_loader_entry(&id)
                         .await
                         .map_err(|e| dbus_error_message(&e).to_string())?;
-                    println!("ID:        {}", entry.id);
+                    println!("ID:        {}", esc(&entry.id));
                     if let Some(t) = &entry.title {
-                        println!("Title:     {t}");
+                        println!("Title:     {}", esc(t));
                     }
                     if let Some(l) = &entry.linux {
-                        println!("Linux:     {l}");
+                        println!("Linux:     {}", esc(l));
                     }
                     if let Some(i) = &entry.initrd {
-                        println!("Initrd:    {i}");
+                        println!("Initrd:    {}", esc(i));
                     }
                     if let Some(o) = &entry.options {
-                        println!("Options:   {o}");
+                        println!("Options:   {}", esc(o));
                     }
                     if let Some(m) = &entry.machine_id {
-                        println!("MachineID: {m}");
+                        println!("MachineID: {}", esc(m));
                     }
                     println!("Default:   {}", entry.is_default);
                     println!("Entry ETag:  {}", entry.etag);
@@ -419,7 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("ETag: {etag}");
                     println!("\nKernel Parameters ({} total):", params.len());
                     for p in &params {
-                        println!("  {p}");
+                        println!("  {}", esc(p));
                     }
                 }
                 CmdlineAction::Add { param, etag } => {

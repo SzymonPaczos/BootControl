@@ -21,8 +21,9 @@ use std::path::Path;
 /// Canonical location of the Polkit policy file on a packaged install.
 pub const DEFAULT_POLICY_PATH: &str = "/usr/share/polkit-1/actions/org.bootcontrol.policy";
 
-/// The six per-intent Polkit Action IDs the daemon needs declared. Must be
-/// kept in sync with [`packaging/polkit/org.bootcontrol.policy`].
+/// The four per-intent Polkit Action IDs the daemon needs declared. Must be
+/// kept in sync with [`packaging/polkit/org.bootcontrol.policy`] and with
+/// `polkit::KNOWN_ACTIONS`, which a regression test pins against this list.
 pub const REQUIRED_ACTIONS: &[&str] = &[
     "org.bootcontrol.rewrite-grub",
     "org.bootcontrol.write-bootloader",
@@ -53,7 +54,7 @@ impl std::fmt::Display for PolicyError {
             Self::LegacyManageOnly => write!(
                 f,
                 "polkit policy file declares only the deprecated \
-                 'org.bootcontrol.manage' action. Daemon requires the six \
+                 'org.bootcontrol.manage' action. Daemon requires the four \
                  per-intent actions declared in \
                  packaging/polkit/org.bootcontrol.policy. Refusing to start \
                  — fix the packaging or re-install."
@@ -175,20 +176,20 @@ mod tests {
 
     #[test]
     fn partial_policy_lists_missing_actions() {
-        // Three out of six declared.
-        let partial = format!(
-            r#"<action id="{}"></action>
-            <action id="{}"></action>
-            <action id="{}"></action>"#,
-            REQUIRED_ACTIONS[0], REQUIRED_ACTIONS[1], REQUIRED_ACTIONS[2]
-        );
+        // All but the last declared — derived from the list rather than
+        // hardcoded indices so the test survives the list changing length.
+        let (last, declared) = REQUIRED_ACTIONS
+            .split_last()
+            .expect("REQUIRED_ACTIONS must not be empty");
+        let partial = declared
+            .iter()
+            .map(|a| format!(r#"<action id="{a}"></action>"#))
+            .collect::<Vec<_>>()
+            .join("\n");
         match validate_policy_content(&partial) {
             Err(PolicyError::IncompleteActions { present, missing }) => {
-                assert_eq!(present.len(), 3);
-                assert_eq!(missing.len(), 3);
-                assert!(missing.contains(&REQUIRED_ACTIONS[3].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[4].to_string()));
-                assert!(missing.contains(&REQUIRED_ACTIONS[5].to_string()));
+                assert_eq!(present.len(), declared.len());
+                assert_eq!(missing, vec![last.to_string()]);
             }
             other => panic!("expected IncompleteActions, got {other:?}"),
         }
@@ -196,7 +197,7 @@ mod tests {
 
     #[test]
     fn policy_with_extra_actions_still_passes() {
-        // Forward-compatibility: a future packaging might add a 7th action.
+        // Forward-compatibility: a future packaging might add a 5th action.
         let mut policy = full_policy();
         policy.push_str(r#"<action id="org.bootcontrol.future-action"></action>"#);
         assert!(validate_policy_content(&policy).is_ok());

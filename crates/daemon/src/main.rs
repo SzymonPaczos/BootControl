@@ -46,7 +46,7 @@ use std::path::PathBuf;
 #[cfg(target_os = "linux")]
 use bootcontrold::interface::GrubManager;
 #[cfg(target_os = "linux")]
-use bootcontrold::policy_check::{validate_policy_file, DEFAULT_POLICY_PATH};
+use bootcontrold::policy_check::{validate_policy_file, DEFAULT_POLICY_PATH, REQUIRED_ACTIONS};
 #[cfg(target_os = "linux")]
 use bootcontrold::prober::{build_backend, probe_system};
 #[cfg(target_os = "linux")]
@@ -152,9 +152,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             Box::<dyn std::error::Error>::from(e.to_string())
         })?;
+        // Count comes from the list, not from prose: the previous hardcoded
+        // "six" outlived the actions it counted by six weeks.
         info!(
             policy_path = %policy_path.display(),
-            "polkit policy file accepted (all six per-intent actions declared)"
+            actions = REQUIRED_ACTIONS.len(),
+            "polkit policy file accepted (all required per-intent actions declared)"
         );
     }
 
