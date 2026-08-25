@@ -43,7 +43,13 @@ Steps 1, 2, 4, 8, 11 are non-negotiable. Steps 3, 7, 10 are required for the fil
 
 ## Sanitization rules (`src/sanitize.rs`)
 
-Any method that writes kernel cmdline or GRUB env **must** route through the sanitizer. The blacklist rejects parameters that can disable security or alter init: `init=`, `selinux=0`, `apparmor=0`, `module_blacklist=`, `efi=disable_early_pci_dma`, and similar. Adding a new mutator without going through sanitize is a code-review reject.
+Any method that writes kernel cmdline or GRUB env **must** route through the sanitizer. Adding a new mutator without going through sanitize is a code-review reject.
+
+`sanitize.rs` holds no logic of its own — it re-exports [`bootcontrol_core::security`](../core/src/security.rs), the single source of truth, so the daemon and `core::backends::uki` cannot drift apart. The check is a **case-sensitive substring** match, not a parse: a payload containing any of these anywhere is rejected.
+
+The list is exactly seven entries — `init=`, `selinux=0`, `apparmor=0`, `systemd.unit=`, `rd.break`, `single`, `emergency` — and nothing else. Treat that as closed, not as examples: this paragraph used to say "`module_blacklist=`, `efi=disable_early_pci_dma`, and similar", neither of which the sanitizer has ever rejected. Read `KERNEL_CMDLINE_BLACKLIST` before claiming a parameter is blocked.
+
+Whether the list *should* cover module loading and DMA-protection parameters is an open question for the owner, not something to settle by editing this file — a wider blacklist changes what the daemon refuses at runtime. See `.claude/backlog.md`.
 
 ## Bash bail-out
 
