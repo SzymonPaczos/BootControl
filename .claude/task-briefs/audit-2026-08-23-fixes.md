@@ -1,7 +1,7 @@
 # Naprawy z audytu 2026-08-23 (pętla Opus)
 
 **Task-Id:** audit-2026-08-23-fixes
-**Status:** zapisane — nie rozpoczęte
+**Status:** **zakończone 2026-08-23** — wszystkie zadania `[x]`, `ci-local.sh` zielony, gałąź wypchnięta. Czeka na przegląd właściciela i merge.
 **Zadanie źródłowe:** Audyt tygodniowy 2026-08-23 (raport: `.claude/audit-log.md`, wpis „Audyt 2026-08-23 20:02")
 **Powiązanie:** Właściciel 2026-08-23 zatwierdził wykonanie napraw z audytu w pętli `/loop` prowadzonej przez Opusa. Brief przygotował Fable (agent audytujący) jako handoff.
 **Tryb pracy:** pętla — JEDNO zadanie z kolejki na iterację, w kolejności. Po zadaniu aktualizacja checklisty tutaj (`[x]` + SHA commitu). Wszystko `[x]` + `scripts/ci-local.sh` zielony → koniec pętli.
@@ -116,7 +116,7 @@ Commit: `fix(cli): escape control characters in untrusted boot config values`.
 - **Dowód end-to-end na realnym binarze** (złośliwy tytuł wstrzyknięty do `MockBackend`, potem cofnięty): **przed** — bajty `^M^[[2K` docierają do terminala, CR+erase-line kasuje prawdziwy tytuł i podstawia sfałszowany wiersz `arch-evil [default]` z fałszywym `title: Windows`; **po** — ten sam input drukuje się bezwładnie w jednej linii. Wyjście dla poprawnych wartości sprawdzone `cat -A` — format bez zmian.
 - **Nie tknięto** write-path (walidacja w `systemd_boot_manager.rs` bez zmian) ani parserów — escapowanie wyłącznie w punkcie wyświetlania, daemon dalej operuje na realnych bajtach.
 
-### [ ] 6. Finał
+### [x] 6. Finał
 - Pełny `scripts/ci-local.sh` (E2E wymaga session bus — jeśli środowisko nie ma, odnotuj w Gates co realnie przeszło, nie udawaj).
 - `git push -u origin fix/audit-2026-08-23` (pre-push preflight audytu przejdzie — audyt z 2026-08-23 jest świeży).
 - Dopisz tu wynik końcowy (sekcja niżej) + zaktualizuj `.claude/status.md` (wiersz „Build daemona" → naprawione na gałęzi, czeka na merge) i `.claude/backlog.md` (pozycje P0/P2 z audytu 2026-08-23: dopisz „fix na gałęzi fix/audit-2026-08-23, czeka na merge" — NIE usuwaj wpisów, znikają dopiero po mergu).
@@ -159,4 +159,45 @@ Commit: `fix(cli): escape control characters in untrusted boot config values`.
 
 ## Wynik końcowy
 
-_(wypełnia pętla po zadaniu 6)_
+**Pętla zakończona 2026-08-23. Wszystkie 6 zadań `[x]`. Gałąź `fix/audit-2026-08-23` wypchnięta na `origin` — NIE zmergowana (merge = osobna decyzja właściciela, zasada 1).**
+
+### Commity (9, w kolejności; baza `main` = `7eb327f`)
+
+| SHA | Commit | Zadanie |
+|-----|--------|---------|
+| `a284b2c` | `fix(e2e): use an array for the single-element feature list` | odblokowanie (poza scope, zgoda właściciela) |
+| `d0d2c93` | `fix(daemon): drop dangling paranoia action refs breaking the build` | **1 (P0)** + P2.4 |
+| `31ce6fc` | `fix(core): parse BootOrder with as_chunks instead of chunks_exact` | odblokowanie (decyzja właściciela) |
+| `b11c0a9` | `chore(toolchain): pin the workspace to Rust 1.98.0` | decyzja właściciela |
+| `97421a1` | `chore(audit): fail-closed daemon build gate in audit.sh` | **2 (P1b)** — control-plane |
+| `c525772` | `docs(daemon): reconcile polkit action count and lists with the 4-action policy` | **3 (P2)** |
+| `8f80c08` | `docs(daemon): sync the sanitizer blacklist section with the real list` | **4 (P2)** |
+| `e19a378` | `fix(cli): escape control characters in untrusted boot config values` | **5 (P2)** |
+| `673b162` | `docs(audit): record the 2026-08-23 audit and the repair-loop outcomes` | **6 (finał)** |
+
+### Gate końcowy — `bash scripts/ci-local.sh`, exit 0, wszystkie 5 kroków
+
+1. `cargo fmt --all -- --check` — pass
+2. `cargo clippy --workspace --all-targets --all-features -- -D warnings` — pass
+3. `cargo test --workspace --all-features` — pass (m.in. core 192, daemon 170)
+4. Windows cross-compile `x86_64-pc-windows-gnu` — **realnie wykonany**, nie pominięty
+5. E2E na szynie sesyjnej (`dbus-run-session`) — 4/4 pass
+
+`git push -u origin fix/audit-2026-08-23` — pre-push (preflight świeżości audytu + `ci-local.sh`) przeszedł, gałąź na `origin`. **Żaden hook nie był omijany `--no-verify` w całej pętli.**
+
+### Czego pętla NIE zrobiła (świadomie)
+
+- **Nie zmergowała do `main`** — `main` nadal ma zepsuty build daemona i wszystkie doc-drifty. Do czasu mergu `status.md` trzyma to jako known-issue.
+- **Nie ruszyła blacklisty sanitizera** — zakaz z zadania 4; poszerzenie = zmiana zachowania runtime, decyzja właściciela.
+- **Nie naprawiła odkryć poza scope** — 4 nowe wpisy w backlogu (niżej).
+
+### Odkrycia zapisane do backlogu, nienaprawione
+
+1. **P1 — brak pinu toolchaina** → rozwiązane decyzją właściciela w trakcie pętli (`b11c0a9`), wpis zamknięty.
+2. **`packaging/rpm/bootcontrol.spec:47`** — `%description` paczki (widoczne w `dnf info`) nadal reklamuje sześć akcji Polkit, w tym dwie usunięte. Jedna linia.
+3. **`docs/threat-model.md:131`** — deklaruje mitygację `module_blacklist=`, której sanitizer nie ma (zmierzone). Dwa kierunki: zawęzić dokument albo poszerzyć blacklistę (zmiana runtime).
+4. **`audit.sh` gubi „top 5 findings" clippy** — potok + `while` = podpowłoka, dopisania do `$section` przepadają. Gate raportuje mniej, niż obiecuje. Control-plane, osobny commit.
+
+### Lekcja procesowa (do audytu, nie do kodu)
+
+Build daemona przeżył 42 dni zepsuty, a commit `4fcf14c` deklarował `Gates: cargo build --workspace (pass)` — bo `#![cfg(target_os = "linux")]` sprawia, że na macOS i crossie Windows crate kompiluje się do pustki i **każdy** gate jest zielony vacuously. Ta sama martwa strefa ukrywała drugi finding (`clippy::useless_vec` w e2e), do którego workspace clippy nigdy nie docierał. Wniosek wdrożony w `97421a1`: gate, który nie może realnie zbadać przedmiotu, musi raportować `n/a`, nigdy „pass".
