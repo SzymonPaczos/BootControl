@@ -80,3 +80,61 @@ fell out.
 
 decisions.md compliance after the day: **100%** (19 of 19 active
 decisions respected by the codebase).
+
+---
+
+## 2026-08-23 — Naprawy z audytu 2026-08-23 (pętla Opus), merge `aaf1caa`
+
+Gałąź `fix/audit-2026-08-23`, 10 commitów, `ci-local.sh` 5/5 zielony przed
+mergem. Pozycje usunięte z `backlog.md` 2026-08-26 po zweryfikowaniu dowodów.
+
+**P0 — daemon nie kompilował się na Linuksie od 2026-07-12** (`d0d2c93`).
+`4fcf14c` usunął stałe `GENERATE_KEYS`/`REPLACE_PK`, zostawiając 4 martwe
+odwołania. Naprawione **zwężeniem** listy akcji do 4, nie przywróceniem
+stałych — przywrócenie reaktywowałoby autoryzację akcji, których policy nie
+deklaruje. Dodany test `known_actions_match_required_policy_actions` pinujący
+`polkit::KNOWN_ACTIONS` do `policy_check::REQUIRED_ACTIONS`, zweryfikowany
+mutacją. Znaleziony niezależnie przez dwa audyty (08-22 SR F2, 08-23 SR F1).
+Dowód zamknięcia: `cargo build -p bootcontrold` zielony; `grep -rn
+"GENERATE_KEYS\|REPLACE_PK" crates/` = 0.
+
+**P1b — fail-closed build gate w `audit.sh`** (`97421a1`). Build daemona
+przeżył 42 dni zepsuty, bo `#![cfg(target_os = "linux")]` sprawia, że na
+macOS i crossie Windows crate kompiluje się do pustki i każdy gate jest
+zielony *vacuously*. Gate rozróżnia trzy przypadki: pass, `n/a` na non-Linux
+(jawnie „to nie jest pass"), BLOKADA. Zweryfikowany na wszystkich trzech
+ścieżkach.
+
+**P2 — ANSI/control-char injection w CLI** (`e19a378`). Wartości boot-configu
+szły z dysku do terminala verbatim; tytuł z `\r` + CSI erase-line podmieniał
+widok `bootcontrol boot list` na sfałszowany wpis. Pure helper
+`core::security::escape_control_chars` (Cow, tab zachowany, non-ASCII
+bajtowo nietknięte) + 6 miejsc druku. Podatność pokazana end-to-end na
+realnym binarze przed i po. Dowód zamknięcia: `grep -c "esc(" cli/src/main.rs`
+= 16.
+
+**P2 — doc-drift „six actions"** (`c525772`) w `crates/daemon/**` i
+`packaging/polkit/**`. Objęło też trzy miejsca spoza inwentarza audytu, w tym
+log startowy, który liczbę bierze teraz z `REQUIRED_ACTIONS.len()`, oraz
+odsyłacz do nieistniejącej funkcji `check_authorized`. **Nie domyka** wpisu
+P1 o drifcie control-plane — `ARCHITECTURE.md`, `AGENTS.md`, `UX_BRIEF.md`
+i spec rpm nadal kłamią (pozycja zawężona, nie usunięta).
+
+**P2 — doc-drift blacklisty sanitizera** (`8f80c08`). Dokument obiecywał
+odrzucanie `module_blacklist=` i `efi=disable_early_pci_dma`, czego sanitizer
+nigdy nie robił. Fałszywość zmierzona wykonywalnie, nie założona. Kierunek:
+dokument do kodu; **nic nie dodano do blacklisty**.
+
+**P2 — martwe `message_ids::REPLACE_PK`/`GENERATE_KEYS`** (`d0d2c93`).
+
+**Odblokowania (poza pierwotnym zakresem, decyzje właściciela w trakcie
+pętli):** `a284b2c` — preegzystujący `clippy::useless_vec` w e2e blokował
+przez `pre-commit` każdy commit; ujawnił się dopiero, gdy daemon zaczął się
+kompilować (vacuously-green gate ukrywał dwa findingi, nie jeden).
+`31ce6fc` + `b11c0a9` — równoległy `rustup update` podniósł toolchain
+1.96 → 1.98 w trakcie pętli, nowy lint zczerwienił `main`; parser `BootOrder`
+zmigrowany na `as_chunks` z testem pinującym granicę obcięcia
+(zweryfikowanym mutacją), toolchain przypięty w `rust-toolchain.toml`.
+
+Pełny zapis z dowodami per zadanie:
+[`history/task-briefs/audit-2026-08-23-fixes.md`](task-briefs/audit-2026-08-23-fixes.md).
