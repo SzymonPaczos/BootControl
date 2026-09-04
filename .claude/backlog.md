@@ -156,16 +156,6 @@ Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`.
 ## P1 — ważne
 **Naprawione 2026-08-23** w pętli napraw — commit `d0d2c93` na gałęzi `fix/audit-2026-08-23`, **czeka na merge** (wpis znika po mergu). Kierunek zgodny z ostrzeżeniem: `KNOWN` zwężone do 4 akcji, stałych NIE przywracano. Dodany test `known_actions_match_required_policy_actions` pinujący `polkit::KNOWN_ACTIONS` do `policy_check::REQUIRED_ACTIONS` (zweryfikowany mutacją) + fail-closed `cargo build -p bootcontrold` w `audit.sh` (`97421a1`). `policy_check.rs` przepisany z indeksów na `split_last()`.
 
-### `ReadLoaderEntry` pozwala na traversal i odczyt root-readable `*.conf`
-Nieautoryzowana metoda `interface.rs:951-970` przekazuje surowe `id` do
-`read_entry`, które buduje `entries_dir.join(format!("{id}.conf"))`.
-`validate_entry_id` (`systemd_boot_manager.rs:267-275`) istnieje, lecz używają
-go tylko ścieżki zapisu. `../` może więc wyprowadzić daemon poza katalog i
-zwrócić rozpoznane pola oraz ETag pliku czytelnego dla roota. Wymagane testy:
-parent `secret.conf` z `options TOPSECRET`, ID z `..`, ścieżka absolutna i oba
-separatory muszą zwracać `MalformedValue`, bez zawartości i hasha.
-**Źródło:** Security Review 2026-09-04 F4 (MEDIUM). **Status:** otwarte.
-
 ### Sekundowe ID snapshotów mogą nadpisać stan rollbacku
 `snapshot.rs:208-244` tworzy ID z czasu o rozdzielczości jednej sekundy i
 używa `create_dir_all`, więc dwa wywołania tej samej operacji w jednej sekundzie

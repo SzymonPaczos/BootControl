@@ -13,6 +13,16 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Zamknięcie `ReadLoaderEntry` traversal
+
+`ca5cd7e` stosuje wspólną walidację bezpiecznego filename stem przed pierwszym
+odczytem wpisu systemd-boot. ID absolutne, `..` oraz separatory `/` i `\` są
+odrzucane jako `MalformedValue`, więc metoda D-Bus nie ujawnia zawartości ani
+ETag plików spoza katalogu entries. Dowód: oba testy były czerwone przed
+poprawką, następnie przeszły razem z 37 doctestami daemona, clippy oraz pełnym
+`cargo test --workspace --all-features`. Finding Security Review 2026-09-04 F4
+usunięty z aktywnego backlogu.
+
 ## 2026-09-05 — Zamknięcie CRITICAL MOK signing oracle
 
 `a06bb68` ogranicza `SignAndEnrollUki` do zwykłych, niesymlinkowanych i
