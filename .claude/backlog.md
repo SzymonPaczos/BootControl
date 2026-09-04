@@ -18,6 +18,41 @@ Kontekst w 2-4 liniach — co i dlaczego.
 **Źródło:** skąd (audyt YYYY-MM-DD / decyzja / drift). **Status:** otwarte / w trakcie.
 -->
 
+## 🔴 TOP — adopcja claude-toolkit 2026.09.04
+
+### `weekly-audit` ma martwy odsyłacz do `test-quality-baseline.md`
+
+Po `toolkit-sync.sh update .` do wersji `2026.09.04` i commita `7f50f1f`
+`toolkit-sync.sh check .` zgłasza jeden rozjazd: zaktualizowany skill wskazuje
+`../../conventions/test-quality-baseline.md`, podczas gdy BootControl używa
+układu `.claude/rules/` i nie ma tej kopii. Synchronizator twierdzi, że
+`update` dokopiuje brakujący plik, ale nowa konwencja nie jest jeszcze
+przyjętym artefaktem projektu, więc bieżący protokół nie daje jawnej komendy
+adopcji bez ręcznego seedowania ścieżki. Nie łatać kopii skilla ani nie
+kopiować pliku ręcznie: poprawić mechanizm/odnośnik w masterze toolkitu,
+następnie ponowić `update` i wymagać zielonego `check`.
+**Źródło:** adopcja toolkitu 2026-09-04, `toolkit-sync.sh check .` exit 1.
+**Status:** otwarte; adopcja zdegradowana do czasu poprawki w masterze.
+
+### Ocenić przyjęcie `test-execution-economy.md`
+
+Commit toolkitu `7f50f1f` dodaje stack-agnostic konwencję ograniczania kosztu
+uruchamiania testów przez agentów. `update` aktualizuje tylko już przyjęte
+artefakty, więc nowa konwencja nie trafia automatycznie do BootControl.
+Potrzebna osobna decyzja adopcyjna po naprawieniu sposobu dołączania nowych
+artefaktów; nie implementować przez ręczne kopiowanie.
+**Źródło:** adopcja toolkitu 2026-09-04. **Status:** czeka na decyzję właściciela.
+
+### Ponownie ocenić profil CI z wykorzystaniem GitHub Pro
+
+Aktywna decyzja z 2026-05-20 utrzymuje local-first i brak cloud CI. Właściciel
+ma obecnie GitHub Pro przez rok, więc hosted Actions, required checks i
+harmonogram audytu stały się realną opcją. Zmiana profilu wymaga osobnej
+specyfikacji, decyzji i commita; nie należy jej mieszać z adopcją toolkitu ani
+bieżącym audytem.
+**Źródło:** decyzja właściciela podczas adopcji 2026-09-04.
+**Status:** czeka na decyzję właściciela.
+
 ## 🔴 TOP — dokończenie adopcji toolkitu (claude-toolkit 2026.08.21)
 
 Kopie masterów są zsynchronizowane do `2026.08.21` (`toolkit-sync.sh check .`

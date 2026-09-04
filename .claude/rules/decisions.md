@@ -22,6 +22,19 @@ Decyzji się NIE usuwa — gdy przestaje obowiązywać, zmień `Status:` na
 
 ## Decyzje aktywne
 
+### 2026-09-04 — Tryb adopcji claude-toolkit: tracked
+**Decyzja:** BootControl przyjmuje aktualizacje `claude-toolkit` w trybie
+`tracked`: zatwierdzone kopie reguł, skilli, agentów i ich lock są częścią
+repozytorium oraz historii Git.
+**Dlaczego:** Repozytorium jest własnym projektem zawodowym właściciela.
+Właściciel świadomie akceptuje, że potencjalny pracodawca może zobaczyć
+sposób pracy z AI i mechanizmy kontroli jakości projektu.
+**Status:** aktywna.
+**Jak stosować:** Każdy upgrade toolkitu wykonuj przez `toolkit-sync.sh
+update .`, w osobnym reviewowanym commicie, po sprawdzeniu źródłowego commita.
+Nie mieszaj adopcji z audytem ani zmianami produktu. Commity zawierają
+`Intent`, `Task-Ref` i `Gates`, bez atrybucji AI i `Co-Authored-By`.
+
 ### 2026-05-03 — Linux-only z Windows-aware UEFI layer
 **Decyzja:** Główny target = Linux (daemon + D-Bus + Polkit + GRUB + systemd-boot + UKI). Windows obsługiwany jako *aware* — tylko zarządzanie UEFI variables (BootNext, BootOrder, Boot####), bez daemona i bez edytowania GRUB. macOS poza zakresem.
 **Dlaczego:** Cross-platform IPC i abstrakcja warstwy bootowej (D-Bus/Polkit vs XPC/launchd vs Windows SCM) rozmyła by focus na etapie MVP. macOS Apple Silicon (Secure Enclave, LocalPolicy) ma fundamentalnie inną architekturę boot niesprzeczną z UEFI. Windows-aware = unikalna value proposition: jedyne narzędzie zarządzające menu bootowym z obu systemów bez reinstalu.

@@ -4,7 +4,7 @@ description: Przeprowadza cotygodniowy/okresowy audyt jakości kodu projektu —
 compatibility: Wymaga bash i git; kroki korzystające z GitHuba wymagają zalogowanego gh. Zaprojektowane dla agentów czytających SKILL.md (Claude Code i pokrewne).
 metadata:
   author: claude-toolkit
-  version: "2026.08.21"
+  version: "2026.09.04"
 ---
 
 # Cotygodniowy audyt jakości kodu
@@ -131,6 +131,16 @@ albo raportuj `BLOCKED/n-a`; nie przełączaj się na inny working tree tylko
 dlatego, że ma `node_modules`.
 Jeśli nie ma — policz ręcznie: błędy lintera (eslint/ruff/...), liczba
 TODO/FIXME, liczba plików testowych, moduły bez importera (`grep -rl`).
+
+**Jakość suity testowej — własności, nie liczba plików.** Liczba plików
+testowych mierzy pojemniki; o ochronie decydują WŁASNOŚCI suity. Przejdź
+checklist z [`conventions/test-quality-baseline.md`](../../conventions/test-quality-baseline.md)
+(14 własności, każda ze zmierzoną awarią za sobą: producent klasyfikujący
+własną awarię, testy niemogące zniknąć po cichu, progi z pomiaru, meta-testy
+bramek, lane split writerów, waity deterministyczne…). Wynik jedną linią
+w audit-log (`test-baseline: 1✓ 2✗(plan) …`). **Brak własności = ostrzeżenie
++ obowiązkowy wpis planu w backlogu projektu** — nie automatyczne P1, ale
+cisza czyta się jak zieleń. Świadome „nie dotyczy" z powodem zapisuje się raz.
 
 **Trend zdrowia kodu między audytami.** Metryki wyżej są migawką; delta mówi
 o kierunku. Jeśli projekt ma narzędzie deltowe (CodeScene `cs delta <base>
