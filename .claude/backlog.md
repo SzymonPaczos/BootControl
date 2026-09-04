@@ -145,18 +145,6 @@ E2E dotyka **4 z 24** metod (`SetGrubValue`, `ReadGrubConfig`, `GetEtag`, `SignA
 To ta sama klasa co wpis „Bramki lokalne są ślepe" (liczniki z grepa zamiast z przebiegu) — do naprawy razem z nim: liczniki mają pochodzić z `cargo test`, a crate bez targetu `lib` ma raportować `n/a`, nie ✅.
 **Źródło:** pomiar pokrycia 2026-08-23. **Status:** otwarte.
 
-### `SignAndEnrollUki` jest oracle podpisującym dowolny EFI prywatnym MOK
-`interface.rs:826-899` przyjmuje `uki_path` z D-Bus bez walidacji i przekazuje
-go do `sbsign --output <uki> <uki>` (`secureboot/mok.rs:138-184`) z lokalnym
-prywatnym kluczem MOK. Atakujący może podać własny PE/COFF; podpisany artefakt
-zostaje nawet gdy późniejszy `mokutil` zawiedzie, a po zapisaniu certyfikatu
-jest zaufany przez Secure Boot. To podnosi wcześniejszy finding o braku
-`enforce_writable_distro` z MEDIUM do CRITICAL. Wymagane: canonical, regular,
-non-symlink UKI bieżącego OS na zarządzanym ESP oraz test spy-signer: złośliwy
-temp EFI odrzucony przed wywołaniem procesu (call count 0).
-**Źródło:** Security Review 2026-09-04 F2, rozszerzenie findingu z 2026-08-22.
-**Status:** otwarte, CRITICAL.
-
 ### Bramki lokalne są ślepe na cały `crates/daemon`
 Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`. Na macOS `-Zunpretty=expanded` daje pustą bibliotekę, a `cargo test -p bootcontrold` wykonuje **0 testów** (zmierzone) — przy czym `.claude/audit.sh` raportuje „daemon | 169 #[test] | 85 doctest | ratchet ✅", bo liczy greppem po źródłach. Dlatego P0 wyżej przeżył 41 dni i pięć pominiętych audytów. Fix: `ci-local.sh` i `audit.sh` wołają `cargo check`/`clippy` dla `--target x86_64-unknown-linux-gnu` (target zainstalowany) i raportują `BLOCKED`, gdy go brakuje; liczniki testów z realnego przebiegu, nie z grepa.
 **Źródło:** audyt 2026-08-22 (warstwa głęboka). **Status:** **częściowo domknięte 2026-08-23** — `audit.sh` ma fail-closed `cargo build -p bootcontrold` (`97421a1`), a non-Linux raportuje `n/a`, nie pass. **Otwarte pozostaje sedno tego wpisu:** liczniki testów w `audit.sh` nadal pochodzą z grepa po źródłach, nie z realnego przebiegu — na macOS `cargo test -p bootcontrold` wykonuje 0 testów, a raport pokazuje „169 #[test]”. Do naprawy razem z pozycją o „top 5 findings”.
@@ -333,7 +321,7 @@ osiągalność i zaktualizować lock/deps z pełnymi testami; nie mieszać z aud
 **Status:** otwarte, pogorszenie 5→6 vulnerabilities.
 
 ### Drobne findingi bezpieczeństwa i control-plane z audytu 2026-08-22
-(1) `SignAndEnrollUki` (`interface.rs:826-899`) i `BackupNvram` (`:728-799`) jako jedyne metody mutujące **nie wołają** `enforce_writable_distro()`; `uki_path` z D-Bus trafia bez walidacji do `sbsign --output <uki> <uki>` (`secureboot/mok.rs:163-171`) — brak `O_NOFOLLOW`, brak ograniczenia do ESP (SR F4, MEDIUM). (2) `.claude/settings.json` dopuszcza `Bash(cargo clean *)` — wildcard obejmuje `--target-dir /dowolna/ścieżka`, czyli rekurencyjne kasowanie poza `target/` bez promptu (SR F5, MEDIUM). (3) Reviewer i Security Reviewer nie mają żadnego niezależnego dowodu bramek: brak CI (decyzja 2026-05-20), brak `Bash`, a `.claude/reviews/` i `.claude/work-graphs/` nie istnieją mimo `multi-agent-delivery.md §2.1` — jedynym dowodem jest `Gates:` pisany przez autora zmiany o samym sobie (RT F5, MEDIUM; decyzja właściciela: allowlista read-only `Bash` dla obu ról albo obowiązkowy review record). (4) `expect()` ×2 w `daemon/src/main.rs:78-79` przy budżecie 0 (startup, przed jakimkolwiek zapisem — SR NOTE-B). (5) `docs/threat-model.md:94` deklaruje `Subject::SystemBusName`, kod używa `unix-user` z UID (`polkit.rs:108-118`) — nie jest spoofowalne, ale rozjeżdża rozumowanie o `auth_admin_keep` (SR NOTE-A). (6) Test-only override'y env w binarce produkcyjnej: `BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE` potrafi wyłączyć pre-flight, `BOOTCONTROL_MOK_KEY`/`_CERT` przekierowują klucz podpisujący (SR NOTE-C).
+(1) `BackupNvram` (`interface.rs:728-799`) nie woła `enforce_writable_distro()`. Finding `SignAndEnrollUki` z tego samego punktu został zamknięty w `a06bb68`: metoda egzekwuje immutable-distro guard oraz ogranicza podpisywanie do bezpiecznych UKI bieżącej instalacji na zarządzanym ESP. (2) `.claude/settings.json` dopuszcza `Bash(cargo clean *)` — wildcard obejmuje `--target-dir /dowolna/ścieżka`, czyli rekurencyjne kasowanie poza `target/` bez promptu (SR F5, MEDIUM). (3) Reviewer i Security Reviewer nie mają żadnego niezależnego dowodu bramek: brak CI (decyzja 2026-05-20), brak `Bash`, a `.claude/reviews/` i `.claude/work-graphs/` nie istnieją mimo `multi-agent-delivery.md §2.1` — jedynym dowodem jest `Gates:` pisany przez autora zmiany o samym sobie (RT F5, MEDIUM; decyzja właściciela: allowlista read-only `Bash` dla obu ról albo obowiązkowy review record). (4) `expect()` ×2 w `daemon/src/main.rs:78-79` przy budżecie 0 (startup, przed jakimkolwiek zapisem — SR NOTE-B). (5) `docs/threat-model.md:94` deklaruje `Subject::SystemBusName`, kod używa `unix-user` z UID (`polkit.rs:108-118`) — nie jest spoofowalne, ale rozjeżdża rozumowanie o `auth_admin_keep` (SR NOTE-A). (6) Test-only override'y env w binarce produkcyjnej: `BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE` potrafi wyłączyć pre-flight, `BOOTCONTROL_MOK_KEY`/`_CERT` przekierowują klucz podpisujący (SR NOTE-C).
 **Źródło:** audyt 2026-08-22. **Status:** otwarte.
 
 ## Inbox — niejasny priorytet

@@ -13,6 +13,17 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Zamknięcie CRITICAL MOK signing oracle
+
+`a06bb68` ogranicza `SignAndEnrollUki` do zwykłych, niesymlinkowanych i
+bezpiecznie chronionych plików UKI bieżącej instalacji w zarządzanych
+katalogach `EFI/Linux`. Cała walidacja kończy się przed dostępem do prywatnego
+klucza i wywołaniem signera; metoda egzekwuje też politykę immutable distro.
+Dowód: czerwony test spy-signera przed implementacją, 15 testów modułu MOK,
+kompilacja E2E, 188 testów jednostkowych daemona, 36 doctestów i pełny
+`cargo test --workspace --all-features`. Finding Security Review 2026-09-04 F2
+usunięty z aktywnego backlogu.
+
 ## 2026-09-05 — Zamknięcie CRITICAL `RestoreSnapshot` traversal
 
 `b9cbd1e` odrzuca absolutne, wielokomponentowe i separatorowe identyfikatory
