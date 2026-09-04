@@ -145,10 +145,6 @@ E2E dotyka **4 z 24** metod (`SetGrubValue`, `ReadGrubConfig`, `GetEtag`, `SignA
 To ta sama klasa co wpis „Bramki lokalne są ślepe" (liczniki z grepa zamiast z przebiegu) — do naprawy razem z nim: liczniki mają pochodzić z `cargo test`, a crate bez targetu `lib` ma raportować `n/a`, nie ✅.
 **Źródło:** pomiar pokrycia 2026-08-23. **Status:** otwarte.
 
-### `RestoreSnapshot`: path traversal + dowolny zapis pliku jako root
-`interface.rs:1291-1329` przekazuje `id: String` z D-Bus bez walidacji do `snapshot::restore`; `snapshot.rs:305` robi `root.join(id)` — ścieżka absolutna podmienia bazę, `../` traversuje. Dalej `snapshot.rs:317-325` deserializuje manifest atakującego i wykonuje `fs::write(&target, …)`, gdzie `target = PathBuf::from(&f.path)` pochodzi z tego manifestu. Wołający z `org.bootcontrol.restore-snapshot` zapisuje dowolny plik jako root (np. `/etc/sudoers.d/`). Sanitizer, ETag i flock na tej ścieżce nie są wołane. Fix: walidacja `id` (odrzuć absolutne, `..`, separatory) + ograniczenie `manifest.files[].path` do ścieżek zarządzanych przez daemona. Test zamykający: `restore(root, "/tmp/evil")` → `NotFound`, `/tmp/evil` nietknięte.
-**Źródło:** audyt 2026-08-22, potwierdzone ponownie przez Security Review 2026-09-04 F1 (CRITICAL). **Status:** otwarte.
-
 ### `SignAndEnrollUki` jest oracle podpisującym dowolny EFI prywatnym MOK
 `interface.rs:826-899` przyjmuje `uki_path` z D-Bus bez walidacji i przekazuje
 go do `sbsign --output <uki> <uki>` (`secureboot/mok.rs:138-184`) z lokalnym

@@ -13,6 +13,16 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Zamknięcie CRITICAL `RestoreSnapshot` traversal
+
+`b9cbd1e` odrzuca absolutne, wielokomponentowe i separatorowe identyfikatory
+snapshotów oraz manifesty wskazujące poza dynamiczny zbiór ścieżek zarządzanych
+przez daemon. Cały manifest jest walidowany przed pierwszym zapisem; istniejące
+symlinki w ścieżce docelowej są odrzucane. Dowód: czerwony test symlinka przed
+naprawą, 181 testów jednostkowych daemona, 35 doctestów oraz pełny
+`cargo test --workspace --all-features` po naprawie. Finding z audytów
+2026-08-22 i 2026-09-04 usunięty z aktywnego backlogu.
+
 ## 2026-05-23 — Post-adoption hardening day
 
 Adopted `claude-toolkit` 9.9 lifecycle layout in the morning; spent the
