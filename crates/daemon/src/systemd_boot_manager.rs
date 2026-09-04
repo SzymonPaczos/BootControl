@@ -159,7 +159,32 @@ pub fn fetch_loader_conf_etag(loader_conf_path: &Path) -> Result<String, BootCon
 /// Read a single loader entry file by ID.
 ///
 /// Returns `(entry, file_etag)`.
+///
+/// # Arguments
+///
+/// * `entries_dir` - Directory containing systemd-boot entry files.
+/// * `id` - Safe filename stem without path separators.
+///
+/// # Errors
+///
+/// Returns [`BootControlError::MalformedValue`] if `id` is not a safe filename
+/// stem, [`BootControlError::EspScanFailed`] if the entry cannot be read, or a
+/// parser error if its contents are malformed.
+///
+/// # Examples
+///
+/// ```
+/// use std::fs;
+/// use bootcontrold::systemd_boot_manager::read_entry;
+///
+/// let dir = tempfile::tempdir().unwrap();
+/// fs::write(dir.path().join("arch.conf"), "title Arch Linux\n").unwrap();
+/// let (entry, etag) = read_entry(dir.path(), "arch").unwrap();
+/// assert_eq!(entry.title.as_deref(), Some("Arch Linux"));
+/// assert!(!etag.is_empty());
+/// ```
 pub fn read_entry(entries_dir: &Path, id: &str) -> Result<(LoaderEntry, String), BootControlError> {
+    validate_entry_id(id)?;
     let path = entry_path(entries_dir, id);
     let content = fs::read_to_string(&path).map_err(|e| BootControlError::EspScanFailed {
         reason: format!("cannot read entry '{id}': {e}"),
@@ -471,6 +496,46 @@ options root=/dev/sda1 rw
 
         let records = read_all_entries(&entries_dir, &loader_conf).unwrap();
         assert_eq!(records.len(), 1);
+    }
+
+    #[test]
+    fn read_entry_rejects_parent_traversal_before_disclosing_content() {
+        let (root, entries_dir, _loader_conf) = make_loader_layout();
+        fs::write(
+            root.path().join("secret.conf"),
+            "title Secret\noptions TOPSECRET\n",
+        )
+        .unwrap();
+
+        let result = read_entry(&entries_dir, "../secret");
+
+        assert!(matches!(
+            result,
+            Err(BootControlError::MalformedValue { .. })
+        ));
+    }
+
+    #[test]
+    fn read_entry_rejects_absolute_and_separator_ids() {
+        let (root, entries_dir, _loader_conf) = make_loader_layout();
+        let absolute_stem = root.path().join("absolute-secret");
+        fs::write(
+            absolute_stem.with_extension("conf"),
+            "title Secret\noptions TOPSECRET\n",
+        )
+        .unwrap();
+
+        for id in [
+            absolute_stem.to_str().unwrap(),
+            "nested/secret",
+            r"nested\secret",
+        ] {
+            let result = read_entry(&entries_dir, id);
+            assert!(
+                matches!(result, Err(BootControlError::MalformedValue { .. })),
+                "unsafe id was not rejected: {id:?}"
+            );
+        }
     }
 
     // ── is_entry_default ─────────────────────────────────────────────────────

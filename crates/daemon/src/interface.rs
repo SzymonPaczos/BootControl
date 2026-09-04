@@ -1066,6 +1066,8 @@ impl GrubManager {
     ///
     /// ## Errors
     ///
+    /// - `org.bootcontrol.Error.MalformedValue` — `id` contains traversal or
+    ///   path separators instead of a loader-entry filename stem.
     /// - `org.bootcontrol.Error.EspScanFailed` — entry not found or unreadable.
     async fn read_loader_entry(&self, id: String) -> Result<(String, String), DaemonError> {
         info!(id = %id, "D-Bus: ReadLoaderEntry");
