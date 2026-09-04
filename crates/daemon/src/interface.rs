@@ -41,7 +41,10 @@ use crate::{
     immutable_distro::{enforce_writable_distro, probe_immutable_distro},
     polkit::{actions, authorize_with_polkit},
     rpm_ostree, sanitize,
-    secureboot::mok::{sign_with_default_keys, SbsignMokSigner},
+    secureboot::mok::{
+        read_entry_token, sign_managed_uki, sign_with_default_keys, SbsignMokSigner,
+        DEFAULT_ENTRY_TOKEN_PATHS, DEFAULT_MANAGED_UKI_DIRS,
+    },
     secureboot::nvram::{backup_efi_variables, DEFAULT_BACKUP_DIR, DEFAULT_EFIVARS_DIR},
     snapshot, systemd_boot_manager, uki_manager,
 };
@@ -149,6 +152,23 @@ pub struct GrubManager {
     /// paths (`rebuild_grub_config`, systemd-boot, UKI, secureboot) integrate
     /// in follow-up commits using this same field.
     snapshot_root: PathBuf,
+    /// ESP `EFI/Linux` directories in which signing is permitted.
+    managed_uki_dirs: Vec<PathBuf>,
+    /// Candidate files identifying the running installation's UKI token.
+    entry_token_paths: Vec<PathBuf>,
+    /// Required owner UID for a UKI. Production always uses root (`0`).
+    trusted_uki_uid: u32,
+}
+
+fn default_managed_uki_dirs() -> Vec<PathBuf> {
+    DEFAULT_MANAGED_UKI_DIRS.iter().map(PathBuf::from).collect()
+}
+
+fn default_entry_token_paths() -> Vec<PathBuf> {
+    DEFAULT_ENTRY_TOKEN_PATHS
+        .iter()
+        .map(PathBuf::from)
+        .collect()
 }
 
 impl GrubManager {
@@ -184,6 +204,9 @@ impl GrubManager {
             loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
             kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
             snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
+            managed_uki_dirs: default_managed_uki_dirs(),
+            entry_token_paths: default_entry_token_paths(),
+            trusted_uki_uid: 0,
         }
     }
 
@@ -226,6 +249,9 @@ impl GrubManager {
             loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
             kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
             snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
+            managed_uki_dirs: default_managed_uki_dirs(),
+            entry_token_paths: default_entry_token_paths(),
+            trusted_uki_uid: 0,
         }
     }
 
@@ -271,6 +297,9 @@ impl GrubManager {
             loader_conf_path: PathBuf::from("/boot/loader/loader.conf"),
             kernel_cmdline_path: PathBuf::from("/etc/kernel/cmdline"),
             snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
+            managed_uki_dirs: default_managed_uki_dirs(),
+            entry_token_paths: default_entry_token_paths(),
+            trusted_uki_uid: 0,
         }
     }
 
@@ -296,7 +325,52 @@ impl GrubManager {
             loader_conf_path,
             kernel_cmdline_path,
             snapshot_root: PathBuf::from("/var/lib/bootcontrol/snapshots"),
+            managed_uki_dirs: default_managed_uki_dirs(),
+            entry_token_paths: default_entry_token_paths(),
+            trusted_uki_uid: 0,
         }
+    }
+
+    /// Override the UKI containment policy for an isolated test daemon.
+    ///
+    /// Production constructors retain root ownership and the standard ESP
+    /// directories. The daemon entry point uses this builder only for a
+    /// session-bus process compiled with `polkit-mock`.
+    ///
+    /// # Arguments
+    ///
+    /// * `managed_dirs` - Test directories corresponding to `EFI/Linux`.
+    /// * `entry_token_paths` - Test files containing the installation token.
+    /// * `trusted_uid` - UID owning the test UKI.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::{Path, PathBuf};
+    /// use bootcontrol_core::backends::grub::GrubBackend;
+    /// use bootcontrold::interface::GrubManager;
+    ///
+    /// let manager = GrubManager::new(
+    ///     PathBuf::from("/tmp/grub"),
+    ///     Box::new(GrubBackend),
+    /// )
+    /// .with_uki_policy(
+    ///     vec![PathBuf::from("/tmp/EFI/Linux")],
+    ///     vec![PathBuf::from("/tmp/entry-token")],
+    ///     1000,
+    /// );
+    /// assert_eq!(manager.grub_path(), Path::new("/tmp/grub"));
+    /// ```
+    pub fn with_uki_policy(
+        mut self,
+        managed_dirs: Vec<PathBuf>,
+        entry_token_paths: Vec<PathBuf>,
+        trusted_uid: u32,
+    ) -> Self {
+        self.managed_uki_dirs = managed_dirs;
+        self.entry_token_paths = entry_token_paths;
+        self.trusted_uki_uid = trusted_uid;
+        self
     }
 
     /// Return the path to the GRUB configuration file managed by this instance.
@@ -837,11 +911,16 @@ impl GrubManager {
     ///
     /// ## Arguments
     ///
-    /// * `uki_path` — Absolute path to the UKI `.efi` image to sign.
+    /// * `uki_path` — Absolute path to a root-owned, installation-associated
+    ///   UKI in a managed `EFI/Linux` directory.
     ///
     /// ## Errors
     ///
     /// - `org.bootcontrol.Error.PolkitDenied` — the caller is not authorized.
+    /// - `org.bootcontrol.Error.ImmutableDistroDetected` — the host forbids direct boot mutation.
+    /// - `org.bootcontrol.Error.SecurityPolicyViolation` — the UKI is outside
+    ///   managed storage, has unsafe ownership or permissions, or belongs to
+    ///   another installation.
     /// - `org.bootcontrol.Error.MokKeyNotFound` — the MOK key or certificate is absent.
     /// - `org.bootcontrol.Error.ToolNotFound` — `sbsign` or `mokutil` is not installed.
     /// - `org.bootcontrol.Error.SigningFailed` — signing or enrollment exited non-zero.
@@ -887,6 +966,11 @@ impl GrubManager {
                 to_daemon_error(e)
             })?;
 
+        // All host inspection stays after authorization. Secure Boot writes
+        // are refused on declarative/immutable systems just like the other
+        // boot mutation paths.
+        enforce_writable_distro().map_err(to_daemon_error)?;
+
         // ── Step 3: Instantiate the signer ──────────────────────────────────
         let signer = SbsignMokSigner {
             sbsign_override: None,
@@ -903,8 +987,21 @@ impl GrubManager {
         let uki = std::path::Path::new(&uki_path);
         let key = crate::secureboot::mok::get_mok_key_path();
         let cert = crate::secureboot::mok::get_mok_cert_path();
+        let entry_token = read_entry_token(&self.entry_token_paths).map_err(|e| {
+            warn!(uki_path = %uki_path, error = %e, "UKI installation token validation failed");
+            to_daemon_error(e)
+        })?;
 
-        signer.sign_uki(uki, &key, &cert).map_err(|e| {
+        sign_managed_uki(
+            &signer,
+            uki,
+            &key,
+            &cert,
+            &self.managed_uki_dirs,
+            &entry_token,
+            self.trusted_uki_uid,
+        )
+        .map_err(|e| {
             warn!(uki_path = %uki_path, "UKI signing failed");
             to_daemon_error(e)
         })?;

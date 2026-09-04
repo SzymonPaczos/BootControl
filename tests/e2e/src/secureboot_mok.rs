@@ -11,6 +11,7 @@
 #![deny(missing_docs)]
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
 use crate::helpers::*;
@@ -82,6 +83,11 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     let grub_file = tempfile::NamedTempFile::new()?;
     let failsafe_dir = tempfile::TempDir::new()?;
     let snapshot_dir = tempfile::TempDir::new()?;
+    let uki_dir = failsafe_dir.path().join("EFI/Linux");
+    fs::create_dir_all(&uki_dir)?;
+    let entry_token = "bootcontrol-e2e";
+    let entry_token_path = failsafe_dir.path().join("entry-token");
+    fs::write(&entry_token_path, format!("{entry_token}\n"))?;
 
     let process = Command::new(&binary_path)
         .env("BOOTCONTROL_BUS", "session")
@@ -93,6 +99,8 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
         .env("BOOTCONTROL_SNAPSHOT_ROOT", snapshot_dir.path())
         .env("BOOTCONTROL_MOK_KEY", &mok_key)
         .env("BOOTCONTROL_MOK_CERT", &mok_crt)
+        .env("BOOTCONTROL_UKI_DIR", &uki_dir)
+        .env("BOOTCONTROL_ENTRY_TOKEN_PATH", &entry_token_path)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -112,8 +120,11 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     };
 
     // ── Step 4: Sign the dummy EFI binary via D-Bus ─────────────────────────
-    let signed_efi = handle.failsafe_dir.path().join("bootx64.efi");
+    let signed_efi = uki_dir.join(format!("{entry_token}-bootx64.efi"));
     fs::copy("tests/fixtures/dummy.efi", &signed_efi).context("failed to copy fixture")?;
+    let mut permissions = fs::metadata(&signed_efi)?.permissions();
+    permissions.set_mode(0o644);
+    fs::set_permissions(&signed_efi, permissions)?;
 
     let _proxy = zbus::fdo::DBusProxy::new(&handle.conn).await?;
     // Wait for name again just in case

@@ -9,6 +9,8 @@
 
 use std::path::{Path, PathBuf};
 
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
 use bootcontrol_core::{error::BootControlError, secureboot::MokSigner};
 use tracing::info;
 
@@ -17,6 +19,159 @@ pub const DEFAULT_MOK_KEY_PATH: &str = "/var/lib/bootcontrol/keys/mok.key";
 
 /// Default path for the MOK certificate.
 pub const DEFAULT_MOK_CERT_PATH: &str = "/var/lib/bootcontrol/keys/mok.crt";
+
+/// Default directories containing UKIs managed by the running Linux install.
+pub(crate) const DEFAULT_MANAGED_UKI_DIRS: [&str; 3] =
+    ["/efi/EFI/Linux", "/boot/EFI/Linux", "/boot/efi/EFI/Linux"];
+
+/// Files used, in priority order, to identify the running installation's UKIs.
+pub(crate) const DEFAULT_ENTRY_TOKEN_PATHS: [&str; 2] =
+    ["/etc/kernel/entry-token", "/etc/machine-id"];
+
+fn security_policy_violation(reason: impl Into<String>) -> BootControlError {
+    BootControlError::SecurityPolicyViolation {
+        reason: reason.into(),
+    }
+}
+
+/// Read and validate the entry token identifying the running Linux install.
+///
+/// # Arguments
+///
+/// * `paths` - Candidate token files in priority order.
+///
+/// # Errors
+///
+/// Returns [`BootControlError::SecurityPolicyViolation`] if no candidate
+/// contains a non-empty filename-safe token, or if a candidate exists but
+/// cannot be read.
+pub(crate) fn read_entry_token(paths: &[PathBuf]) -> Result<String, BootControlError> {
+    for path in paths {
+        match std::fs::read_to_string(path) {
+            Ok(value) => {
+                let token = value.trim();
+                if !token.is_empty()
+                    && token
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+                {
+                    return Ok(token.to_string());
+                }
+                return Err(security_policy_violation(format!(
+                    "installation entry token in {} is not filename-safe",
+                    path.display()
+                )));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(security_policy_violation(format!(
+                    "cannot read installation entry token {}: {error}",
+                    path.display()
+                )));
+            }
+        }
+    }
+    Err(security_policy_violation(
+        "no installation entry token found",
+    ))
+}
+
+fn validate_managed_uki(
+    uki: &Path,
+    managed_dirs: &[PathBuf],
+    entry_token: &str,
+    trusted_uid: u32,
+) -> Result<PathBuf, BootControlError> {
+    if !uki.is_absolute() {
+        return Err(security_policy_violation("UKI path must be absolute"));
+    }
+    let link_metadata = std::fs::symlink_metadata(uki).map_err(|error| {
+        security_policy_violation(format!("cannot inspect UKI {}: {error}", uki.display()))
+    })?;
+    if link_metadata.file_type().is_symlink() {
+        return Err(security_policy_violation("UKI path must not be a symlink"));
+    }
+    if !link_metadata.is_file() {
+        return Err(security_policy_violation("UKI path must be a regular file"));
+    }
+    if link_metadata.uid() != trusted_uid {
+        return Err(security_policy_violation(format!(
+            "UKI must be owned by uid {trusted_uid}"
+        )));
+    }
+    if link_metadata.permissions().mode() & 0o022 != 0 {
+        return Err(security_policy_violation(
+            "UKI must not be writable by group or other users",
+        ));
+    }
+
+    let canonical = std::fs::canonicalize(uki).map_err(|error| {
+        security_policy_violation(format!(
+            "cannot canonicalize UKI {}: {error}",
+            uki.display()
+        ))
+    })?;
+    let in_managed_dir = managed_dirs.iter().any(|directory| {
+        std::fs::canonicalize(directory)
+            .map(|root| canonical.starts_with(root))
+            .unwrap_or(false)
+    });
+    if !in_managed_dir {
+        return Err(security_policy_violation(
+            "UKI is outside the managed EFI/Linux directories",
+        ));
+    }
+
+    let filename = canonical
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| security_policy_violation("UKI filename is not valid UTF-8"))?;
+    let token_prefix = format!("{entry_token}-");
+    let token_exact = format!("{entry_token}.efi");
+    if !filename.eq_ignore_ascii_case(&token_exact)
+        && !(filename.starts_with(&token_prefix) && filename.to_ascii_lowercase().ends_with(".efi"))
+    {
+        return Err(security_policy_violation(
+            "UKI filename does not belong to the running installation",
+        ));
+    }
+
+    Ok(canonical)
+}
+
+/// Validate and sign a UKI belonging to the running installation.
+///
+/// Validation completes before [`MokSigner::sign_uki`] is called. This keeps
+/// the private MOK key from becoming a signing oracle for caller-controlled
+/// EFI binaries.
+///
+/// # Arguments
+///
+/// * `signer` - Signing implementation to invoke after validation.
+/// * `uki` - Candidate UKI path supplied by the D-Bus caller.
+/// * `key` - Private MOK key path.
+/// * `cert` - MOK certificate path.
+/// * `managed_dirs` - Canonical ESP `EFI/Linux` directory candidates.
+/// * `entry_token` - Token identifying the running installation.
+/// * `trusted_uid` - Required owner of the UKI, `0` in production.
+///
+/// # Errors
+///
+/// Returns [`BootControlError::SecurityPolicyViolation`] when the candidate is
+/// not a trusted, installation-owned UKI. Propagates errors returned by the
+/// signer after validation succeeds.
+pub(crate) fn sign_managed_uki(
+    signer: &dyn MokSigner,
+    uki: &Path,
+    key: &Path,
+    cert: &Path,
+    managed_dirs: &[PathBuf],
+    entry_token: &str,
+    trusted_uid: u32,
+) -> Result<(), BootControlError> {
+    let canonical = validate_managed_uki(uki, managed_dirs, entry_token, trusted_uid)?;
+    signer.sign_uki(&canonical, key, cert)
+}
 
 /// Resolve the MOK private key path, checking for env override first.
 pub fn get_mok_key_path() -> PathBuf {
@@ -285,7 +440,9 @@ pub fn sign_with_default_keys(_signer: &dyn MokSigner) -> Result<(), BootControl
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
     use tempfile::TempDir;
 
@@ -470,5 +627,206 @@ mod tests {
     fn path_lock_is_accessible() {
         let _guard = PATH_LOCK.lock().expect("PATH lock poisoned");
         // Lock acquired and released — no-op.
+    }
+
+    struct CountingSigner<'a> {
+        sign_calls: &'a AtomicUsize,
+    }
+
+    impl MokSigner for CountingSigner<'_> {
+        fn is_available(&self) -> bool {
+            true
+        }
+
+        fn sign_uki(&self, _uki: &Path, _key: &Path, _cert: &Path) -> Result<(), BootControlError> {
+            self.sign_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn generate_enrollment_request(
+            &self,
+            _cert: &Path,
+            _output: &Path,
+        ) -> Result<(), BootControlError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn managed_signing_rejects_attacker_file_before_signer_invocation() {
+        let dir = TempDir::new().expect("tempdir");
+        let esp_linux = dir.path().join("esp/EFI/Linux");
+        std::fs::create_dir_all(&esp_linux).expect("create managed ESP directory");
+        let attacker_efi = dir.path().join("attacker.efi");
+        std::fs::write(&attacker_efi, b"malicious PE payload").expect("write attacker EFI");
+        let key = dir.path().join("mok.key");
+        let cert = dir.path().join("mok.crt");
+        std::fs::write(&key, b"key").expect("write key");
+        std::fs::write(&cert, b"cert").expect("write cert");
+
+        let calls = AtomicUsize::new(0);
+        let signer = CountingSigner { sign_calls: &calls };
+        let trusted_uid = std::fs::metadata(&attacker_efi).expect("metadata").uid();
+
+        let result = sign_managed_uki(
+            &signer,
+            &attacker_efi,
+            &key,
+            &cert,
+            &[esp_linux],
+            "0123456789abcdef0123456789abcdef",
+            trusted_uid,
+        );
+
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn managed_signing_accepts_root_owned_installation_uki() {
+        let dir = TempDir::new().expect("tempdir");
+        let esp_linux = dir.path().join("esp/EFI/Linux");
+        std::fs::create_dir_all(&esp_linux).expect("create managed ESP directory");
+        let token = "0123456789abcdef0123456789abcdef";
+        let uki = esp_linux.join(format!("{token}-6.12.efi"));
+        std::fs::write(&uki, b"UKI").expect("write UKI");
+        let mut uki_permissions = std::fs::metadata(&uki).expect("metadata").permissions();
+        uki_permissions.set_mode(0o644);
+        std::fs::set_permissions(&uki, uki_permissions).expect("set UKI permissions");
+        let key = dir.path().join("mok.key");
+        let cert = dir.path().join("mok.crt");
+        std::fs::write(&key, b"key").expect("write key");
+        std::fs::write(&cert, b"cert").expect("write cert");
+
+        let calls = AtomicUsize::new(0);
+        let signer = CountingSigner { sign_calls: &calls };
+        let trusted_uid = std::fs::metadata(&uki).expect("metadata").uid();
+
+        sign_managed_uki(&signer, &uki, &key, &cert, &[esp_linux], token, trusted_uid)
+            .expect("managed UKI should be signed");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn managed_signing_rejects_filename_for_another_installation() {
+        let dir = TempDir::new().expect("tempdir");
+        let esp_linux = dir.path().join("esp/EFI/Linux");
+        std::fs::create_dir_all(&esp_linux).expect("create managed ESP directory");
+        let uki = esp_linux.join("other-installation-6.12.efi");
+        std::fs::write(&uki, b"UKI").expect("write UKI");
+        let calls = AtomicUsize::new(0);
+        let signer = CountingSigner { sign_calls: &calls };
+        let trusted_uid = std::fs::metadata(&uki).expect("metadata").uid();
+
+        let result = sign_managed_uki(
+            &signer,
+            &uki,
+            Path::new("key"),
+            Path::new("cert"),
+            &[esp_linux],
+            "this-installation",
+            trusted_uid,
+        );
+
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn managed_signing_rejects_group_writable_uki() {
+        let dir = TempDir::new().expect("tempdir");
+        let esp_linux = dir.path().join("esp/EFI/Linux");
+        std::fs::create_dir_all(&esp_linux).expect("create managed ESP directory");
+        let token = "this-installation";
+        let uki = esp_linux.join(format!("{token}-6.12.efi"));
+        std::fs::write(&uki, b"UKI").expect("write UKI");
+        let mut permissions = std::fs::metadata(&uki).expect("metadata").permissions();
+        permissions.set_mode(0o664);
+        std::fs::set_permissions(&uki, permissions).expect("set permissions");
+        let calls = AtomicUsize::new(0);
+        let signer = CountingSigner { sign_calls: &calls };
+        let trusted_uid = std::fs::metadata(&uki).expect("metadata").uid();
+
+        let result = sign_managed_uki(
+            &signer,
+            &uki,
+            Path::new("key"),
+            Path::new("cert"),
+            &[esp_linux],
+            token,
+            trusted_uid,
+        );
+
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn managed_signing_rejects_symlinked_uki() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().expect("tempdir");
+        let esp_linux = dir.path().join("esp/EFI/Linux");
+        std::fs::create_dir_all(&esp_linux).expect("create managed ESP directory");
+        let attacker = dir.path().join("attacker.efi");
+        std::fs::write(&attacker, b"malicious PE payload").expect("write attacker EFI");
+        let token = "this-installation";
+        let uki = esp_linux.join(format!("{token}-6.12.efi"));
+        symlink(&attacker, &uki).expect("create symlink");
+        let calls = AtomicUsize::new(0);
+        let signer = CountingSigner { sign_calls: &calls };
+        let trusted_uid = std::fs::metadata(&attacker).expect("metadata").uid();
+
+        let result = sign_managed_uki(
+            &signer,
+            &uki,
+            Path::new("key"),
+            Path::new("cert"),
+            &[esp_linux],
+            token,
+            trusted_uid,
+        );
+
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn entry_token_uses_first_existing_safe_candidate() {
+        let dir = TempDir::new().expect("tempdir");
+        let missing = dir.path().join("missing-entry-token");
+        let machine_id = dir.path().join("machine-id");
+        std::fs::write(&machine_id, "0123456789abcdef\n").expect("write machine-id");
+
+        let token = read_entry_token(&[missing, machine_id]).expect("read fallback token");
+
+        assert_eq!(token, "0123456789abcdef");
+    }
+
+    #[test]
+    fn entry_token_rejects_path_separators() {
+        let dir = TempDir::new().expect("tempdir");
+        let token_path = dir.path().join("entry-token");
+        std::fs::write(&token_path, "../../other-install\n").expect("write token");
+
+        let result = read_entry_token(&[token_path]);
+
+        assert!(matches!(
+            result,
+            Err(BootControlError::SecurityPolicyViolation { .. })
+        ));
     }
 }

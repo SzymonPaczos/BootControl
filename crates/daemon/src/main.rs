@@ -28,6 +28,8 @@
 //! | `BOOTCONTROL_GRUB_PATH` | any path | Override the GRUB config path (E2E tests). |
 //! | `BOOTCONTROL_FAILSAFE_PATH` | any path | Override the failsafe snippet path (E2E tests). |
 //! | `BOOTCONTROL_SNAPSHOT_ROOT` | any path | Override the snapshot root dir (E2E tests). |
+//! | `BOOTCONTROL_UKI_DIR` | any path | Override managed `EFI/Linux` dir (session bus + `polkit-mock` only). |
+//! | `BOOTCONTROL_ENTRY_TOKEN_PATH` | any path | Override installation token file (session bus + `polkit-mock` only). |
 //! | `RUST_LOG` | `trace`, `debug`, `info`, `warn`, `error` | Log verbosity filter. |
 
 #[cfg(not(target_os = "linux"))]
@@ -42,6 +44,9 @@ fn main() -> std::process::ExitCode {
 
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
+
+#[cfg(all(target_os = "linux", feature = "polkit-mock"))]
+use std::os::unix::fs::MetadataExt;
 
 #[cfg(target_os = "linux")]
 use bootcontrold::interface::GrubManager;
@@ -61,6 +66,13 @@ const DEFAULT_GRUB_PATH: &str = "/etc/default/grub";
 /// Default path to the failsafe menu-entry GRUB snippet.
 #[cfg(target_os = "linux")]
 const DEFAULT_FAILSAFE_PATH: &str = "/etc/bootcontrol/failsafe.cfg";
+
+#[cfg(all(target_os = "linux", feature = "polkit-mock"))]
+struct TestUkiPolicy {
+    managed_dirs: Vec<PathBuf>,
+    token_paths: Vec<PathBuf>,
+    trusted_uid: u32,
+}
 
 /// Select the D-Bus connection builder based on the `BOOTCONTROL_BUS`
 /// environment variable.
@@ -119,6 +131,32 @@ fn resolve_snapshot_root() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Resolve the isolated UKI policy used by Secure Boot E2E tests.
+///
+/// The override exists only in `polkit-mock` builds and is applied only to a
+/// session-bus daemon. Production system-bus processes always retain the
+/// root-owned standard ESP policy.
+#[cfg(all(target_os = "linux", feature = "polkit-mock"))]
+fn resolve_test_uki_policy() -> std::io::Result<Option<TestUkiPolicy>> {
+    let Some(managed_dir) = std::env::var_os("BOOTCONTROL_UKI_DIR").map(PathBuf::from) else {
+        return Ok(None);
+    };
+    let token_path = std::env::var_os("BOOTCONTROL_ENTRY_TOKEN_PATH")
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "BOOTCONTROL_UKI_DIR requires BOOTCONTROL_ENTRY_TOKEN_PATH",
+            )
+        })?;
+    let trusted_uid = std::fs::metadata(&managed_dir)?.uid();
+    Ok(Some(TestUkiPolicy {
+        managed_dirs: vec![managed_dir],
+        token_paths: vec![token_path],
+        trusted_uid,
+    }))
+}
+
 #[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -170,6 +208,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut manager = GrubManager::with_failsafe_path(grub_path, failsafe_path, backend);
     if let Some(snap) = resolve_snapshot_root() {
         manager = manager.with_snapshot_root(snap);
+    }
+    #[cfg(feature = "polkit-mock")]
+    if std::env::var("BOOTCONTROL_BUS").as_deref() == Ok("session") {
+        if let Some(policy) = resolve_test_uki_policy()? {
+            manager = manager.with_uki_policy(
+                policy.managed_dirs,
+                policy.token_paths,
+                policy.trusted_uid,
+            );
+        }
     }
 
     let _conn = dbus_connection_builder()
