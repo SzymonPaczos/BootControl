@@ -43,7 +43,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bootcontrol_core::hash::compute_etag;
-use chrono::{SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Errors raised by the snapshot module.
@@ -164,7 +164,7 @@ pub struct SnapshotManifest {
 /// Lightweight summary returned by [`list`] — full manifest is read on demand.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotInfo {
-    /// Snapshot id, of the form `<rfc3339-ts>-<op>` (filesystem-safe).
+    /// Snapshot id, of the form `<rfc3339-ts>-<op>-<job-hash>` (filesystem-safe).
     pub id: String,
     /// Operation tag (mirror of [`SnapshotManifest::op`]).
     pub op: String,
@@ -226,11 +226,24 @@ pub struct SnapshotRequest<'a> {
 /// assert!(info.id.contains("rewrite_grub"));
 /// ```
 pub fn create(req: SnapshotRequest<'_>) -> Result<SnapshotInfo, SnapshotError> {
-    let ts = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+    create_at(req, Utc::now())
+}
+
+fn create_at(
+    req: SnapshotRequest<'_>,
+    timestamp: DateTime<Utc>,
+) -> Result<SnapshotInfo, SnapshotError> {
+    let ts = timestamp.to_rfc3339_opts(SecondsFormat::Secs, true);
     // Filesystem-safe id (replace ':' which is invalid on FAT/exFAT).
-    let id = format!("{}-{}", ts.replace(':', ""), req.op);
+    // The audit job is unique per invocation. Hashing it keeps arbitrary job
+    // identifiers out of the path while retaining a stable uniqueness suffix.
+    let job_hash = compute_etag(req.audit_job_id.as_bytes());
+    let id = format!("{}-{}-{}", ts.replace(':', ""), req.op, &job_hash[..16]);
     let snap_dir = req.root.join(&id);
-    fs::create_dir_all(&snap_dir)?;
+    fs::create_dir_all(req.root)?;
+    // Exclusive creation makes a duplicate job fail before any captured file
+    // can overwrite the first snapshot.
+    fs::create_dir(&snap_dir)?;
 
     let mut manifest_files = Vec::with_capacity(req.files.len());
     for src in req.files {
@@ -513,6 +526,7 @@ fn file_mode_octal(_p: &Path) -> Result<String, SnapshotError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use tempfile::TempDir;
 
     fn make_target(dir: &Path, name: &str, content: &str) -> PathBuf {
@@ -566,6 +580,76 @@ mod tests {
         let listed = list(dir.path()).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].op, "test_op");
+    }
+
+    #[test]
+    fn create_at_fixed_time_preserves_snapshots_from_distinct_jobs() {
+        let dir = TempDir::new().unwrap();
+        let target = make_target(dir.path(), "grub", "first\n");
+        let files = [target.clone()];
+        let fixed_time = Utc.with_ymd_and_hms(2026, 9, 5, 12, 0, 0).unwrap();
+
+        let mut first_request = req(dir.path(), "rewrite_grub", &files);
+        first_request.audit_job_id = "job-one";
+        let first = create_at(first_request, fixed_time).unwrap();
+
+        fs::write(&target, "second\n").unwrap();
+        let mut second_request = req(dir.path(), "rewrite_grub", &files);
+        second_request.audit_job_id = "job-two";
+        let second = create_at(second_request, fixed_time).unwrap();
+
+        assert_ne!(first.id, second.id);
+        assert_eq!(
+            fs::read_to_string(
+                first
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .join(flatten_path(&target))
+            )
+            .unwrap(),
+            "first\n"
+        );
+        assert_eq!(
+            fs::read_to_string(
+                second
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .join(flatten_path(&target))
+            )
+            .unwrap(),
+            "second\n"
+        );
+    }
+
+    #[test]
+    fn create_at_refuses_to_overwrite_duplicate_snapshot_id() {
+        let dir = TempDir::new().unwrap();
+        let target = make_target(dir.path(), "grub", "first\n");
+        let files = [target.clone()];
+        let fixed_time = Utc.with_ymd_and_hms(2026, 9, 5, 12, 0, 0).unwrap();
+
+        let first = create_at(req(dir.path(), "rewrite_grub", &files), fixed_time).unwrap();
+        fs::write(&target, "second\n").unwrap();
+        let duplicate = create_at(req(dir.path(), "rewrite_grub", &files), fixed_time);
+
+        assert!(matches!(
+            duplicate,
+            Err(SnapshotError::Io(ref error))
+                if error.kind() == std::io::ErrorKind::AlreadyExists
+        ));
+        assert_eq!(
+            fs::read_to_string(
+                first
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .join(flatten_path(&target))
+            )
+            .unwrap(),
+            "first\n"
+        );
     }
 
     #[test]
