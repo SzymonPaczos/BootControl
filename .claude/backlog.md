@@ -156,15 +156,6 @@ Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`.
 ## P1 — ważne
 **Naprawione 2026-08-23** w pętli napraw — commit `d0d2c93` na gałęzi `fix/audit-2026-08-23`, **czeka na merge** (wpis znika po mergu). Kierunek zgodny z ostrzeżeniem: `KNOWN` zwężone do 4 akcji, stałych NIE przywracano. Dodany test `known_actions_match_required_policy_actions` pinujący `polkit::KNOWN_ACTIONS` do `policy_check::REQUIRED_ACTIONS` (zweryfikowany mutacją) + fail-closed `cargo build -p bootcontrold` w `audit.sh` (`97421a1`). `policy_check.rs` przepisany z indeksów na `split_last()`.
 
-### Sekundowe ID snapshotów mogą nadpisać stan rollbacku
-`snapshot.rs:208-244` tworzy ID z czasu o rozdzielczości jednej sekundy i
-używa `create_dir_all`, więc dwa wywołania tej samej operacji w jednej sekundzie
-zapisują ten sam katalog, manifest i płaskie kopie plików. Oba zdarzenia audit
-mogą wskazywać to samo ID, a pierwszy znany-dobry stan znika. Wymagane:
-exclusive create lub unikalny suffix/job-id oraz zegar wstrzykiwany w teście;
-dwa snapshoty przy stałym czasie muszą mieć różne ID i zachować oba obrazy.
-**Źródło:** Security Review 2026-09-04 F5 (MEDIUM). **Status:** otwarte.
-
 ### Evidence pipeline testów nie spełnia baseline'u 14 właściwości
 Istniejące wpisy o fikcyjnym ratchecie doctestów i źródłowych licznikach
 pokrywają najpilniejszy objaw, ale nie pełny kontrakt. Audyt 2026-09-04 wykazał
@@ -179,6 +170,17 @@ parser/serializer i pilotaż mutation testing bez arbitralnego progu. Powiązać
 nie duplikować, z P0 o audit.sh i doctestach.
 **Źródło:** audyt 2026-09-04, `test-quality-baseline.md` toolkitu.
 **Status:** otwarte; plan obowiązkowy po adopcji baseline'u.
+
+### Równoległe testy `uki_manager` kolidują na stałej nazwie pliku tymczasowego
+`atomic_cmdline_update` zawsze używa `<parent>/cmdline.bootcontrol.tmp`. Testy
+oparte na różnych `NamedTempFile` mają wspólny parent `/tmp`, więc równoległe
+`add_param_appends_to_cmdline` i `remove_param_removes_from_cmdline` ścierają
+sobie plik: pełny workspace run 2026-09-05 zakończył się `atomic rename failed:
+No such file or directory`, a oba testy osobno i cały daemon przy
+`--test-threads=1` przeszły. Wymagane: unikalny plik tymczasowy tworzony
+wyłącznie w katalogu celu oraz test równoległy bez globalnego locka/retry.
+**Źródło:** bramka naprawy snapshot ID 2026-09-05. **Status:** otwarte; nie
+mieszać z naprawą snapshotów.
 
 ### Hooki gitowe niezainstalowane → jedyna warstwa CI (local-first) była martwa
 `git config core.hooksPath` pusty w tym klonie; `.githooks/{pre-commit,commit-msg,pre-push}` obecne ale nieaktywne (`install-hooks.sh` nieuruchomiony lub commity z `--no-verify`). Efekt: preflight świeżości audytu nie zadziałał (42 dni bez audytu vs próg 7 dni) i zepsuty build (P0.1) trafił na `main`. Dodatkowo gate `ci-local.sh` jest **vacuously green** na macOS i cross-compile Windows, bo `crates/daemon/src/lib.rs:11` = `#![cfg(target_os = "linux")]` — daemon kompiluje się do pustki na non-Linux targecie, więc build break `polkit.rs` przechodzi wszędzie poza natywnym `cargo build` na Linuksie (potwierdzone: cross-compile `x86_64-pc-windows-gnu` exit 0 mimo zepsutego daemona). Fix: (a) wymusić `install-hooks.sh` w onboardingu + wyjaśnić jak tip powstał bez hooków; (b) `.claude/audit.sh` fail-closed `cargo build -p bootcontrold` (build breakage blokuje, nie jest liczbą w logu); (c) upewnić się, że pre-push liczy build/test natywnie na Linuksie.

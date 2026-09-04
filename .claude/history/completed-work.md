@@ -13,6 +13,18 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Zamknięcie kolizji sekundowych ID snapshotów
+
+`58afe02` dodaje do ID snapshotu skrócony hash unikalnego audit JOB_ID oraz
+tworzy katalog wyłącznie przez `create_dir`, więc istniejący snapshot nigdy nie
+jest ponownie używany ani nadpisywany. Test ze wstrzykniętym stałym zegarem
+zachowuje dwa różne obrazy, a drugi test potwierdza `AlreadyExists` i
+nienaruszenie pierwszej kopii przy dokładnym duplikacie. Przeszło 18 testów
+snapshotów, 37 doctestów, clippy i pełny workspace w trybie szeregowym.
+Równoległy workspace run odkrył niezależną kolizję temp-file w `uki_manager`;
+została od razu zapisana w backlogu. Finding Security Review 2026-09-04 F5
+usunięty z aktywnego backlogu.
+
 ## 2026-09-05 — Zamknięcie `ReadLoaderEntry` traversal
 
 `ca5cd7e` stosuje wspólną walidację bezpiecznego filename stem przed pierwszym
