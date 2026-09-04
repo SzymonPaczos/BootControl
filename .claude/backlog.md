@@ -147,7 +147,19 @@ To ta sama klasa co wpis „Bramki lokalne są ślepe" (liczniki z grepa zamiast
 
 ### `RestoreSnapshot`: path traversal + dowolny zapis pliku jako root
 `interface.rs:1291-1329` przekazuje `id: String` z D-Bus bez walidacji do `snapshot::restore`; `snapshot.rs:305` robi `root.join(id)` — ścieżka absolutna podmienia bazę, `../` traversuje. Dalej `snapshot.rs:317-325` deserializuje manifest atakującego i wykonuje `fs::write(&target, …)`, gdzie `target = PathBuf::from(&f.path)` pochodzi z tego manifestu. Wołający z `org.bootcontrol.restore-snapshot` zapisuje dowolny plik jako root (np. `/etc/sudoers.d/`). Sanitizer, ETag i flock na tej ścieżce nie są wołane. Fix: walidacja `id` (odrzuć absolutne, `..`, separatory) + ograniczenie `manifest.files[].path` do ścieżek zarządzanych przez daemona. Test zamykający: `restore(root, "/tmp/evil")` → `NotFound`, `/tmp/evil` nietknięte.
-**Źródło:** audyt 2026-08-22, Security Reviewer F1 (CRITICAL). **Status:** otwarte.
+**Źródło:** audyt 2026-08-22, potwierdzone ponownie przez Security Review 2026-09-04 F1 (CRITICAL). **Status:** otwarte.
+
+### `SignAndEnrollUki` jest oracle podpisującym dowolny EFI prywatnym MOK
+`interface.rs:826-899` przyjmuje `uki_path` z D-Bus bez walidacji i przekazuje
+go do `sbsign --output <uki> <uki>` (`secureboot/mok.rs:138-184`) z lokalnym
+prywatnym kluczem MOK. Atakujący może podać własny PE/COFF; podpisany artefakt
+zostaje nawet gdy późniejszy `mokutil` zawiedzie, a po zapisaniu certyfikatu
+jest zaufany przez Secure Boot. To podnosi wcześniejszy finding o braku
+`enforce_writable_distro` z MEDIUM do CRITICAL. Wymagane: canonical, regular,
+non-symlink UKI bieżącego OS na zarządzanym ESP oraz test spy-signer: złośliwy
+temp EFI odrzucony przed wywołaniem procesu (call count 0).
+**Źródło:** Security Review 2026-09-04 F2, rozszerzenie findingu z 2026-08-22.
+**Status:** otwarte, CRITICAL.
 
 ### Bramki lokalne są ślepe na cały `crates/daemon`
 Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`. Na macOS `-Zunpretty=expanded` daje pustą bibliotekę, a `cargo test -p bootcontrold` wykonuje **0 testów** (zmierzone) — przy czym `.claude/audit.sh` raportuje „daemon | 169 #[test] | 85 doctest | ratchet ✅", bo liczy greppem po źródłach. Dlatego P0 wyżej przeżył 41 dni i pięć pominiętych audytów. Fix: `ci-local.sh` i `audit.sh` wołają `cargo check`/`clippy` dla `--target x86_64-unknown-linux-gnu` (target zainstalowany) i raportują `BLOCKED`, gdy go brakuje; liczniki testów z realnego przebiegu, nie z grepa.
@@ -159,6 +171,40 @@ Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`.
 
 ## P1 — ważne
 **Naprawione 2026-08-23** w pętli napraw — commit `d0d2c93` na gałęzi `fix/audit-2026-08-23`, **czeka na merge** (wpis znika po mergu). Kierunek zgodny z ostrzeżeniem: `KNOWN` zwężone do 4 akcji, stałych NIE przywracano. Dodany test `known_actions_match_required_policy_actions` pinujący `polkit::KNOWN_ACTIONS` do `policy_check::REQUIRED_ACTIONS` (zweryfikowany mutacją) + fail-closed `cargo build -p bootcontrold` w `audit.sh` (`97421a1`). `policy_check.rs` przepisany z indeksów na `split_last()`.
+
+### `ReadLoaderEntry` pozwala na traversal i odczyt root-readable `*.conf`
+Nieautoryzowana metoda `interface.rs:951-970` przekazuje surowe `id` do
+`read_entry`, które buduje `entries_dir.join(format!("{id}.conf"))`.
+`validate_entry_id` (`systemd_boot_manager.rs:267-275`) istnieje, lecz używają
+go tylko ścieżki zapisu. `../` może więc wyprowadzić daemon poza katalog i
+zwrócić rozpoznane pola oraz ETag pliku czytelnego dla roota. Wymagane testy:
+parent `secret.conf` z `options TOPSECRET`, ID z `..`, ścieżka absolutna i oba
+separatory muszą zwracać `MalformedValue`, bez zawartości i hasha.
+**Źródło:** Security Review 2026-09-04 F4 (MEDIUM). **Status:** otwarte.
+
+### Sekundowe ID snapshotów mogą nadpisać stan rollbacku
+`snapshot.rs:208-244` tworzy ID z czasu o rozdzielczości jednej sekundy i
+używa `create_dir_all`, więc dwa wywołania tej samej operacji w jednej sekundzie
+zapisują ten sam katalog, manifest i płaskie kopie plików. Oba zdarzenia audit
+mogą wskazywać to samo ID, a pierwszy znany-dobry stan znika. Wymagane:
+exclusive create lub unikalny suffix/job-id oraz zegar wstrzykiwany w teście;
+dwa snapshoty przy stałym czasie muszą mieć różne ID i zachować oba obrazy.
+**Źródło:** Security Review 2026-09-04 F5 (MEDIUM). **Status:** otwarte.
+
+### Evidence pipeline testów nie spełnia baseline'u 14 właściwości
+Istniejące wpisy o fikcyjnym ratchecie doctestów i źródłowych licznikach
+pokrywają najpilniejszy objaw, ale nie pełny kontrakt. Audyt 2026-09-04 wykazał
+brak dowodu dla: liczników z runnera, progów z pomiaru, meta-testów wszystkich
+gate'ów, rejestru wyjątków z ratchetem, retry=0/flakiness metric, deterministycznych
+waitów, self-testu parsera wyników, systematycznego PBT i pilota mutation testing.
+Plan: (1) po naprawieniu linku przyjąć baseline jawnie; (2) generować liczby z
+runnera i dodać self-test enumeracji; (3) live-file meta-testy + forced-failure
+dla każdego producenta; (4) rejestr skip/exception i flake metric bez retry;
+(5) usunąć sleep 1.1 s/5 s na rzecz sterowanego zegara/warunku; (6) PBT dla
+parser/serializer i pilotaż mutation testing bez arbitralnego progu. Powiązać,
+nie duplikować, z P0 o audit.sh i doctestach.
+**Źródło:** audyt 2026-09-04, `test-quality-baseline.md` toolkitu.
+**Status:** otwarte; plan obowiązkowy po adopcji baseline'u.
 
 ### Hooki gitowe niezainstalowane → jedyna warstwa CI (local-first) była martwa
 `git config core.hooksPath` pusty w tym klonie; `.githooks/{pre-commit,commit-msg,pre-push}` obecne ale nieaktywne (`install-hooks.sh` nieuruchomiony lub commity z `--no-verify`). Efekt: preflight świeżości audytu nie zadziałał (42 dni bez audytu vs próg 7 dni) i zepsuty build (P0.1) trafił na `main`. Dodatkowo gate `ci-local.sh` jest **vacuously green** na macOS i cross-compile Windows, bo `crates/daemon/src/lib.rs:11` = `#![cfg(target_os = "linux")]` — daemon kompiluje się do pustki na non-Linux targecie, więc build break `polkit.rs` przechodzi wszędzie poza natywnym `cargo build` na Linuksie (potwierdzone: cross-compile `x86_64-pc-windows-gnu` exit 0 mimo zepsutego daemona). Fix: (a) wymusić `install-hooks.sh` w onboardingu + wyjaśnić jak tip powstał bez hooków; (b) `.claude/audit.sh` fail-closed `cargo build -p bootcontrold` (build breakage blokuje, nie jest liczbą w logu); (c) upewnić się, że pre-push liczy build/test natywnie na Linuksie.
@@ -278,9 +324,17 @@ Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md,
 `chore/cargo-fmt-workspace`, `fix/core-doc-overindented-list-item`, `fix/daemon-tests-etxtbsy-aarch64`, `fix/e2e-compile-errors` (wszystkie 2026-05-19, 95 dni), `feat/gui-v2-boot-entries` (2026-07-12, **6 commitów dotykających `crates/`**: parser menu-entry GRUB, `ListGrubEntries`, `fix(daemon): drop dangling refs to removed paranoia polkit actions` — prawdopodobna naprawa P0 „daemon nie kompiluje"), `ratunek/stash-gui-smoke-tests` (2026-07-22, packaging deb + AUR, 112 commitów za `main`, commit typu `wip:`), `feat/gui-v21-stacja` (2026-07-27). Konwencja: cel życia gałęzi <1 dzień, ostrzeżenie po 3. Zastępuje nieaktualny wpis „4 lokalne branche z 2026-05-19" (lokalnych już nie ma).
 **Źródło:** audyt 2026-08-22 (higiena repo, punkt 14a). **Status:** otwarte — decyzja per gałąź: scalić, przenieść pracę, czy skasować.
 
-### `cargo audit`: 5 vulnerabilities + 10 warnings (pierwszy pomiar)
-2× HIGH 7.5 w `quick-xml` (RUSTSEC-2026-0194/0195, DoS) przez `slint → accesskit → atspi → zbus_xml` oraz `wayland-scanner`; `crossbeam-epoch` RUSTSEC-2026-0204 przez `slint-macros` (build-time); warningi unmaintained (`bincode`, `paste`, `rustybuzz`, `ttf-parser`) i unsound (`anyhow` RUSTSEC-2026-0190, `event-listener` RUSTSEC-2026-0221 — jako jedyny obecny w drzewie `bootcontrold`). Do tego 12 przeterminowanych zależności bezpośrednich (`zbus` 5.14→5.19, `nix` 0.29→0.31, `tokio` 1.52→1.53, `sha2` 0.10→0.11, …). `cargo-udeps` = exec error trzeci audyt z rzędu, więc metryka dead-code nie istnieje.
-**Źródło:** audyt 2026-08-22 (punkt 15). Podnosi istniejący P2 „`cargo --locked` + `cargo deny/audit` w ci-local.sh". **Status:** otwarte.
+### `cargo audit`: 6 vulnerabilities + 10 warnings
+Pomiar 2026-09-04 (`cargo-audit 0.22.1`, advisory DB 1239 wpisów) wykrywa:
+`crossbeam-epoch` RUSTSEC-2026-0204, `quick-xml` RUSTSEC-2026-0194/0195 w
+wersjach 0.38.4 i 0.39.2 oraz nowy `zbus_polkit` RUSTSEC-2026-0278 na
+uprzywilejowanej ścieżce autoryzacji. Warningi: 5 unmaintained + 5 unsound.
+`cargo update --dry-run --offline` raportuje 46 kompatybilnych aktualizacji;
+pełne sprawdzenie yanked zostało zablokowane timeoutem rejestru. Osobno ocenić
+osiągalność i zaktualizować lock/deps z pełnymi testami; nie mieszać z audytem.
+`cargo-udeps` nadal nie jest zainstalowane, więc metryka dead-code nie istnieje.
+**Źródło:** audyt 2026-08-22 (pierwszy pomiar), odświeżone 2026-09-04.
+**Status:** otwarte, pogorszenie 5→6 vulnerabilities.
 
 ### Drobne findingi bezpieczeństwa i control-plane z audytu 2026-08-22
 (1) `SignAndEnrollUki` (`interface.rs:826-899`) i `BackupNvram` (`:728-799`) jako jedyne metody mutujące **nie wołają** `enforce_writable_distro()`; `uki_path` z D-Bus trafia bez walidacji do `sbsign --output <uki> <uki>` (`secureboot/mok.rs:163-171`) — brak `O_NOFOLLOW`, brak ograniczenia do ESP (SR F4, MEDIUM). (2) `.claude/settings.json` dopuszcza `Bash(cargo clean *)` — wildcard obejmuje `--target-dir /dowolna/ścieżka`, czyli rekurencyjne kasowanie poza `target/` bez promptu (SR F5, MEDIUM). (3) Reviewer i Security Reviewer nie mają żadnego niezależnego dowodu bramek: brak CI (decyzja 2026-05-20), brak `Bash`, a `.claude/reviews/` i `.claude/work-graphs/` nie istnieją mimo `multi-agent-delivery.md §2.1` — jedynym dowodem jest `Gates:` pisany przez autora zmiany o samym sobie (RT F5, MEDIUM; decyzja właściciela: allowlista read-only `Bash` dla obu ról albo obowiązkowy review record). (4) `expect()` ×2 w `daemon/src/main.rs:78-79` przy budżecie 0 (startup, przed jakimkolwiek zapisem — SR NOTE-B). (5) `docs/threat-model.md:94` deklaruje `Subject::SystemBusName`, kod używa `unix-user` z UID (`polkit.rs:108-118`) — nie jest spoofowalne, ale rozjeżdża rozumowanie o `auth_admin_keep` (SR NOTE-A). (6) Test-only override'y env w binarce produkcyjnej: `BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE` potrafi wyłączyć pre-flight, `BOOTCONTROL_MOK_KEY`/`_CERT` przekierowują klucz podpisujący (SR NOTE-C).

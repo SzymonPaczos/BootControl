@@ -5,6 +5,223 @@ Pełna procedura: [`.claude/rules/audit.md`](rules/audit.md).
 
 ---
 
+## Audyt 2026-09-04 16:54
+
+_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
+
+### Toolchain
+- rustc: `rustc 1.98.0 (88d9e12ae 2026-08-18)`
+- cargo: `cargo 1.98.0 (797e8a9bc 2026-08-05)`
+
+### Build gate: `cargo build -p bootcontrold` (fail-closed)
+- ✅ daemon kompiluje się natywnie na Linuksie
+
+### Formatowanie
+- cargo fmt: ✅ czysto
+
+### Clippy (workspace, -D warnings)
+- clippy: ✅ 0 findings
+
+### `unwrap` / `expect` / `panic!` w production (poza mod tests i doctestach)
+
+| Crate | unwrap | expect | panic! | Budżet |
+|-------|--------|--------|--------|--------|
+| core | 0 | 1 | 0 | 0/0/0 (strict) |
+| daemon | 0 | 2 | 0 | 0/0/0 (strict) |
+| client | 2 | 0 | 0 | ≤2/≤2/0 |
+| cli | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| tui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+| gui | 0 | 0 | 0 | ≤5/≤5/≤1 |
+
+### TODO / FIXME / HACK / XXX w kodzie
+- łącznie wystąpień: **0** (w 0 plikach)
+
+### `unsafe` blocks
+
+| Crate | unsafe blocks |
+|-------|---------------|
+| core | 0 |
+| daemon | 2 |
+| client | 0 |
+| cli | 0 |
+| tui | 0 |
+| gui | 0 |
+
+_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._
+
+### Testy
+
+| Crate | #[test] | tests/ | doctest | min ratchet |
+|-------|---------|--------|---------|-------------|
+| core | 192 | 0 | 95 | 93 ✅ |
+| daemon | 170 | 0 | 85 | 85 ✅ |
+| client | 20 | 0 | 14 | 14 ✅ |
+| cli | 5 | 0 | 4 | 4 ✅ |
+| tui | 36 | 0 | 30 | 30 ✅ |
+| gui | 0 | 2 | 0 | 0 ✅ |
+
+### Swallowed errors (heurystyka — wymagają weryfikacji greppem)
+- heurystyczna liczba: 46. Każdy wpis → przejrzeć ręcznie (część bywa legalna: `let _ = drop(...)`).
+
+### Dead code / nieużywane deps
+- cargo-udeps: ⚠️  niezainstalowane (`cargo install cargo-udeps --locked` żeby aktywować).
+
+### Rejestr decyzji (`.claude/rules/decisions.md`)
+- decyzje aktywne: 28
+- decyzje wycofane: 0
+
+### Inwariant: frontendy używają `bootcontrol-client`, nie `bootcontrol-daemon`
+- ✅ żaden frontend nie importuje daemon
+
+### Regression guards (zamknięte audyty)
+- P0.1 per-intent Polkit: ✅ wszystkie wywołania mają action argument
+- P0.2 sanitize rpm-ostree: ✅ `kargs_append` waliduje param
+- P1.1 single blacklist: ✅ 1 definicja (`KERNEL_CMDLINE_BLACKLIST` w `core::security`)
+- P1.2 startup policy validation: ✅ `validate_policy_file` w main.rs
+- P2.1 audit.sh filter: ✅ `count_in_production` aktywne
+- P2.2 no fake polkit action ID: ✅ `"org.bootcontrol.test"` nie istnieje
+
+### Faza A stream signal (informational)
+- (git niedostępny — pomiń)
+
+### Hooki gitowe
+- pre-push: ✅ obecny i executable
+
+### Trend audytów
+- poprzedni audyt: 2026-08-23 20:02
+- łącznie audytów: 8 (włącznie z tym)
+
+### Skille (`.claude/skills/`)
+- skills lokalnie: 1
+- toolkit.lock: 2026.09.04
+- skills w masterze: 6 (`/home/szymon-paczos/Projects/dev/claude-toolkit`)
+- wersja mastera: 2026.09.04 — zgodna z lockiem
+- Krok 00: `bash /home/szymon-paczos/Projects/dev/claude-toolkit/scripts/toolkit-sync.sh check .` (nie `git pull` w trakcie audytu)
+
+**Do przeglądu agentem** (warstwa głęboka — patrz `rules/audit.md` Krok 2):
+bezpieczeństwo, slop, jakość testów, architektura, drift, skille/MCP. Lista
+P0/P1/P2 dopisywana ręcznie do tej samej sekcji po Krok 2.
+
+### Nagłówek dowodowy
+
+```text
+AUDITED_REVISION: 3668bce090e60d6bf7362ab1b91d91af581ab3a5 (chore/toolkit-2026-09-04)
+DIFF_RANGE_OR_SCOPE: 7eb327f..3668bce (wspólny przodek z poprzednio audytowaną boczną gałęzią) + standing privileged surface; wyjątek właściciela: czysty worktree /tmp/bootcontrol-toolkit-adoption
+PREVIOUS_AUDIT: 2026-08-23 / c5fb3f3b334923c3e2c26acffe2e9c04e95821c5; ten SHA nie jest przodkiem HEAD
+TOOLKIT_VERSION: 2026.09.04 / 7f50f1f vs master 2026.09.04 / 7f50f1f | wersja zgodna, check FAIL przez 1 martwy odsyłacz
+TOOLS: rustc/cargo 1.98.0; toolkit-sync check (exit 1); toolkit-sync contrib (exit 0); bash .claude/audit.sh (exit 0); cargo fmt (pass); cargo clippy --workspace --all-targets --all-features -D warnings (pass); cargo audit 0.22.1; cargo update --dry-run --offline; grep/git/manual review; niezależny Security Reviewer
+DOCS_SOURCE: n/a (brak projektowego serwera dokumentacji; twierdzenia wersyjne ograniczone do lokalnych narzędzi i Cargo.lock)
+DEPENDENCY_CURRENCY: REPORT — 46 kompatybilnych aktualizacji; cargo audit: 6 vulnerabilities + 10 warnings; sprawdzenie yanked częściowo BLOCKED przez timeout rejestru
+EXCLUSIONS_OR_NA: 4 niecommitowane pliki WIP w głównym drzewie wyłączone; pełny cargo test workspace BLOCKED przez quota przy gui-spike, potem wykonano pakiety krytyczne; cargo-udeps brak; SAST/.github/workflows n/a; gui-spike i GUI test binaries nieotrzymały pełnego wyniku runtime
+THREAT_MODEL_VERSION: docs/threat-model.md + ARCHITECTURE.md @ 3668bce
+SECURITY_REVIEW: FAIL (2 CRITICAL, 1 HIGH, 2 MEDIUM; 2 findings nowe)
+RED_TEAM: NOT_DUE (ostatni 2026-08-22; delta adopcji nie zmienia auth/secrets/deploy/threat model)
+SAST: n/a (not configured — decyzja 2026-05-20)
+CODE_HEALTH_DELTA: ręcznie vs 2026-08-23 — clippy 4 errors+1 warning -> 0; core #[test] 184->192, daemon 169->170; expect/unwrap/unsafe bez poprawy; liczniki testów skryptu nadal nie pochodzą z runnera
+BACKLOG_WRITE: recorded — security-read-loader-entry-2026-09-04, snapshot-id-collision-2026-09-04, mok-signing-oracle-2026-09-04, test-evidence-baseline-2026-09-04; dependency entry refreshed
+```
+
+### Warstwa głęboka (osąd agenta)
+
+- **Zakres i wyjątek:** właściciel jawnie dopuścił audyt czystego, izolowanego
+  worktree mimo brudnego głównego drzewa. Oceniono commit `3668bce`; WIP w
+  `dbus_error.rs`, `interface.rs`, `snapshot.rs` i briefie backlog-cleanup nie
+  był czytany ani uwzględniany. Poprzedni audit SHA `c5fb3f3` leży na bocznej
+  gałęzi GUI, dlatego uczciwy zakres zmian zaczyna się od merge-base `7eb327f`.
+- **Bezpieczeństwo:** niezależny Security Reviewer potwierdził znany CRITICAL
+  `RestoreSnapshot` (traversal + dowolny zapis root) i HIGH brak ETag/flock/
+  atomic restore. Istniejący finding `SignAndEnrollUki` podniesiono do CRITICAL:
+  niezwalidowany `uki_path` robi z daemona oracle podpisujące dowolny EFI
+  prywatnym MOK. Nowe: nieautoryzowany `ReadLoaderEntry` przyjmuje traversal i
+  może ujawniać root-readable `*.conf` (MEDIUM); sekundowe ID snapshotów kolidują
+  i nadpisują rollback/provenance (MEDIUM). Pozytywnie: 14 metod mutujących nadal
+  ma per-intent Polkit; blacklist sanitizera pozostaje pojedynczym źródłem;
+  dwa `unsafe` ioctl mają lokalne komentarze `SAFETY`; brak kluczy/.env w repo.
+- **Build i testy:** build daemona, fmt i pełny clippy są zielone. Pierwszy pełny
+  `cargo test --workspace --all-features` został przerwany przez `Disk quota
+  exceeded` podczas linkowania `gui-spike`; ten przebieg nie dostarcza liczb.
+  Po usunięciu wyłącznie wygenerowanego `target/` uruchomiono pakiety krytyczne:
+  458/459 testów przeszło, jeden `sbsign` padł na `ETXTBSY`; pojedynczy rerun
+  dokładnie tego testu przeszedł, co potwierdza flake (retry nie zmienia wyniku
+  całego gate'a na PASS). Doctesty runnera: core 47, daemon 34, client 8, tui 15
+  — 104/104 pass. `audit.sh` nadal pokazuje źródłowe, nie wykonywalne liczniki.
+- **14 właściwości jakości testów:** spełnione: częściowo izolowane writery i
+  property-like testy parserów; częściowo: klasyfikacja błędów, obserwowalne
+  skipy, testy negatywne producentów, warianty środowiska i live meta-test tylko
+  dla pre-push. Brak dowodu dla: liczników z runnera, progów z pomiaru, pełnych
+  meta-testów gate'ów, rejestru wyjątków z ratchetem, retry=0/flakiness metric,
+  deterministycznych waitów (są sleep 1.1 s i 5 s), self-testu parsera wyników,
+  systematycznego property-based testing i pilota mutation testing. Obowiązkowy
+  plan scalono w jeden wpis backlogu, powiązany z istniejącymi zadaniami o
+  fikcyjnym ratchecie doctestów i ślepym `audit.sh`.
+- **Zależności:** `cargo update --dry-run --offline` raportuje 46 zgodnych
+  aktualizacji (3 zależności nadal za najnowszą kompatybilną wersją). `cargo
+  audit --no-fetch` wykrywa 6 podatności: `crossbeam-epoch` RUSTSEC-2026-0204,
+  `quick-xml` RUSTSEC-2026-0194/0195 w dwóch wersjach i `zbus_polkit`
+  RUSTSEC-2026-0278; ponadto 5 warningów unmaintained i 5 unsound. Pełny tryb
+  online nie sprawdził yanked packages z powodu timeoutu rejestru.
+- **Architektura i drift:** frontendy nie importują daemona; delta adopcji
+  dotyka wyłącznie `.claude/**`. Nadal żywy jest drift 6 vs 4 akcji Polkit w
+  `ARCHITECTURE.md`, `AGENTS.md`, `docs/UX_BRIEF.md` i RPM spec (już w backlogu).
+  `README.md` i dwa pliki packaging nadal zawierają `YOUR_USERNAME`. Brak SAST,
+  workflows, `SECURITY.md` i pliku `LICENSE` pozostaje jawny/n/a lub zbacklogowany.
+- **Repo/provenance:** lokalny HEAD jest 2 commity przed `origin/main`; 7 starych
+  zdalnych gałęzi nadal istnieje. Wszystkie nie-merge commity w zakresie mają
+  `Intent`/`Task-Ref`/`Gates` i brak atrybucji AI; dwa merge commity (`aaf1caa`,
+  `738839d`) mają `Gates`, lecz nie mają `Intent` ani `Task-Ref`. Toolkit ma
+  zgodną wersję i zachowane lokalne rozszerzenie Security Reviewera, ale `check`
+  kończy się 1 przez martwy link do nieprzyjętej konwencji test-quality.
+
+### P0 — krytyczne
+
+1. **`RestoreSnapshot`: traversal i dowolny zapis jako root — istniejący,
+   potwierdzony.** `interface.rs:1291-1329`, `snapshot.rs:304-325`.
+   - Akcja: walidacja ID i allowlista zarządzanych targetów; test z zewnętrznym
+     manifestem musi zostawić victim byte-identical. Deduplikacja: istniejący P0.
+2. **`SignAndEnrollUki` jako oracle prywatnego klucza MOK — severity podniesione.**
+   `interface.rs:826-899` przekazuje dowolny `uki_path` do `sbsign --output <uki>
+   <uki>` w `secureboot/mok.rs:138-184`; podpis zostaje nawet gdy enroll zawiedzie.
+   - Akcja: canonical regular non-symlink UKI bieżącego OS na zarządzanym ESP;
+     test spy-signer ma wykazać 0 wywołań dla attacker-owned EFI. Backlog rozszerzony.
+
+### P1 — ważne
+
+1. **`ReadLoaderEntry` traversal / root-file disclosure (nowe, MEDIUM).**
+   `interface.rs:951-970` omija istniejące `validate_entry_id` z
+   `systemd_boot_manager.rs:267-275`.
+   - Akcja: wspólna walidacja przed `entry_path`; testy `..`, separatorów i
+     ścieżek absolutnych, bez zwracania zawartości ani ETag.
+2. **Kolizje ID snapshotów niszczą rollback provenance (nowe, MEDIUM).**
+   `snapshot.rs:208-244` używa czasu z rozdzielczością 1 s oraz `create_dir_all`.
+   - Akcja: ID unikalne/exclusive-create i zegar wstrzykiwany w testach; dwa
+     snapshoty w tej samej sekundzie muszą zachować oba obrazy.
+3. **Łańcuch zależności ma 6 aktywnych advisory.** Szczególnie
+   `zbus_polkit` RUSTSEC-2026-0278 leży na privileged authorization path.
+   - Akcja: osobna aktualizacja zależności z `cargo audit`/testami i oceną
+     osiągalności; nie mieszać z audytem.
+4. **Evidence pipeline testów nie spełnia większości nowego baseline'u.**
+   - Akcja: wykonać plan z backlogu; w pierwszej kolejności liczby z runnera,
+     self-test parsera i meta-testy gate'ów, potem flake/waits/PBT/mutation pilot.
+
+### P2 — porządkowe
+
+1. Produkcyjne `expect`: core 1, daemon 2 przy budżecie strict 0; bez regresji,
+   ale aktywna decyzja nadal niespełniona. `audit.sh` kończy 0 mimo przekroczenia.
+2. `cargo-udeps` nadal nie jest zainstalowane; dead-code layer pozostaje `n/a`.
+3. Dwa merge commity w zakresie nie spełniają pełnego formatu provenance.
+4. `toolkit-sync check .` nadal blokuje martwy link baseline'u; zadanie powstało
+   już w adopcji i nie jest duplikowane.
+
+### Werdykt
+
+**FAIL.** Adopcja nie wprowadziła zmian produktu ani nowej regresji bezpieczeństwa,
+ale bieżący standing surface ma dwa CRITICAL, w tym rozszerzoną ścieżkę signing
+oracle, oraz dwa nowe findings MEDIUM. Pełny gate testów jest dodatkowo
+**BLOCKED** dla GUI/gui-spike przez quota; krytyczne pakiety mają jeden
+potwierdzony flake i zielone doctesty, nie pełny PASS.
+
+
+
 ## Audyt 2026-08-23 20:02
 
 _Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja niżej w tym samym wpisie, dopisywana ręcznie._
@@ -1300,6 +1517,5 @@ osobna runda projektowa).
 - `cargo test --workspace --all-features` → ✅ wszystkie zielone (daemon na macOS to stub `#![cfg(target_os = "linux")]` w lib.rs — daemon tests odpalą się na realnym Linuxie / w pre-push hook na Linux contributorze)
 
 **Compliance po naprawach**: 19 z 19 aktywnych decyzji respektowanych = **100%**.
-
 
 
