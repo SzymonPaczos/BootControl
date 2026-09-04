@@ -124,6 +124,12 @@ pub fn snapshot_to_daemon_error(e: SnapshotError) -> DaemonError {
         SnapshotError::SchemaUpgradeRequired(_) => DaemonError::SnapshotCorrupt(msg),
         SnapshotError::Serde(_) => DaemonError::SnapshotCorrupt(msg),
         SnapshotError::Io(_) => DaemonError::SnapshotFailed(msg),
+        // Both are caller-supplied or manifest-supplied garbage rather than a
+        // missing snapshot: report them as a failed restore, not as NotFound,
+        // so an attacker probing ids cannot use the error name as an oracle
+        // for which paths exist.
+        SnapshotError::InvalidId(_) => DaemonError::SnapshotFailed(msg),
+        SnapshotError::UnmanagedTarget(_) => DaemonError::SnapshotFailed(msg),
     }
 }
 
@@ -330,6 +336,19 @@ mod tests {
     fn snapshot_io_maps_to_failed() {
         let e = SnapshotError::Io(std::io::Error::other("disk full"));
         let mapped = snapshot_to_daemon_error(e);
+        assert!(matches!(mapped, DaemonError::SnapshotFailed(_)));
+    }
+
+    #[test]
+    fn invalid_snapshot_id_maps_to_failed_without_path_existence_oracle() {
+        let mapped = snapshot_to_daemon_error(SnapshotError::InvalidId("../outside".into()));
+        assert!(matches!(mapped, DaemonError::SnapshotFailed(_)));
+    }
+
+    #[test]
+    fn unmanaged_snapshot_target_maps_to_failed() {
+        let mapped =
+            snapshot_to_daemon_error(SnapshotError::UnmanagedTarget("/etc/sudoers.d/pwn".into()));
         assert!(matches!(mapped, DaemonError::SnapshotFailed(_)));
     }
 

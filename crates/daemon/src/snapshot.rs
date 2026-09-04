@@ -61,6 +61,15 @@ pub enum SnapshotError {
     NotFound(String),
     /// The manifest's `schema_version` is newer than this binary supports.
     SchemaUpgradeRequired(u32),
+    /// The snapshot id is not a single, plain directory name.
+    ///
+    /// Rejected before it ever reaches `root.join(id)`: an absolute id
+    /// silently discards the root, and `..` climbs out of it, either of which
+    /// turns a restore into a write driven by a manifest the daemon never
+    /// created.
+    InvalidId(String),
+    /// The manifest asks to write a path the daemon does not manage.
+    UnmanagedTarget(PathBuf),
 }
 
 impl std::fmt::Display for SnapshotError {
@@ -76,6 +85,17 @@ impl std::fmt::Display for SnapshotError {
                     v
                 )
             }
+            SnapshotError::InvalidId(id) => write!(
+                f,
+                "invalid snapshot id {:?}: must be a single directory name, \
+                 without path separators, '.' or '..'",
+                id
+            ),
+            SnapshotError::UnmanagedTarget(p) => write!(
+                f,
+                "snapshot manifest targets {}, which is not a path this daemon manages",
+                p.display()
+            ),
         }
     }
 }
@@ -293,15 +313,117 @@ pub fn list(root: &Path) -> Result<Vec<SnapshotInfo>, SnapshotError> {
     Ok(out)
 }
 
+/// True when `id` is a single plain directory name.
+///
+/// The snapshot id arrives from D-Bus as an unconstrained `String` and is fed
+/// straight into `root.join(id)`. `Path::join` replaces the base when given an
+/// absolute path, so `"/tmp/evil"` would silently relocate the whole restore;
+/// `".."` climbs out the same way. Requiring exactly one `Normal` component
+/// removes both without pattern-matching on separators.
+fn is_plain_component(id: &str) -> bool {
+    // `Path::components()` normalises a trailing separator (`"snap/"` becomes
+    // one Normal component), so reject separators before component parsing.
+    // Backslash is not a separator on Linux, but refusing it keeps snapshot
+    // IDs portable and consistent with loader-entry validation.
+    if id.is_empty() || id.contains('/') || id.contains('\\') {
+        return false;
+    }
+    let mut components = Path::new(id).components();
+    matches!(
+        (components.next(), components.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    )
+}
+
+/// True when `target` is an absolute, `..`-free path that the daemon manages.
+///
+/// A path is managed when it *is* one of `allowed`, or lives underneath one of
+/// them — loader entries sit in a managed directory, `/etc/default/grub` is a
+/// managed file. `Path::starts_with` compares whole components, so
+/// `/etc/default/grub-evil` does not pass as `/etc/default/grub`.
+///
+/// Parent components are refused before the prefix test rather than after:
+/// `/managed/../escaped` would otherwise satisfy `starts_with("/managed")`
+/// while resolving somewhere else entirely.
+fn is_managed_target(target: &Path, allowed: &[PathBuf]) -> Result<bool, SnapshotError> {
+    use std::path::Component;
+    if !target.is_absolute() {
+        return Ok(false);
+    }
+    if target
+        .components()
+        .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    {
+        return Ok(false);
+    }
+    if !allowed.iter().any(|a| target.starts_with(a)) {
+        return Ok(false);
+    }
+
+    // `starts_with` is purely lexical. Without this check, an entry such as
+    // `<managed-dir>/arch.conf -> /etc/sudoers.d/pwn` passes containment and
+    // `fs::write` follows it. Inspect every existing lexical ancestor so an
+    // intermediate directory symlink is rejected as well as the final file.
+    for ancestor in target.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(false),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(SnapshotError::Io(error)),
+        }
+    }
+
+    Ok(true)
+}
+
 /// Restore a snapshot by copying every captured file back to its original
 /// path. Existing files are overwritten.
 ///
+/// `allowed` is the set of paths this daemon manages — files it owns and
+/// directories it writes into. Every manifest target must fall inside it, and
+/// all targets are checked before the first byte is written, so a manifest
+/// mixing a managed and an unmanaged path restores neither.
+///
+/// # Arguments
+///
+/// * `root` - Directory containing BootControl snapshot directories.
+/// * `id` - Single snapshot directory name supplied by the D-Bus caller.
+/// * `allowed` - Files and directories the daemon is permitted to restore.
+///
 /// # Errors
 ///
+/// * [`SnapshotError::InvalidId`] — `id` is not a single plain directory name.
+/// * [`SnapshotError::UnmanagedTarget`] — a manifest entry points outside
+///   `allowed`, is relative, or contains `..`.
 /// * [`SnapshotError::NotFound`] — `<root>/<id>/manifest.json` does not exist.
 /// * [`SnapshotError::Io`] — file read or write fails.
 /// * [`SnapshotError::Serde`] — manifest is malformed.
-pub fn restore(root: &Path, id: &str) -> Result<(), SnapshotError> {
+///
+/// # Examples
+///
+/// ```
+/// # use bootcontrold::snapshot::{create, restore, SnapshotRequest};
+/// # let dir = tempfile::tempdir().unwrap();
+/// # let target = dir.path().join("grub");
+/// # std::fs::write(&target, "GRUB_TIMEOUT=5\n").unwrap();
+/// # let files = [target.clone()];
+/// # let info = create(SnapshotRequest {
+/// #     root: dir.path(),
+/// #     op: "rewrite_grub",
+/// #     polkit_action: "org.bootcontrol.rewrite-grub",
+/// #     caller_uid: 1000,
+/// #     etag_before: "deadbeef",
+/// #     files: &files,
+/// #     audit_job_id: "4f87bb12-0000-0000-0000-000000000000",
+/// # }).unwrap();
+/// std::fs::write(&target, "GRUB_TIMEOUT=10\n").unwrap();
+/// restore(dir.path(), &info.id, std::slice::from_ref(&target)).unwrap();
+/// assert_eq!(std::fs::read_to_string(&target).unwrap(), "GRUB_TIMEOUT=5\n");
+/// ```
+pub fn restore(root: &Path, id: &str, allowed: &[PathBuf]) -> Result<(), SnapshotError> {
+    if !is_plain_component(id) {
+        return Err(SnapshotError::InvalidId(id.to_string()));
+    }
     let snap_dir = root.join(id);
     let manifest_path = snap_dir.join("manifest.json");
     if !manifest_path.is_file() {
@@ -313,6 +435,14 @@ pub fn restore(root: &Path, id: &str) -> Result<(), SnapshotError> {
         return Err(SnapshotError::SchemaUpgradeRequired(
             manifest.schema_version,
         ));
+    }
+    // Validate every target before writing any of them: a manifest listing
+    // one managed and one unmanaged path must not leave the first written.
+    for f in &manifest.files {
+        let target = PathBuf::from(&f.path);
+        if !is_managed_target(&target, allowed)? {
+            return Err(SnapshotError::UnmanagedTarget(target));
+        }
     }
     for f in &manifest.files {
         let captured = snap_dir.join(flatten_path(Path::new(&f.path)));
@@ -456,14 +586,14 @@ mod tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "v2\n");
 
         // Restore puts v1 back.
-        restore(dir.path(), &info.id).unwrap();
+        restore(dir.path(), &info.id, std::slice::from_ref(&target)).unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "v1\n");
     }
 
     #[test]
     fn restore_unknown_id_returns_not_found() {
         let dir = TempDir::new().unwrap();
-        match restore(dir.path(), "no-such-id") {
+        match restore(dir.path(), "no-such-id", &[]) {
             Err(SnapshotError::NotFound(id)) => assert_eq!(id, "no-such-id"),
             other => panic!("expected NotFound, got {:?}", other),
         }
@@ -495,5 +625,252 @@ mod tests {
         let listed = list(dir.path()).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].op, "real");
+    }
+
+    // ── Restore hardening (audyt 2026-08-22, SR F1 CRITICAL) ────────────────
+
+    /// Build a snapshot directory by hand — as an attacker who controls a
+    /// directory outside the snapshot root would — and point its manifest at
+    /// `target`. Returns the directory holding the planted snapshot.
+    fn plant_snapshot(dir: &Path, snap_name: &str, target: &Path, payload: &str) -> PathBuf {
+        let snap_dir = dir.join(snap_name);
+        fs::create_dir_all(&snap_dir).unwrap();
+        fs::write(snap_dir.join(flatten_path(target)), payload.as_bytes()).unwrap();
+        let manifest = format!(
+            r#"{{"schema_version":1,"ts":"2026-08-26T00:00:00Z","op":"evil",
+                 "polkit_action":"org.bootcontrol.restore-snapshot","caller_uid":1000,
+                 "etag_before":"00",
+                 "files":[{{"path":"{}","sha256":"00","mode":"0644"}}],
+                 "efivars":[],"audit_job_id":"job"}}"#,
+            target.display()
+        );
+        fs::write(snap_dir.join("manifest.json"), manifest).unwrap();
+        snap_dir
+    }
+
+    #[test]
+    fn restore_rejects_absolute_id_escaping_the_root() {
+        // The attack from the 2026-08-22 audit: `root.join(id)` with an
+        // absolute id discards the root entirely, so a snapshot the daemon
+        // never created drives a write as root.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+
+        let victim = dir.path().join("victim");
+        fs::write(
+            &victim,
+            "original
+",
+        )
+        .unwrap();
+
+        let evil_dir = dir.path().join("evil");
+        fs::create_dir_all(&evil_dir).unwrap();
+        let planted = plant_snapshot(
+            &evil_dir, "snap", &victim, "pwned
+",
+        );
+
+        let err = restore(
+            &root,
+            planted.to_str().unwrap(),
+            std::slice::from_ref(&victim),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, SnapshotError::InvalidId(_)),
+            "absolute id must be rejected as invalid, got {err:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(&victim).unwrap(),
+            "original\n",
+            "victim file must be untouched"
+        );
+    }
+
+    #[test]
+    fn restore_rejects_parent_traversal_in_id() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+        for id in ["..", "../..", "../sibling", "a/../../b"] {
+            let err = restore(&root, id, &[]).unwrap_err();
+            assert!(
+                matches!(err, SnapshotError::InvalidId(_)),
+                "id {id:?} must be rejected, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn restore_rejects_id_that_is_not_a_single_component() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+        for id in ["", "nested/snap", "snap/", "snap\\evil", "."] {
+            let err = restore(&root, id, &[]).unwrap_err();
+            assert!(
+                matches!(err, SnapshotError::InvalidId(_)),
+                "id {id:?} must be rejected, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn restore_rejects_target_outside_the_managed_set() {
+        // Defence in depth: even a snapshot sitting legitimately under the
+        // root cannot write to a path the daemon does not manage.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+
+        let managed = dir.path().join("managed-grub");
+        fs::write(&managed, "ok\n").unwrap();
+        let outsider = dir.path().join("sudoers.d-lookalike");
+
+        plant_snapshot(&root, "snap", &outsider, "pwned\n");
+
+        let err = restore(&root, "snap", &[managed]).unwrap_err();
+        assert!(
+            matches!(err, SnapshotError::UnmanagedTarget(_)),
+            "target outside the managed set must be rejected, got {err:?}"
+        );
+        assert!(
+            !outsider.exists(),
+            "rejected restore must not create the file"
+        );
+    }
+
+    #[test]
+    fn restore_validates_every_target_before_writing_any_file() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        let snap_dir = root.join("snap");
+        fs::create_dir_all(&snap_dir).unwrap();
+
+        let managed = dir.path().join("managed-grub");
+        fs::write(&managed, "original\n").unwrap();
+        let outsider = dir.path().join("outside");
+        for (target, payload) in [(&managed, "replacement\n"), (&outsider, "pwned\n")] {
+            fs::write(snap_dir.join(flatten_path(target)), payload).unwrap();
+        }
+        let manifest = SnapshotManifest {
+            schema_version: SCHEMA_VERSION,
+            ts: "2026-08-26T00:00:00Z".to_string(),
+            op: "evil".to_string(),
+            polkit_action: "org.bootcontrol.restore-snapshot".to_string(),
+            caller_uid: 1000,
+            etag_before: "00".to_string(),
+            files: vec![
+                ManifestFile {
+                    path: managed.to_string_lossy().into_owned(),
+                    sha256: "00".to_string(),
+                    mode: "0644".to_string(),
+                },
+                ManifestFile {
+                    path: outsider.to_string_lossy().into_owned(),
+                    sha256: "00".to_string(),
+                    mode: "0644".to_string(),
+                },
+            ],
+            efivars: Vec::new(),
+            audit_job_id: "job".to_string(),
+        };
+        fs::write(
+            snap_dir.join("manifest.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let err = restore(&root, "snap", std::slice::from_ref(&managed)).unwrap_err();
+        assert!(matches!(err, SnapshotError::UnmanagedTarget(_)));
+        assert_eq!(fs::read_to_string(&managed).unwrap(), "original\n");
+        assert!(!outsider.exists());
+    }
+
+    #[test]
+    fn restore_rejects_manifest_target_climbing_out_of_a_managed_dir() {
+        // `/managed/../evil` starts_with(`/managed`) component-wise only if
+        // the `..` is left in place — so parent components must be refused
+        // before any prefix comparison.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+        let managed_dir = dir.path().join("managed");
+        fs::create_dir_all(&managed_dir).unwrap();
+
+        let climbing = managed_dir.join("..").join("escaped");
+        plant_snapshot(&root, "snap", &climbing, "pwned\n");
+
+        let err = restore(&root, "snap", &[managed_dir]).unwrap_err();
+        assert!(
+            matches!(err, SnapshotError::UnmanagedTarget(_)),
+            "target with a parent component must be rejected, got {err:?}"
+        );
+        assert!(!dir.path().join("escaped").exists());
+    }
+
+    #[test]
+    fn restore_allows_a_file_inside_a_managed_directory() {
+        // Loader entries live in a managed *directory*, so containment — not
+        // just equality — has to be accepted.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+        let entries_dir = dir.path().join("loader-entries");
+        fs::create_dir_all(&entries_dir).unwrap();
+        let entry = entries_dir.join("arch.conf");
+        fs::write(&entry, "v2\n").unwrap();
+
+        plant_snapshot(&root, "snap", &entry, "v1\n");
+
+        restore(&root, "snap", &[entries_dir]).unwrap();
+        assert_eq!(fs::read_to_string(&entry).unwrap(), "v1\n");
+    }
+
+    #[test]
+    fn restore_rejects_sibling_path_sharing_a_managed_prefix() {
+        // `/etc/default/grub-evil` must not pass as `/etc/default/grub`.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+        let managed = dir.path().join("grub");
+        fs::write(&managed, "ok\n").unwrap();
+        let sibling = dir.path().join("grub-evil");
+
+        plant_snapshot(&root, "snap", &sibling, "pwned\n");
+
+        let err = restore(&root, "snap", &[managed]).unwrap_err();
+        assert!(
+            matches!(err, SnapshotError::UnmanagedTarget(_)),
+            "got {err:?}"
+        );
+        assert!(!sibling.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restore_rejects_symlink_inside_a_managed_directory() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("snapshots");
+        fs::create_dir_all(&root).unwrap();
+        let managed_dir = dir.path().join("managed");
+        fs::create_dir_all(&managed_dir).unwrap();
+
+        let victim = dir.path().join("outside-victim");
+        fs::write(&victim, "original\n").unwrap();
+        let linked_target = managed_dir.join("entry.conf");
+        symlink(&victim, &linked_target).unwrap();
+        plant_snapshot(&root, "snap", &linked_target, "pwned\n");
+
+        let err = restore(&root, "snap", &[managed_dir]).unwrap_err();
+        assert!(
+            matches!(err, SnapshotError::UnmanagedTarget(_)),
+            "a symlink below an allowed directory must be rejected, got {err:?}"
+        );
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "original\n");
     }
 }

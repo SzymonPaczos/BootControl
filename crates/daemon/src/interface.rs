@@ -357,6 +357,28 @@ impl GrubManager {
     pub fn snapshot_root(&self) -> &Path {
         &self.snapshot_root
     }
+
+    /// The set of paths this daemon is allowed to write — every file it owns
+    /// and every directory it writes into.
+    ///
+    /// Used as the containment policy for [`snapshot::restore`]: a snapshot
+    /// manifest may only restore paths inside this set. It is derived from the
+    /// manager's configured paths rather than hardcoded, so an integration
+    /// test pointing the manager at a `TempDir` restores under that tempdir
+    /// and nowhere else — and so production and tests cannot drift apart.
+    ///
+    /// Adding a new file the daemon writes means adding it here too, or
+    /// restoring a snapshot of it will be refused.
+    fn managed_paths(&self) -> Vec<PathBuf> {
+        vec![
+            self.grub_path.clone(),
+            self.failsafe_cfg_path.clone(),
+            self.grub_cfg_path.clone(),
+            self.loader_entries_dir.clone(),
+            self.loader_conf_path.clone(),
+            self.kernel_cmdline_path.clone(),
+        ]
+    }
 }
 
 #[interface(name = "org.bootcontrol.Manager")]
@@ -1326,7 +1348,8 @@ impl GrubManager {
             stderr_tail: String::new(),
         });
 
-        let result = snapshot::restore(&self.snapshot_root, &id).map_err(snapshot_to_daemon_error);
+        let result = snapshot::restore(&self.snapshot_root, &id, &self.managed_paths())
+            .map_err(snapshot_to_daemon_error);
 
         let exit_code = if result.is_ok() { 0 } else { 1 };
         let stderr_tail = result
