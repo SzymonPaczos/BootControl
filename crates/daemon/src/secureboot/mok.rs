@@ -460,6 +460,7 @@ mod tests {
         let mut perms = f.metadata().expect("metadata").permissions();
         perms.set_mode(0o755);
         f.set_permissions(perms).expect("set permissions");
+        drop(f);
 
         path
     }
