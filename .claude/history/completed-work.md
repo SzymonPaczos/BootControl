@@ -218,8 +218,8 @@ skalibrowane z realnego przebiegu 2026-09-05. Format, Clippy, runner, ratchet,
 `cargo-udeps` i regression guards są fail-closed; naprawiono też gubione w
 podpowłoce top 5 findings Clippy. Meta-test sabotuje żywy `.claude/audit.sh`
 i pokrywa ścieżki: zdrową, czerwony Clippy, awarię runnera i przekroczenie
-budżetu panic. Pełny baseline
-14 właściwości pozostaje częściowo otwarty w backlogu.
+budżetu panic. Pełny baseline 14 właściwości pozostaje częściowo otwarty
+w backlogu.
 
 **Kolizja plików tymczasowych UKI** (`dd331eb`). `atomic_cmdline_update`
 przestał współdzielić stałe `cmdline.bootcontrol.tmp` między niezależnymi
@@ -236,3 +236,11 @@ buildera session/system D-Bus do `main()` zamiast panikować podczas startu.
 Izolowany przebieg `audit.sh` potwierdza 0/0/0 w obu crate'ach. Audit gate ma
 teraz czwarty meta-test: sztuczny produkcyjny `expect` przekracza budżet,
 pojawia się w raporcie i wymusza niezerowy exit.
+
+**Merge provenance — bez rewrite'u historii.** P2 z audytu 2026-09-04
+dotyczył merge commitów `aaf1caa` i `738839d`. Oba mają szczegółowy opis
+intencji i rzeczywiste `Gates`, ale nie etykiety `Intent`/`Task-Ref`. Aktywna
+reguła [`change-provenance.md`](../rules/change-provenance.md) §5 jawnie
+wyłącza merge/revert z obowiązku tych trailerów, więc stan jest zgodny z
+przyjętym kontraktem. Przepisywanie opublikowanej historii tylko dla etykiet
+nie jest uzasadnione; finding zamknięto oceną, bez zmiany SHA.
