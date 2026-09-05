@@ -11,7 +11,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-LOG="$REPO_ROOT/.claude/audit-log.md"
+LOG="${AUDIT_LOG:-$REPO_ROOT/.claude/audit-log.md}"
 # Timestamp z minutą — żeby kilka runów tego samego dnia nie kolidowało
 # (każdy wpis ma unikalny nagłówek, log zachowuje chronologię).
 DATE="$(date '+%Y-%m-%d %H:%M')"
@@ -38,10 +38,9 @@ add ""
 # daemona przeżył 42 dni niezauważony (audyt 2026-08-23, P0) — mimo trailerów
 # `Gates: cargo build --workspace (pass)` w historii.
 #
-# To jedyny krok w tym skrypcie, który BLOKUJE: porażka = niezerowy exit i
-# głośny komunikat, nie „liczba w logu". Wpis audytu i tak zostaje zapisany —
-# blokada nie może kasować dowodu, że audyt się odbył.
-BUILD_GATE_FAILED=0
+# Porażka dowolnej mechanicznej bramki daje niezerowy exit. Wpis audytu i tak
+# zostaje zapisany — blokada nie może kasować dowodu, że audyt się odbył.
+AUDIT_FAILED=0
 add "### Build gate: \`cargo build -p bootcontrold\` (fail-closed)"
 if [ "${SKIP_BUILD_GATE:-0}" = "1" ]; then
     add "- ⚠️ **POMINIĘTY** przez \`SKIP_BUILD_GATE=1\` — escape hatch awaryjny (\`rules/rules-as-gates.md\` §7), nie stan normalny. Wynik audytu w tym obszarze jest **nieznany**, nie zielony."
@@ -50,7 +49,7 @@ elif [ "$(uname -s)" != "Linux" ]; then
     add "- ⚠️ **n/a** — host \`$(uname -s)\`, nie Linux. Daemon kompiluje się tu do pustki, więc zielony wynik nic nie znaczy. **To nie jest pass** — pełny audyt wymaga przebiegu natywnie na Linuksie."
 elif ! command -v cargo >/dev/null 2>&1; then
     add "- ❌ **BLOKADA** — brak \`cargo\`, gate nie może się wykonać. Fail-closed: brak narzędzia to awaria gate'a, nie cichy pass (\`rules/ci-cd.md\` §1). Instalacja: https://rustup.rs"
-    BUILD_GATE_FAILED=1
+    AUDIT_FAILED=1
 else
     BUILD_TMP="$(mktemp)"
     if cargo build -p bootcontrold >"$BUILD_TMP" 2>&1; then
@@ -63,7 +62,7 @@ else
         while IFS= read -r line; do
             add "    - \`$line\`"
         done < <(grep -E "^error" "$BUILD_TMP" | head -5)
-        BUILD_GATE_FAILED=1
+        AUDIT_FAILED=1
     fi
     rm -f "$BUILD_TMP"
 fi
@@ -76,9 +75,11 @@ if command -v cargo >/dev/null 2>&1; then
         add "- cargo fmt: ✅ czysto"
     else
         add "- cargo fmt: ❌ wymaga \`cargo fmt --all\`"
+        AUDIT_FAILED=1
     fi
 else
     add "- cargo fmt: ⚠️  cargo niedostępne"
+    AUDIT_FAILED=1
 fi
 add ""
 
@@ -89,15 +90,19 @@ if command -v cargo >/dev/null 2>&1; then
     if cargo clippy --workspace --all-targets --all-features -- -D warnings >"$CLIPPY_TMP" 2>&1; then
         add "- clippy: ✅ 0 findings"
     else
-        CLIPPY_WARN=$(grep -cE "^warning:" "$CLIPPY_TMP" || echo 0)
-        CLIPPY_ERR=$(grep -cE "^error:" "$CLIPPY_TMP" || echo 0)
+        CLIPPY_WARN=$(grep -cE "^warning:" "$CLIPPY_TMP" || true)
+        CLIPPY_ERR=$(grep -cE "^error:" "$CLIPPY_TMP" || true)
         add "- clippy: ❌ warnings=$CLIPPY_WARN errors=$CLIPPY_ERR"
         add "  - top 5 findings:"
-        grep -E "^(warning|error):" "$CLIPPY_TMP" | head -5 | sed 's/^/    /' | while IFS= read -r line; do section+="$line"$'\n'; done
+        while IFS= read -r line; do
+            add "    $line"
+        done < <(grep -E "^(warning|error):" "$CLIPPY_TMP" | head -5)
+        AUDIT_FAILED=1
     fi
     rm -f "$CLIPPY_TMP"
 else
     add "- clippy: ⚠️  cargo niedostępne"
+    AUDIT_FAILED=1
 fi
 add ""
 
@@ -169,54 +174,69 @@ add "_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/
 add ""
 
 # === 7. Testy ==================================================================
-# Doctest ratchet — minima ustawione w 2026-05-23 follow-up audit po
-# dorobieniu doctestów w client crate. Każde minimum to **podłoga**: nigdy
-# nie wolno zejść poniżej tej wartości bez świadomej decyzji właściciela
-# (AGENTS.md §II wymaga `# Examples` na publicznym API). Gdy stan rośnie,
-# zaktualizuj te liczby w **górę** — raz osiągnięty poziom jest podłogą,
-# nie sufitem (audit.md "Krok 4 Ratchet").
-# Floors set to current observed values after the 2026-05-23 follow-up
-# (indent-aware doctest counter — the previous floor numbers undercounted
-# anything inside `impl`/`mod` blocks because the regex used `^/// ...`
-# instead of `^\s*/// ...`).
-DOCTEST_MIN_core=93
-DOCTEST_MIN_daemon=85
-DOCTEST_MIN_client=14
-DOCTEST_MIN_cli=4
-DOCTEST_MIN_tui=30
-DOCTEST_MIN_gui=0  # gui to Slint UI; doctesty na .slint nie istnieją, na .rs sensowne tylko dla logic
+# Liczby pochodzą z enumeracji wykonywanej przez libtest/rustdoc (`--list`),
+# nie z grepa po źródłach. Dzięki temu cfg platformy, brak targetu lib i testy
+# naprawdę widziane przez runner wpływają na wynik. Minima zmierzono
+# 2026-09-05; są podłogą i mogą iść wyłącznie w górę.
+TEST_MIN_core=239
+TEST_MIN_daemon=234
+TEST_MIN_client=28
+TEST_MIN_cli=5
+TEST_MIN_tui=87
+TEST_MIN_gui=3
+DOCTEST_MIN_core=47
+DOCTEST_MIN_daemon=37
+DOCTEST_MIN_client=7
+DOCTEST_MIN_cli=n/a
+DOCTEST_MIN_tui=15
+DOCTEST_MIN_gui=0
 add "### Testy"
 add ""
-add "| Crate | #[test] | tests/ | doctest | min ratchet |"
-add "|-------|---------|--------|---------|-------------|"
+add "| Crate | runner tests | ignored | doctest | ratchet (all/docs) |"
+add "|-------|--------------|---------|---------|--------------------|"
 RATCHET_BREACH=""
 for c in $CRATES; do
-    SRC_DIR="crates/$c/src"
-    [ -d "$SRC_DIR" ] || continue
-    TESTS_INLINE=$(grep -rE "^\s*#\[test\]|^\s*#\[tokio::test\]" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
-    TESTS_DIR="crates/$c/tests"
-    if [ -d "$TESTS_DIR" ]; then
-        TESTS_FILES=$(find "$TESTS_DIR" -name "*.rs" 2>/dev/null | wc -l | tr -d ' ')
+    case "$c" in
+        daemon) package="bootcontrold" ;;
+        *) package="bootcontrol-$c" ;;
+    esac
+    TEST_LIST_TMP="$(mktemp)"
+    TEST_IGNORED_TMP="$(mktemp)"
+    if cargo test -p "$package" -- --list --format terse >"$TEST_LIST_TMP" 2>&1 \
+            && cargo test -p "$package" -- --list --format terse --ignored >"$TEST_IGNORED_TMP" 2>&1; then
+        RUNNER_TESTS=$(grep -cE ': test$' "$TEST_LIST_TMP" || true)
+        IGNORED_TESTS=$(grep -cE ': test$' "$TEST_IGNORED_TMP" || true)
+        DOCTESTS=$(grep -cE '^crates/.+ - .+\(line [0-9]+\): test$' "$TEST_LIST_TMP" || true)
+        TEST_MIN_VAR="TEST_MIN_$c"
+        DOC_MIN_VAR="DOCTEST_MIN_$c"
+        TEST_MIN="${!TEST_MIN_VAR}"
+        DOC_MIN="${!DOC_MIN_VAR}"
+        DOC_DISPLAY="$DOCTESTS"
+        DOC_STATUS="$DOC_MIN ✅"
+        if [ "$DOC_MIN" = "n/a" ]; then
+            DOC_DISPLAY="n/a"
+            DOC_STATUS="n/a"
+        fi
+        if [ "$RUNNER_TESTS" -lt "$TEST_MIN" ] \
+                || { [ "$DOC_MIN" != "n/a" ] && [ "$DOCTESTS" -lt "$DOC_MIN" ]; }; then
+            STATUS="❌ <$TEST_MIN / <$DOC_MIN"
+            RATCHET_BREACH+="$c "
+            AUDIT_FAILED=1
+        else
+            STATUS="$TEST_MIN ✅ / $DOC_STATUS"
+        fi
+        add "| $c | $RUNNER_TESTS | $IGNORED_TESTS | $DOC_DISPLAY | $STATUS |"
     else
-        TESTS_FILES=0
-    fi
-    # Doctest = '''rust' lub '''no_run' lub '''ignore' w docs.
-    # Indent-aware: doctesty wewnątrz `impl Foo {` / `mod tests {` mają
-    # wcięcie (4 spacje), więc anchor musi tolerować leading whitespace.
-    DOCTESTS=$(grep -rE "^\s*/// \`\`\`($|rust|no_run|ignore|compile_fail)" "$SRC_DIR" 2>/dev/null | wc -l | tr -d ' ')
-    MIN_VAR="DOCTEST_MIN_$c"
-    MIN_VAL="${!MIN_VAR:-0}"
-    if [ "$DOCTESTS" -lt "$MIN_VAL" ]; then
-        STATUS="❌ <$MIN_VAL"
+        add "| $c | BLOCKED | BLOCKED | BLOCKED | ❌ runner failed |"
+        add "  - \`cargo test -p $package -- --list --format terse\` nie wykonało enumeracji."
         RATCHET_BREACH+="$c "
-    else
-        STATUS="$MIN_VAL ✅"
+        AUDIT_FAILED=1
     fi
-    add "| $c | $TESTS_INLINE | $TESTS_FILES | $DOCTESTS | $STATUS |"
+    rm -f "$TEST_LIST_TMP" "$TEST_IGNORED_TMP"
 done
 add ""
 if [ -n "$RATCHET_BREACH" ]; then
-    add "**⚠ RATCHET BREACH (doctest)**: $RATCHET_BREACH — patrz \`rules/audit.md\` Krok 4."
+    add "**⚠ RATCHET/RUNNER BREACH**: $RATCHET_BREACH — patrz \`rules/audit.md\` Krok 4."
     add ""
 fi
 
@@ -232,10 +252,11 @@ add "### Dead code / nieużywane deps"
 if command -v cargo-udeps >/dev/null 2>&1; then
     UDEPS_TMP="$(mktemp)"
     if cargo +nightly udeps --workspace --all-features >"$UDEPS_TMP" 2>&1; then
-        UDEPS_UNUSED=$(grep -c "unused" "$UDEPS_TMP" || echo 0)
+        UDEPS_UNUSED=$(grep -c "unused" "$UDEPS_TMP" || true)
         add "- cargo-udeps: $UDEPS_UNUSED unused (output w \`$UDEPS_TMP\` — przejrzyj)."
     else
         add "- cargo-udeps: ❌ exec error (sprawdź toolchain nightly)"
+        AUDIT_FAILED=1
     fi
     rm -f "$UDEPS_TMP"
 else
@@ -337,6 +358,7 @@ fi
 if [ -n "$GUARD_FAILS" ]; then
     add ""
     add "**⚠ REGRESJA**: $GUARD_FAILS — patrz \`audit-log.md\` sekcje zamkniętych audytów; nie ignoruj."
+    AUDIT_FAILED=1
 fi
 add ""
 
@@ -443,17 +465,16 @@ echo ""
 echo "Zapisano sekcję do: $LOG"
 
 # === Fail-closed exit =========================================================
-# Po zapisaniu wpisu — audyt się odbył i ma zostać udokumentowany — ale kończy
-# się błędem, żeby porażka build gate'a nie utonęła w kilkuset linijkach
-# raportu.
-if [ "$BUILD_GATE_FAILED" -ne 0 ]; then
+# Po zapisaniu wpisu — audyt się odbył i ma zostać udokumentowany — ale każda
+# mechaniczna porażka kończy proces błędem, żeby nie utonęła w raporcie.
+if [ "$AUDIT_FAILED" -ne 0 ]; then
     {
         echo ""
         echo "════════════════════════════════════════════════════════════════"
-        echo " AUDYT ZAKOŃCZONY BŁĘDEM: build gate daemona nie przeszedł."
+        echo " AUDYT ZAKOŃCZONY BŁĘDEM: co najmniej jedna bramka nie przeszła."
         echo ""
-        echo " Wpis audytu zapisany w $LOG (sekcja „Build gate\")."
-        echo " Napraw zanim cokolwiek dołożysz:  cargo build -p bootcontrold"
+        echo " Wpis audytu zapisany w $LOG."
+        echo " Szczegóły są przy czerwonej bramce w zapisanym wpisie."
         echo "════════════════════════════════════════════════════════════════"
     } >&2
     exit 1
