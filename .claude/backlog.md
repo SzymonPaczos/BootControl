@@ -20,20 +20,6 @@ Kontekst w 2-4 liniach — co i dlaczego.
 
 ## 🔴 TOP — adopcja claude-toolkit 2026.09.04
 
-### `weekly-audit` ma martwy odsyłacz do `test-quality-baseline.md`
-
-Po `toolkit-sync.sh update .` do wersji `2026.09.04` i commita `7f50f1f`
-`toolkit-sync.sh check .` zgłasza jeden rozjazd: zaktualizowany skill wskazuje
-`../../conventions/test-quality-baseline.md`, podczas gdy BootControl używa
-układu `.claude/rules/` i nie ma tej kopii. Synchronizator twierdzi, że
-`update` dokopiuje brakujący plik, ale nowa konwencja nie jest jeszcze
-przyjętym artefaktem projektu, więc bieżący protokół nie daje jawnej komendy
-adopcji bez ręcznego seedowania ścieżki. Nie łatać kopii skilla ani nie
-kopiować pliku ręcznie: poprawić mechanizm/odnośnik w masterze toolkitu,
-następnie ponowić `update` i wymagać zielonego `check`.
-**Źródło:** adopcja toolkitu 2026-09-04, `toolkit-sync.sh check .` exit 1.
-**Status:** otwarte; adopcja zdegradowana do czasu poprawki w masterze.
-
 ### Ocenić przyjęcie `test-execution-economy.md`
 
 Commit toolkitu `7f50f1f` dodaje stack-agnostic konwencję ograniczania kosztu
@@ -153,11 +139,11 @@ enumeracji runnera, `ignored` jest jawne, CLI ma doctest `n/a`, parser i ścież
 fail-closed mają 4 meta-testy na żywym skrypcie. Nadal brak pełnego kontraktu:
 meta-testów pozostałych gate'ów, rejestru wyjątków z ratchetem,
 retry=0/flakiness metric, deterministycznych waitów, systematycznego PBT i
-pilota mutation testing. Plan: (1) po naprawieniu linku przyjąć baseline
-jawnie; (2) rozszerzyć forced-failure na każdego producenta; (3) rejestr
-skip/exception i flake metric bez retry; (4) usunąć sleep 1.1 s/5 s na rzecz
-sterowanego zegara/warunku; (5) PBT dla parser/serializer i pilotaż mutation
-testing bez arbitralnego progu.
+pilota mutation testing. Baseline został jawnie przyjęty wraz z toolkitem
+`2026.09.05` (`31ed713`). Plan: (1) rozszerzyć forced-failure na każdego
+producenta; (2) rejestr skip/exception i flake metric bez retry; (3) usunąć
+sleep 1.1 s/5 s na rzecz sterowanego zegara/warunku; (4) PBT dla
+parser/serializer i pilotaż mutation testing bez arbitralnego progu.
 **Źródło:** audyt 2026-09-04, `test-quality-baseline.md` toolkitu.
 **Status:** częściowo zamknięte w `631b2a0`; pozostałe właściwości otwarte.
 
@@ -286,8 +272,8 @@ Aktywne podatności (`crossbeam-epoch`, dwa warianty `quick-xml` oraz
 `zbus_polkit` na uprzywilejowanej ścieżce autoryzacji) usunięto w `5661fe1`;
 pomiar 2026-09-05 zwraca **0 vulnerabilities**. Pozostało 5 ostrzeżeń
 unmaintained i 5 unsound w zależnościach pośrednich. Osobno ocenić ich
-osiągalność i dostępne migracje. `cargo-udeps` nadal nie jest zainstalowane,
-więc metryka dead-code nie istnieje.
+osiągalność i dostępne migracje. Metryka dead-code działa osobno i po usunięciu
+dwóch martwych zależności bezpośrednich zwraca 0 ustaleń.
 **Źródło:** audyt 2026-08-22, odświeżone 2026-09-04 i 2026-09-05.
 **Status:** aktywne podatności zamknięte; ostrzeżenia otwarte (P2).
 
@@ -305,14 +291,6 @@ Aktualizacja (2026-07-12, decyzja właściciela): **TUI = docelowo pełna konsol
 _Zasada „najpierw zapisz, potem kontynuuj": zadania odkryte w rozmowie/audycie/review
 lądują tu natychmiast, gdy priorytet nie jest oczywisty. Triage do P0/P1/P2 robi
 właściciel._
-
-### `cargo-udeps` exec error w audit.sh (drugi audyt z rzędu)
-`.claude/audit.sh` wywołuje `cargo-udeps --workspace` do dead-code detection — od 2026-05-23 zwraca exec error (toolchain nightly niedostępny/niekompatybilny). Efekt: dead-code layer zdegradowany, weryfikacja greppem zamiast tego. Decyzja: naprawić nightly (`rustup toolchain install nightly` + `cargo install cargo-udeps`) czy usunąć krok ze skryptu i polegać na warstwie greppem.
-Pomiar 2026-09-05: nightly nie jest zainstalowany, `cargo-udeps` nie istnieje;
-instalacja wymaga zapisu poza repo do globalnego rustup/cargo home.
-**Źródło:** Audyt 2026-07-12 (warstwa statyczna), potwierdzone 2026-09-05.
-**Status:** czeka na zgodę właściciela na globalną instalację albo decyzję o
-usunięciu warstwy.
 
 ### `docs/threat-model.md:131` deklaruje mitygację, której sanitizer nie ma (`module_blacklist=`)
 Wiersz w sekcji *Elevation of privilege*: „Caller adds `selinux=0`, `apparmor=0`, `module_blacklist=` → Same blacklist; same rejection point". **`module_blacklist=` nie jest odrzucany** — `KERNEL_CMDLINE_BLACKLIST` (`crates/core/src/security.rs:43-51`) ma dokładnie 7 wpisów: `init=`, `selinux=0`, `apparmor=0`, `systemd.unit=`, `rd.break`, `single`, `emergency`. Zweryfikowane wykonywalnie (jednorazowa sonda w `core`, usunięta po pomiarze): `first_blacklisted_match("module_blacklist=nouveau")` → `None`, `first_blacklisted_match("efi=disable_early_pci_dma")` → `None`. To ten sam fałszywy claim, który zadanie 4 pętli usunęło z `crates/daemon/CLAUDE.md` — ale threat model to dokument, którego **jedynym zadaniem** jest mówić, co jest zmitygowane, więc kłamie w najgorszym możliwym miejscu.

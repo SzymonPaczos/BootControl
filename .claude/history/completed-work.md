@@ -13,6 +13,25 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Przenośny baseline audytu i toolkit 2026.09.05
+
+Źródłowy `claude-toolkit` naprawiono w `a6816cf`: `weekly-audit` niesie teraz
+generowaną, pilnowaną przed dryfem kopię `test-quality-baseline.md`, a test
+regresyjny kopiuje skill poza repo toolkitu i wymaga braku martwych odsyłaczy.
+BootControl przyjął wydanie `2026.09.05` w osobnym commicie `31ed713`;
+`toolkit-sync.sh check .` jest zielony, a domenowa sekcja Security Reviewera
+pozostała nienaruszona.
+
+## 2026-09-05 — Aktywna bramka nieużywanych zależności
+
+Zainstalowano Rust nightly i `cargo-udeps 0.1.61`. Pomiar wszystkich feature'ów
+i targetów wykrył dwie realnie martwe zależności `bootcontrol-core` w crate'ach
+client i GUI; usunięto je w `4e5d93d`. `zbus_polkit` potwierdzono osobnym
+przebiegiem jako używane na produkcyjnej ścieżce bez feature'a `polkit-mock`
+i jawnie wyłączono wyłącznie z fałszywego alarmu `--all-features`. Commit
+`69efd56` rozróżnia kod 1 oznaczający ustalenia od rzeczywistego błędu
+wykonania i dodaje dwa meta-testy. Wynik końcowy: 0 nieużywanych zależności.
+
 ## 2026-09-05 — Zamknięcie HIGH atomic restore
 
 `445b3d9` zmienia `RestoreSnapshot` na kontrakt wymagający bieżącego ETagu.
