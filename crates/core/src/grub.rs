@@ -192,7 +192,9 @@ fn is_valid_key(key: &str) -> bool {
         return false;
     }
     let mut chars = key.chars();
-    let first = chars.next().expect("non-empty string has a first char");
+    let Some(first) = chars.next() else {
+        return false;
+    };
     if !first.is_ascii_alphabetic() && first != '_' {
         return false;
     }

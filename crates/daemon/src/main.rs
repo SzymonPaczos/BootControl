@@ -85,10 +85,10 @@ struct TestUkiPolicy {
 /// Returns a `zbus::Error` if the underlying connection builder fails to
 /// initialise (e.g., the bus is not running).
 #[cfg(target_os = "linux")]
-fn dbus_connection_builder() -> connection::Builder<'static> {
+fn dbus_connection_builder() -> zbus::Result<connection::Builder<'static>> {
     match std::env::var("BOOTCONTROL_BUS").as_deref() {
-        Ok("session") => connection::Builder::session().expect("session bus unavailable"),
-        _ => connection::Builder::system().expect("system bus unavailable"),
+        Ok("session") => connection::Builder::session(),
+        _ => connection::Builder::system(),
     }
 }
 
@@ -220,7 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let _conn = dbus_connection_builder()
+    let _conn = dbus_connection_builder()?
         // ── 3. Register the interface object ────────────────────────────────
         .serve_at("/org/bootcontrol/Manager", manager)?
         // ── 4. Request the well-known bus name ──────────────────────────────
