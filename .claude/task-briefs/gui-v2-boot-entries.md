@@ -47,6 +47,15 @@ Lokalny model (LM Studio) = Builder; agent Claude = Coordinator + autor testów 
 
 Przydział chunków wg dopasowania do lokalnego modelu: **chunk 1 (parser `menuentry` w core — idealny: pure functions, table-driven testy)** → **chunk 4 (client trait + MockBackend — łatwy)** → chunk 2 (daemon D-Bus — średni, dużo idiomów Polkit/ETag) → chunk 3 (GUI `.slint` — **odradzany dla lokalnego modelu**: Slint to niszowy język, którego małe modele praktycznie nie znają; robi agent).
 
+## Stan chunków
+
+| Chunk | Stan | Dowód |
+|-------|------|-------|
+| 1 — parser `menuentry` w core (`grub_cfg.rs`) | **done 2026-07-12** | commit `cf7ddaf` (15 testów kontraktowych zielone, doctest, clippy, pełne `ci-local.sh`); testy red-phase: `c124cee`. Wykonane przez agenta — eksperyment local-Builder (gemma) nieudany, patrz handoff [`history/task-briefs/a1-chunk1-handoff.md`](../history/task-briefs/a1-chunk1-handoff.md) |
+| 2 — daemon D-Bus (`ListGrubEntries` + ETag) | **zaimplementowany 2026-07-12** — czeka na natywną weryfikację na Linuksie + scenariusz E2E | commit `34668c3` (TDD; check+clippy dla targetu Linux czyste); plan weryfikacji: [`a1-linux-handoff.md`](a1-linux-handoff.md). Po drodze fix P0 `6a3fd03` (daemon nie kompilował się na Linuksie po `4fcf14c`) |
+| 3 — GUI `boot_entries.slint` | nie rozpoczęty | — |
+| 4 — client trait + MockBackend | nie rozpoczęty | — |
+
 ## Prompt rozpoczynający nową rozmowę
 
 > Przeczytaj `CLAUDE.md`, potem `.claude/task-briefs/gui-v2-boot-entries.md`
