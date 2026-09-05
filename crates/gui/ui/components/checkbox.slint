@@ -1,6 +1,8 @@
 // crates/gui/ui/components/checkbox.slint
 //
-// Two-state checkbox with label. accent-info fill when checked.
+// Two-state checkbox with label. Stacja: 18 px square, interactive
+// outline, accent fill + check glyph when checked. Centering is
+// layout-driven (fix A2).
 
 import { Tokens } from "../tokens.slint";
 
@@ -18,23 +20,30 @@ export component CheckBox inherits Rectangle {
         spacing: Tokens.space-sm;
         alignment: start;
 
-        Rectangle {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            border-width: 2px;
-            border-color: root.checked ? Tokens.accent-info : Tokens.surface-2;
-            background: root.checked ? Tokens.accent-info : transparent;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+                border-width: 2px;
+                border-color: root.checked ? Tokens.accent : Tokens.border-interactive;
+                background: root.checked ? Tokens.accent : transparent;
 
-            animate background, border-color { duration: Tokens.motion-fast; }
+                animate background, border-color { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
 
-            if root.checked : Image {
-                source: @image-url("../../assets/icons/check.svg");
-                width: 14px;
-                height: 14px;
-                colorize: Tokens.on-accent;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
+                if root.checked : HorizontalLayout {
+                    alignment: center;
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            source: @image-url("../../assets/icons/check.svg");
+                            width: 14px;
+                            height: 14px;
+                            colorize: Tokens.on-accent;
+                        }
+                    }
+                }
             }
         }
 

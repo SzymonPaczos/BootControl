@@ -33,14 +33,16 @@ export component CommandDisclosure inherits Rectangle {
             HorizontalLayout {
                 spacing: Tokens.space-sm;
                 alignment: start;
-                Image {
-                    source: root.expanded
-                        ? @image-url("../../assets/icons/chevron-down.svg")
-                        : @image-url("../../assets/icons/chevron-right.svg");
-                    width: 12px;
-                    height: 12px;
-                    colorize: Tokens.on-surface-faint;
-                    y: (parent.height - self.height) / 2;
+                VerticalLayout {
+                    alignment: center;
+                    Image {
+                        source: root.expanded
+                            ? @image-url("../../assets/icons/expand-more.svg")
+                            : @image-url("../../assets/icons/chevron-right.svg");
+                        width: 16px;
+                        height: 16px;
+                        colorize: Tokens.on-surface-dim;
+                    }
                 }
                 Text {
                     text: "Command";
@@ -71,7 +73,8 @@ export component CommandDisclosure inherits Rectangle {
                 Text {
                     text: root.command;
                     color: Tokens.accent-info;
-                    font-size: Tokens.font-meta;
+                    font-size: Tokens.font-mono-meta;
+                    font-family: Tokens.font-family-mono;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                     overflow: elide;

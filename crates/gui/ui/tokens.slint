@@ -1,67 +1,73 @@
 // crates/gui/ui/tokens.slint
 //
-// Visual direction: GRANITE
-// ─────────────────────────
-// Mood: technical · calm · premium (refs: GNOME System Settings, JetBrains Toolbox)
-// Palette: cool-neutral granite ground, sapphire accent (no mauve / no purple).
-// Type:   Inter (UI) + JetBrains Mono (paths, etag, commands).
-// Mode:   dark default + light variant (apply_light_palette() at runtime).
+// Visual direction: STACJA (Station) — BootControl v2.1
+// ─────────────────────────────────────────────────────
+// Mood:  przyjazny · spokojny · utylitarny
+// Refs:  Windows 11 Settings, Tailscale
+// Model: "wszystko jest wierszem z afordancją" — karta = grupa wierszy,
+//        nie pudełko na akapit. Listy kompaktowe, formularze komfortowe.
+// Type:  Inter (UI) + JetBrains Mono (KAŻDA wartość techniczna: ścieżki,
+//        etag, snapshot-id, timeouty, kody wyjścia, komendy).
+// Icons: Material Symbols Rounded, 20 px (manifest: Faza C spec §4).
+// Mode:  dark + light + high-contrast × oba, domyślnie za systemem.
 //
-// Token NAMES are unchanged from v1 → all components keep compiling.
-// Hex VALUES are new and computed from the OKLCH design palette;
-// every text/bg pair is annotated with WCAG ratio.
+// Token NAMES z Granite są zachowane → wszystkie komponenty dalej się
+// kompilują. NOWE tokeny są oznaczone [NEW] i są wyłącznie addytywne.
+// Każda para tekst/tło ma policzony współczynnik WCAG (formuła WebAIM).
 //
-// Mapping rationale: docs/GUI_V2_SPEC_v2.md §8 (post-WCAG token system) and
-// docs/CLAUDE_DESIGN_BRIEF.md §9 (Phase C deliverable).
-//
-// Runtime override pattern: every property is in-out so the Rust side can:
-//   - swap to apply_light_palette() in batch   → light mode
-//   - swap to apply_high_contrast() in batch   → AAA fallback
-//   - re-tint accent based on user pick        → tweak panel parity
+// Runtime: Slint globals są singletonami compile-time — Rust (`theme.rs`)
+// przepisuje wartości z globali palet (DarkPalette / LightPalette /
+// HighContrastDark / HighContrastLight) do `Tokens` jedną paczką set_*.
 
 export global Tokens {
-    // ── Surface hierarchy (background levels) ────────────────────────
-    in-out property <color> surface: #1c1d22;                   // base — window/page (oklch 20.5% 0.008 250)
-    in-out property <color> surface-container: #22232a;         // card                (oklch 23.5% 0.008 250)
-    in-out property <color> surface-container-high: #292a32;    // nested card / hero  (oklch 27.5% 0.009 250)
-    in-out property <color> surface-1: #30323b;                 // sidebar active      (oklch 31% 0.010 250)
-    in-out property <color> surface-2: #3a3c47;                 // hover               (oklch 36% 0.011 250)
-    in-out property <color> surface-3: #474a55;                 // disabled fill       (oklch 42% 0.012 250)
-    in-out property <color> surface-error-tint: #2c1d1c;        // danger button hover bg
-    in-out property <color> surface-error-tint-strong: #3a2522; // armed/active state pill bg
+    // ── Surface hierarchy ────────────────────────────────────────────
+    in-out property <color> surface: #171a1f;                   // page ground
+    in-out property <color> surface-container: #1e2229;         // grupa wierszy (karta)
+    in-out property <color> surface-container-high: #252a33;    // wiersz hover / nested
+    in-out property <color> surface-1: #2c323d;                 // sidebar active
+    in-out property <color> surface-2: #353c48;                 // hover na kontrolkach
+    in-out property <color> surface-3: #434b58;                 // disabled fill
+    in-out property <color> surface-sidebar: #13161a;           // [NEW] sidebar ground (ciemniejszy od strony)
+    in-out property <color> surface-error-tint: #2b1d1d;
+    in-out property <color> surface-error-tint-strong: #3a2523;
 
-    // ── Text on surfaces ─────────────────────────────────────────────
-    // All ratios computed against `surface` (#1c1d22).
-    in-out property <color> on-surface: #f4f4f7;                // primary text   — 14.6:1 ✓ AAA
-    in-out property <color> on-surface-muted: #cdced4;          // secondary text —  9.4:1 ✓ AAA
-    in-out property <color> on-surface-dim: #aaabb3;            // tertiary       —  6.3:1 ✓ AA
-    in-out property <color> on-surface-faint: #888992;          // captions       —  4.6:1 ✓ AA (large only for body)
-    in-out property <color> on-surface-disabled: #6f7079;       // disabled       —  3.5:1 ✓ AA UI element
+    // ── Text on surfaces (ratio vs `surface` #171a1f) ────────────────
+    in-out property <color> on-surface: #e9edf2;                // 14.8:1 ✓ AAA
+    in-out property <color> on-surface-muted: #b4bcc7;          //  9.1:1 ✓ AAA
+    in-out property <color> on-surface-dim: #8e97a4;            //  5.9:1 ✓ AA  (opis wiersza)
+    in-out property <color> on-surface-faint: #7d8794;          //  4.8:1 ✓ AA  (meta, nagłówki kolumn)
+    in-out property <color> on-surface-disabled: #626b78;       //  3.2:1 ✓ AA UI element
 
-    // ── Accent (non-destructive primary — sapphire) ──────────────────
-    in-out property <color> accent: #5fa3d0;                    // sapphire 64% 0.130 235
-    in-out property <color> accent-secondary: #87b8d8;          // light sapphire (gradient pair)
-    in-out property <color> accent-info: #6eaad4;               // sidebar active marker
-    in-out property <color> on-accent: #14151a;                 // crust on accent — 7.1:1 ✓ AAA
+    // ── Accent (stalowy błękit) ──────────────────────────────────────
+    in-out property <color> accent: #7aa2e8;                    //  6.8:1 ✓ AA na surface
+    in-out property <color> accent-secondary: #9bbaf0;          // hover pair
+    in-out property <color> accent-info: #7aa2e8;               // = accent (HC swap MUSI go zmieniać — fix B8)
+    in-out property <color> on-accent: #0d1116;                 //  7.4:1 ✓ AAA na accent
 
-    // ── Semantic state colors ────────────────────────────────────────
-    in-out property <color> info: #6eaad4;                      // sapphire-info
-    in-out property <color> success: #69bf8e;                   // sage green
-    in-out property <color> warning: #d6a55a;                   // amber
-    in-out property <color> warning-soft: #c9a85c;              // modified-row border (yellow-amber)
-    in-out property <color> error: #d76a5d;                     // terracotta
-    in-out property <color> on-error: #14151a;                  // 5.4:1 ✓ AA
+    // ── Semantic ─────────────────────────────────────────────────────
+    in-out property <color> info: #7aa2e8;                      //  6.8:1 ✓ AA
+    in-out property <color> success: #6fbf95;                   //  7.9:1 ✓ AAA
+    in-out property <color> warning: #d7a55e;                   //  7.8:1 ✓ AAA
+    in-out property <color> warning-soft: #c9a15e;              // obrys wiersza zmodyfikowanego
+    in-out property <color> error: #e2695f;                     //  5.3:1 ✓ AA
+    in-out property <color> on-error: #14161a;                  //  5.7:1 ✓ AA
 
-    // ── Focus ring (composite per spec_v2 §8) ────────────────────────
-    in-out property <color> focus-ring-outer: #14151a;          // surface base shadow
-    in-out property <color> focus-ring-inner: #5fa3d0;          // accent
-    in-out property <length> focus-ring-width: 2px;             // each layer; total 4 px stroke
+    // ── Focus ring ───────────────────────────────────────────────────
+    in-out property <color> focus-ring-outer: #0d1116;
+    in-out property <color> focus-ring-inner: #7aa2e8;
+    in-out property <length> focus-ring-width: 2px;             // 2+2 = 4 px łącznie
 
-    // ── Borders (granite hairlines — new role; existing components OK) ──
-    in-out property <color> hairline: #3a3c44;                  // hairline (~ surface-1+α)
-    in-out property <color> hairline-strong: #4a4c56;           // separators / hover borders
+    // ── Borders ──────────────────────────────────────────────────────
+    in-out property <color> hairline: #2b313a;                  // separator wewnątrz grupy (dekoracyjny)
+    in-out property <color> hairline-strong: #39414c;           // obrys grupy / karty
+    in-out property <color> border-interactive: #626b78;        // [NEW] 3.2:1 ✓ — obrys ghost buttona,
+                                                                //  inputa, chipa: SPEŁNIA 3:1 UI element (fix A3)
 
-    // ── Spacing scale (unchanged) ────────────────────────────────────
+    // ── Typography families ──────────────────────────────────────────
+    in-out property <string> font-family-ui: "Inter, Cantarell, Roboto, sans-serif";        // [NEW]
+    in-out property <string> font-family-mono: "JetBrains Mono, Source Code Pro, monospace"; // [NEW]
+
+    // ── Spacing (bez zmian) ──────────────────────────────────────────
     in-out property <length> space-xs: 4px;
     in-out property <length> space-sm: 8px;
     in-out property <length> space-md: 12px;
@@ -71,19 +77,27 @@ export global Tokens {
     in-out property <length> space-3xl: 48px;
 
     // ── Layout ───────────────────────────────────────────────────────
-    in-out property <length> sidebar-width: 240px;              // PR 3 target reached
+    in-out property <length> sidebar-width: 240px;
     in-out property <length> inspector-width: 320px;
     in-out property <length> footer-height: 56px;
     in-out property <length> page-padding: 24px;
+    in-out property <length> content-max-width: 820px;          // [NEW] grupy wierszy nie rozjeżdżają się
+                                                                //  na szerokim oknie
+    in-out property <length> group-gap: 18px;                   // [NEW] odstęp między grupami
+    in-out property <length> group-label-gap: 8px;              // [NEW] etykieta grupy → grupa
 
-    // ── Type scale ───────────────────────────────────────────────────
-    in-out property <length> font-display: 28px;
-    in-out property <length> font-title-large: 20px;
-    in-out property <length> font-title-small: 14px;
+    // ── Type scale (o klasę większa niż Granite — fix „słaba hierarchia") ──
+    in-out property <length> font-display: 28px;                // tytuł strony
+    in-out property <length> font-title-large: 18px;            // nagłówek sekcji w treści (było 20)
+    in-out property <length> font-title-small: 15px;            // tytuł wiersza (było 14)
     in-out property <length> font-body-medium: 14px;
-    in-out property <length> font-label-large: 13px;
-    in-out property <length> font-meta: 11px;
-    in-out property <int> weight-display: 700;                  // Inter 700 (was 800)
+    in-out property <length> font-label-large: 13px;            // opis wiersza / etykieta grupy
+    in-out property <length> font-meta: 12px;                   // meta, nagłówki kolumn (było 11 — za małe)
+    in-out property <length> font-mono-value: 13px;             // [NEW] wartość techniczna w wierszu
+    in-out property <length> font-mono-meta: 12px;              // [NEW] etag, snapshot-id, kod wyjścia
+    in-out property <length> letter-spacing-display: -0.4px;    // [NEW] Inter 28/700 optycznie zbite
+    in-out property <length> letter-spacing-label: 0.4px;       // [NEW] etykieta grupy
+    in-out property <int> weight-display: 700;
     in-out property <int> weight-title: 600;
     in-out property <int> weight-strong: 600;
     in-out property <int> weight-medium: 500;
@@ -91,79 +105,200 @@ export global Tokens {
     in-out property <int> weight-body: 400;
 
     // ── Component sizing ─────────────────────────────────────────────
-    in-out property <length> sidebar-item-height: 40px;         // was 48 — Granite: tighter list
+    in-out property <length> sidebar-item-height: 40px;
+    in-out property <length> row-height-single: 44px;           // [NEW] wiersz jednoliniowy
+    in-out property <length> row-height-double: 56px;           // [NEW] tytuł + opis
+    in-out property <length> row-height-compact: 36px;          // [NEW] tabela Logs / diff
+    in-out property <length> row-separator-inset: 50px;         // [NEW] separator zaczyna się pod ikoną
+    in-out property <length> icon-size: 20px;                   // [NEW]
+    in-out property <length> icon-size-sm: 18px;                // [NEW] w przyciskach
+    in-out property <length> icon-column-width: 22px;           // [NEW] kolumna ikony wiersza
     in-out property <length> button-height-md: 36px;
     in-out property <length> button-height-lg: 40px;
+    in-out property <length> button-height-sm: 30px;            // [NEW] akcja wewnątrz wiersza
     in-out property <length> input-height: 36px;
-    in-out property <length> radius-sm: 6px;
-    in-out property <length> radius-md: 8px;
-    in-out property <length> radius-lg: 10px;
-    in-out property <length> radius-pill: 999px;                // pills: full-round
+    in-out property <length> radius-sm: 8px;
+    in-out property <length> radius-md: 10px;
+    in-out property <length> radius-lg: 12px;
+    in-out property <length> radius-pill: 999px;
     in-out property <length> radius-card: 12px;
 
+    // ── Siatka kolumn dla list (fix A1/A4/A5 — zakaz alignment:center) ──
+    in-out property <length> col-key-width: 200px;              // [NEW] etykieta klucza (Boot Entries, Bootloader)
+    in-out property <length> col-id-width: 230px;               // [NEW] snapshot-id / timestamp
+    in-out property <length> col-status-width: 96px;            // [NEW] status / rozmiar
+    in-out property <length> col-actions-width: 168px;          // [NEW] stała kolumna akcji, prawa
+    in-out property <length> col-gap: 12px;                     // [NEW]
+
     // ── Motion ───────────────────────────────────────────────────────
-    in-out property <duration> motion-fast: 150ms;
-    in-out property <duration> motion-medium: 220ms;
+    in-out property <duration> motion-fast: 120ms;
+    in-out property <duration> motion-medium: 200ms;
     in-out property <bool> reduced-motion: false;
 
-    // ── High-contrast (Rust toggles via apply_high_contrast) ─────────
+    // ── Theme state ──────────────────────────────────────────────────
     in-out property <bool> high-contrast: false;
+    in-out property <bool> light: false;                        // [NEW]
+    in-out property <bool> theme-follow-system: true;           // [NEW] domyślnie za systemem
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Light palette — call from Rust on theme switch.
-// Hex values precomputed from the same OKLCH design palette as dark.
-// All text/bg pairs re-audited in HANDOFF.md §6 (light table).
+// DARK — lustrzana kopia wartości domyślnych `Tokens`, żeby powrót do
+// dark był data-driven (theme.rs czyta globale, nie duplikuje hexów).
+// ─────────────────────────────────────────────────────────────────────
+export global DarkPalette {
+    out property <color> surface: #171a1f;
+    out property <color> surface-container: #1e2229;
+    out property <color> surface-container-high: #252a33;
+    out property <color> surface-1: #2c323d;
+    out property <color> surface-2: #353c48;
+    out property <color> surface-3: #434b58;
+    out property <color> surface-sidebar: #13161a;
+    out property <color> surface-error-tint: #2b1d1d;
+    out property <color> surface-error-tint-strong: #3a2523;
+
+    out property <color> on-surface: #e9edf2;
+    out property <color> on-surface-muted: #b4bcc7;
+    out property <color> on-surface-dim: #8e97a4;
+    out property <color> on-surface-faint: #7d8794;
+    out property <color> on-surface-disabled: #626b78;
+
+    out property <color> accent: #7aa2e8;
+    out property <color> accent-secondary: #9bbaf0;
+    out property <color> accent-info: #7aa2e8;
+    out property <color> on-accent: #0d1116;
+
+    out property <color> info: #7aa2e8;
+    out property <color> success: #6fbf95;
+    out property <color> warning: #d7a55e;
+    out property <color> warning-soft: #c9a15e;
+    out property <color> error: #e2695f;
+    out property <color> on-error: #14161a;
+
+    out property <color> focus-ring-outer: #0d1116;
+    out property <color> focus-ring-inner: #7aa2e8;
+
+    out property <color> hairline: #2b313a;
+    out property <color> hairline-strong: #39414c;
+    out property <color> border-interactive: #626b78;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// LIGHT — ratios vs `surface` #f5f7fa
 // ─────────────────────────────────────────────────────────────────────
 export global LightPalette {
-    // Surface levels (paper → granite)
-    out property <color> surface: #f6f6f8;                       // oklch 96% 0.004 250
-    out property <color> surface-container: #ececef;             // oklch 92% 0.005 250
-    out property <color> surface-container-high: #e2e3e8;        // oklch 88% 0.006 250
-    out property <color> surface-1: #d6d8de;                     // sidebar active
-    out property <color> surface-2: #c9ccd3;                     // hover
-    out property <color> surface-3: #b8bbc3;                     // disabled fill
-    out property <color> surface-error-tint: #f7e3df;
-    out property <color> surface-error-tint-strong: #f1cdc6;
+    out property <color> surface: #f5f7fa;
+    out property <color> surface-container: #ffffff;             // grupa wierszy = czysta biel na chłodnym tle
+    out property <color> surface-container-high: #eef2f7;
+    out property <color> surface-1: #e2e8f0;                     // sidebar active
+    out property <color> surface-2: #dce3ec;
+    out property <color> surface-3: #c6cdd8;
+    out property <color> surface-sidebar: #eef1f6;
+    out property <color> surface-error-tint: #fbe9e6;
+    out property <color> surface-error-tint-strong: #f5d3cd;
 
-    // Text (ratios computed against `surface` #f6f6f8)
-    out property <color> on-surface: #161821;                    // 14.1:1 ✓ AAA
-    out property <color> on-surface-muted: #3d4150;              //  9.0:1 ✓ AAA
-    out property <color> on-surface-dim: #5a5e6c;                //  6.0:1 ✓ AA
-    out property <color> on-surface-faint: #767988;              //  4.5:1 ✓ AA
-    out property <color> on-surface-disabled: #9295a0;
+    out property <color> on-surface: #161a20;                    // 16.3:1 ✓ AAA
+    out property <color> on-surface-muted: #464e5a;              //  7.8:1 ✓ AAA
+    out property <color> on-surface-dim: #5a6472;                //  5.6:1 ✓ AA
+    out property <color> on-surface-faint: #687181;              //  4.6:1 ✓ AA
+    out property <color> on-surface-disabled: #8b94a1;           //  2.9:1 — tylko wypełnienia, nie tekst
 
-    // Accent (sapphire — darker on light to keep ratio)
-    out property <color> accent: #2c6da6;                        // oklch 52% 0.130 235
-    out property <color> accent-secondary: #4f8ec1;
-    out property <color> accent-info: #2c6da6;
-    out property <color> on-accent: #ffffff;                     // 7.4:1 ✓ AAA
+    out property <color> accent: #2b5fc0;                        //  5.6:1 ✓ AA
+    out property <color> accent-secondary: #4d7ed6;
+    out property <color> accent-info: #2b5fc0;
+    out property <color> on-accent: #ffffff;                     //  6.0:1 ✓ AA na accent
 
-    // Semantic
-    out property <color> info: #2c6da6;
-    out property <color> success: #2f7d4f;
-    out property <color> warning: #8a5e1c;
+    out property <color> info: #2b5fc0;                          //  5.6:1 ✓ AA
+    out property <color> success: #2f7d4f;                       //  4.7:1 ✓ AA
+    out property <color> warning: #8a5e1c;                       //  5.3:1 ✓ AA
     out property <color> warning-soft: #a47b2c;
-    out property <color> error: #b03a2c;
+    out property <color> error: #b03a2c;                         //  5.6:1 ✓ AA
     out property <color> on-error: #ffffff;
 
-    // Focus ring
     out property <color> focus-ring-outer: #ffffff;
-    out property <color> focus-ring-inner: #2c6da6;
+    out property <color> focus-ring-inner: #2b5fc0;
 
-    // Borders
-    out property <color> hairline: #d4d6dc;
-    out property <color> hairline-strong: #b9bcc4;
+    out property <color> hairline: #dde2e9;
+    out property <color> hairline-strong: #c6cdd8;
+    out property <color> border-interactive: #848d9b;            //  3.1:1 ✓ UI element
 }
 
-// Rust-side helper (pseudocode — implement in `theme.rs`):
-//
-//   pub fn apply_light_palette(t: &Tokens, p: &LightPalette) {
-//       t.set_surface(p.get_surface());
-//       t.set_surface_container(p.get_surface_container());
-//       // … one set_* per property listed above
-//   }
-//
-// Symmetric `apply_dark_palette()` simply re-applies the file defaults
-// (or store them in a `DarkPalette` global with the same shape if you
-// want fully data-driven theming).
+// ─────────────────────────────────────────────────────────────────────
+// HIGH CONTRAST — dark. Fix B8: bursztyn wchodzi TAKŻE w accent-info
+// i info, nie tylko w logo. Różnica jest widoczna z odległości.
+// ─────────────────────────────────────────────────────────────────────
+export global HighContrastDark {
+    out property <color> surface: #000000;
+    out property <color> surface-container: #0b0b0b;
+    out property <color> surface-container-high: #161616;
+    out property <color> surface-1: #262626;
+    out property <color> surface-2: #333333;
+    out property <color> surface-3: #4a4a4a;
+    out property <color> surface-sidebar: #000000;
+    out property <color> surface-error-tint: #2a0000;
+    out property <color> surface-error-tint-strong: #3d0000;
+
+    out property <color> on-surface: #ffffff;                    // 21:1 ✓ AAA
+    out property <color> on-surface-muted: #ffffff;              // brak stopniowania — HC to HC
+    out property <color> on-surface-dim: #e0e0e0;                // 15.3:1 ✓ AAA
+    out property <color> on-surface-faint: #c8c8c8;              // 11.6:1 ✓ AAA
+    out property <color> on-surface-disabled: #8a8a8a;           //  4.6:1 ✓
+
+    out property <color> accent: #ffcf4d;                        // 14.3:1 ✓ AAA
+    out property <color> accent-secondary: #ffe28a;
+    out property <color> accent-info: #ffcf4d;                   // ← klucz do B8
+    out property <color> on-accent: #000000;                     // 14.3:1 ✓ AAA
+
+    out property <color> info: #ffcf4d;
+    out property <color> success: #5cf08e;
+    out property <color> warning: #ffcf4d;
+    out property <color> warning-soft: #ffcf4d;
+    out property <color> error: #ff8a7a;
+    out property <color> on-error: #000000;
+
+    out property <color> focus-ring-outer: #000000;
+    out property <color> focus-ring-inner: #ffcf4d;
+
+    out property <color> hairline: #5a5a5a;
+    out property <color> hairline-strong: #8a8a8a;
+    out property <color> border-interactive: #ffffff;            // 21:1 — każda kontrolka ma biały obrys
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// HIGH CONTRAST — light (uzupełnia macierz: HC × jasny motyw)
+// ─────────────────────────────────────────────────────────────────────
+export global HighContrastLight {
+    out property <color> surface: #ffffff;
+    out property <color> surface-container: #ffffff;
+    out property <color> surface-container-high: #f0f0f0;
+    out property <color> surface-1: #dcdcdc;
+    out property <color> surface-2: #c8c8c8;
+    out property <color> surface-3: #a8a8a8;
+    out property <color> surface-sidebar: #f5f5f5;
+    out property <color> surface-error-tint: #ffecea;
+    out property <color> surface-error-tint-strong: #ffd6d1;
+
+    out property <color> on-surface: #000000;                    // 21:1 ✓ AAA
+    out property <color> on-surface-muted: #000000;
+    out property <color> on-surface-dim: #1f1f1f;                // 17.4:1 ✓ AAA
+    out property <color> on-surface-faint: #333333;              // 12.6:1 ✓ AAA
+    out property <color> on-surface-disabled: #666666;           //  5.7:1 ✓
+
+    out property <color> accent: #7a4400;                        //  7.9:1 ✓ AAA
+    out property <color> accent-secondary: #96560a;
+    out property <color> accent-info: #7a4400;
+    out property <color> info: #7a4400;
+    out property <color> on-accent: #ffffff;                     //  7.9:1 ✓ AAA
+
+    out property <color> success: #005c2e;
+    out property <color> warning: #7a4400;
+    out property <color> warning-soft: #7a4400;
+    out property <color> error: #a30000;
+    out property <color> on-error: #ffffff;
+
+    out property <color> focus-ring-outer: #ffffff;
+    out property <color> focus-ring-inner: #7a4400;
+
+    out property <color> hairline: #767676;
+    out property <color> hairline-strong: #3a3a3a;
+    out property <color> border-interactive: #000000;
+}

@@ -1,19 +1,22 @@
 // crates/gui/ui/components/styled_input.slint
 //
-// Single-line text input. Surface-container-high background, accent border on focus.
+// Single-line text input. Stacja: visible `border-interactive` outline at
+// rest (3:1 UI-element contrast), accent outline on focus. Technical
+// values opt into the mono face via `mono` (internal, additive).
 // Anatomy: see docs/GUI_V2_SPEC_v2.md §13.
 
 import { Tokens } from "../tokens.slint";
 
 export component StyledInput inherits Rectangle {
     in-out property <string> text <=> input.text;
+    in property <bool> mono: false;
     callback edited(string);
 
     height: Tokens.input-height;
     border-radius: Tokens.radius-sm;
     background: Tokens.surface-container-high;
-    border-width: 1px;
-    border-color: input.has-focus ? Tokens.accent-secondary : Tokens.surface-1;
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? Tokens.focus-ring-inner : Tokens.border-interactive;
 
     accessible-role: text-input;
     accessible-label: "Text input";
@@ -27,7 +30,8 @@ export component StyledInput inherits Rectangle {
             horizontal-alignment: left;
             vertical-alignment: center;
             color: Tokens.on-surface;
-            font-size: Tokens.font-body-medium;
+            font-size: root.mono ? Tokens.font-mono-value : Tokens.font-body-medium;
+            font-family: root.mono ? Tokens.font-family-mono : Tokens.font-family-ui;
             single-line: true;
             edited => { root.edited(self.text); }
         }

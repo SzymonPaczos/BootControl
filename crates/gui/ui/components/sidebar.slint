@@ -1,36 +1,40 @@
 // crates/gui/ui/components/sidebar.slint
 //
 // Left navigation rail. v2 spec §3 IA: 6 items + footer Settings.
-// Granite restyle (HANDOFF.md §4):
-//   - Brand block: 32×32 rounded square with sapphire gradient + B avatar,
-//     wordmark "BootControl" + v0.1 chip
-//   - "SYSTEM" section label above the nav list
-//   - Each item gets a 16 px nav glyph (overview / list / cpu / shield /
-//     layers / scroll / settings)
-//   - Item height tightened to Tokens.sidebar-item-height (40 px Granite vs 48 v1)
+// Stacja restyle (Faza C §2):
+//   - Ground `surface-sidebar` — darker than the page, the rail recedes
+//     instead of glowing
+//   - Brand: accent "start pill" (circle + play triangle drawn from
+//     primitives — no bitmap) + wordmark
+//   - Items: 19 px Material Symbols glyph + 14 px label; active state =
+//     `surface-1` fill + 3 px accent bar at the left edge + accent-info
+//     glyph (FILL 1 variant where the glyph has one)
+//   - Manual y-centerings replaced with layout alignment (fix A2)
 //
-// Mapping:
-//   0 Overview      — overview.svg
-//   1 Boot Entries  — list.svg
-//   2 Bootloader    — cpu.svg
-//   3 Secure Boot   — shield.svg
-//   4 Snapshots     — layers.svg
-//   5 Logs          — scroll.svg
-//   6 Settings      — settings.svg (footer)
+// Mapping (Material Symbols Rounded):
+//   0 Overview      — dashboard(-fill)
+//   1 Boot Entries  — format-list-bulleted
+//   2 Bootloader    — memory(-fill)
+//   3 Secure Boot   — verified-user(-fill)
+//   4 Snapshots     — history
+//   5 Logs          — receipt-long
+//   6 Settings      — settings (footer)
 
 import { Tokens } from "../tokens.slint";
 
 component SidebarItem inherits Rectangle {
     in property <string> text;
     in property <image> glyph;
+    in property <image> glyph-active;
     in property <bool> active: false;
     callback clicked <=> touch.clicked;
 
     height: Tokens.sidebar-item-height;
-    border-radius: Tokens.radius-md;
+    border-radius: Tokens.radius-sm;
     background: root.active
         ? Tokens.surface-1
         : (touch.has-hover ? Tokens.surface : transparent);
+    clip: true;
 
     accessible-role: button;
     accessible-label: root.text;
@@ -38,31 +42,33 @@ component SidebarItem inherits Rectangle {
 
     animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
 
+    // Active marker: 3 px accent bar hugging the left edge of the item.
+    if root.active : Rectangle {
+        x: 0;
+        width: 3px;
+        height: parent.height;
+        background: Tokens.accent;
+    }
+
     HorizontalLayout {
-        padding-left: Tokens.space-md;
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-md;
         spacing: Tokens.space-md;
         alignment: start;
 
-        // Active marker (4 px sapphire bar on left)
-        Rectangle {
-            width: 4px;
-            height: 20px;
-            background: root.active ? Tokens.accent-info : transparent;
-            border-radius: 2px;
-            y: (parent.height - self.height) / 2;
-        }
-
-        Image {
-            source: root.glyph;
-            width: 16px;
-            height: 16px;
-            colorize: root.active ? Tokens.accent-info : Tokens.on-surface-dim;
-            y: (parent.height - self.height) / 2;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.active ? root.glyph-active : root.glyph;
+                width: 19px;
+                height: 19px;
+                colorize: root.active ? Tokens.accent-info : Tokens.on-surface-dim;
+            }
         }
 
         Text {
             text: root.text;
-            color: root.active ? Tokens.accent-info : Tokens.on-surface-dim;
+            color: root.active ? Tokens.on-surface : Tokens.on-surface-dim;
             font-size: Tokens.font-body-medium;
             font-weight: root.active ? Tokens.weight-strong : Tokens.weight-label;
             vertical-alignment: center;
@@ -75,31 +81,36 @@ export component Sidebar inherits Rectangle {
     in-out property <int> active-tab: 0;
 
     width: Tokens.sidebar-width;
-    background: Tokens.surface-container-high;
+    background: Tokens.surface-sidebar;
 
     VerticalLayout {
         padding: Tokens.space-xl;
         spacing: Tokens.space-sm;
         alignment: start;
 
-        // ── Brand block ──────────────────────────────────────────────────
+        // ── Brand block: start pill + wordmark (Faza C §4.3) ─────────────
         HorizontalLayout {
             spacing: Tokens.space-md;
             alignment: start;
 
-            // Sapphire-gradient avatar with "B"
-            Rectangle {
-                width: 32px;
-                height: 32px;
-                border-radius: Tokens.radius-md;
-                background: @linear-gradient(135deg, Tokens.accent 0%, Tokens.accent-secondary 100%);
-                Text {
-                    text: "B";
-                    color: Tokens.on-accent;
-                    font-size: 18px;
-                    font-weight: Tokens.weight-display;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 26px;
+                    height: 26px;
+                    border-radius: Tokens.radius-pill;
+                    background: Tokens.accent;
+                    Path {
+                        // Play triangle, nudged 1 px right for optical centering.
+                        x: (parent.width - self.width) / 2 + 1px;
+                        y: (parent.height - self.height) / 2;
+                        width: 9px;
+                        height: 11px;
+                        viewbox-width: 9;
+                        viewbox-height: 11;
+                        commands: "M 0 0 L 9 5.5 L 0 11 Z";
+                        fill: Tokens.on-accent;
+                    }
                 }
             }
 
@@ -108,8 +119,9 @@ export component Sidebar inherits Rectangle {
                 spacing: 0px;
                 Text {
                     text: "BootControl";
-                    font-size: 15px;
+                    font-size: Tokens.font-body-medium;
                     font-weight: Tokens.weight-strong;
+                    letter-spacing: -0.1px;
                     color: Tokens.on-surface;
                 }
                 Text {
@@ -129,7 +141,7 @@ export component Sidebar inherits Rectangle {
             color: Tokens.on-surface-faint;
             font-size: Tokens.font-meta;
             font-weight: Tokens.weight-strong;
-            // letter-spacing not exposed in Slint 1.14; rely on weight + size for caps emphasis
+            letter-spacing: Tokens.letter-spacing-label;
         }
 
         Rectangle { height: Tokens.space-xs; }
@@ -137,37 +149,43 @@ export component Sidebar inherits Rectangle {
         // ── Nav items ────────────────────────────────────────────────────
         SidebarItem {
             text: "Overview";
-            glyph: @image-url("../../assets/icons/overview.svg");
+            glyph: @image-url("../../assets/icons/dashboard.svg");
+            glyph-active: @image-url("../../assets/icons/dashboard-fill.svg");
             active: root.active-tab == 0;
             clicked => { root.active-tab = 0; }
         }
         SidebarItem {
             text: "Boot Entries";
-            glyph: @image-url("../../assets/icons/list.svg");
+            glyph: @image-url("../../assets/icons/format-list-bulleted.svg");
+            glyph-active: @image-url("../../assets/icons/format-list-bulleted.svg");
             active: root.active-tab == 1;
             clicked => { root.active-tab = 1; }
         }
         SidebarItem {
             text: "Bootloader";
-            glyph: @image-url("../../assets/icons/cpu.svg");
+            glyph: @image-url("../../assets/icons/memory.svg");
+            glyph-active: @image-url("../../assets/icons/memory-fill.svg");
             active: root.active-tab == 2;
             clicked => { root.active-tab = 2; }
         }
         SidebarItem {
             text: "Secure Boot";
-            glyph: @image-url("../../assets/icons/shield.svg");
+            glyph: @image-url("../../assets/icons/verified-user.svg");
+            glyph-active: @image-url("../../assets/icons/verified-user-fill.svg");
             active: root.active-tab == 3;
             clicked => { root.active-tab = 3; }
         }
         SidebarItem {
             text: "Snapshots";
-            glyph: @image-url("../../assets/icons/layers.svg");
+            glyph: @image-url("../../assets/icons/history.svg");
+            glyph-active: @image-url("../../assets/icons/history.svg");
             active: root.active-tab == 4;
             clicked => { root.active-tab = 4; }
         }
         SidebarItem {
             text: "Logs";
-            glyph: @image-url("../../assets/icons/scroll.svg");
+            glyph: @image-url("../../assets/icons/receipt-long.svg");
+            glyph-active: @image-url("../../assets/icons/receipt-long.svg");
             active: root.active-tab == 5;
             clicked => { root.active-tab = 5; }
         }
@@ -178,6 +196,7 @@ export component Sidebar inherits Rectangle {
         SidebarItem {
             text: "Settings";
             glyph: @image-url("../../assets/icons/settings.svg");
+            glyph-active: @image-url("../../assets/icons/settings.svg");
             active: root.active-tab == 6;
             clicked => { root.active-tab = 6; }
         }

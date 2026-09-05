@@ -21,19 +21,16 @@ export component LoadingBar inherits Rectangle {
 
     animate height { duration: Tokens.reduced-motion ? 0ms : 180ms; easing: ease-in-out; }
 
-    // Granite: a thin sapphire bar along the top edge marks active state.
+    // Stacja: flat 3 px accent line along the top edge marks active state.
     // A true indeterminate sweep needs a Timer-driven property — deferred
-    // to a follow-up; Granite v1 ships the static accent line.
+    // to a follow-up.
     Rectangle {
         x: 0;
         y: 0;
         width: parent.width;
-        height: 2px;
-        background: @linear-gradient(90deg,
-            #ffffff00 0%,
-            Tokens.accent 30%,
-            Tokens.accent-secondary 70%,
-            #ffffff00 100%);
+        height: 3px;
+        border-radius: Tokens.radius-pill;
+        background: Tokens.accent;
     }
 
     HorizontalLayout {
@@ -42,6 +39,15 @@ export component LoadingBar inherits Rectangle {
         spacing: Tokens.space-md;
         alignment: start;
 
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("../../assets/icons/progress-activity.svg");
+                width: Tokens.icon-size-sm;
+                height: Tokens.icon-size-sm;
+                colorize: Tokens.accent;
+            }
+        }
         Text {
             text: root.message;
             color: Tokens.on-surface-muted;

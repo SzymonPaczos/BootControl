@@ -1,0 +1,183 @@
+// crates/gui/ui/components/row_group.slint
+//
+// Stacja building blocks: "everything is a row with an affordance".
+// A Group is a bordered container of rows; the group label renders ABOVE
+// the border (GroupLabel). Rows keep an explicit column grid — icon
+// column, stretching text column, value/action column — never
+// `alignment: center` on a data row (fix A1/A4/A5).
+//
+// New in v2.1 — additive components, no existing API touched.
+
+import { Tokens } from "../tokens.slint";
+
+// Small label rendered above a Group.
+export component GroupLabel inherits Text {
+    color: Tokens.on-surface-dim;
+    font-size: Tokens.font-label-large;
+    font-weight: Tokens.weight-medium;
+    letter-spacing: Tokens.letter-spacing-label;
+}
+
+// Bordered container for rows. Carries no padding of its own — the rows do.
+export component Group inherits Rectangle {
+    background: Tokens.surface-container;
+    border-radius: Tokens.radius-card;
+    border-width: 1px;
+    border-color: Tokens.hairline-strong;
+    clip: true;
+
+    VerticalLayout {
+        @children
+    }
+}
+
+// Inset hairline separator between rows (starts under the icon column).
+export component RowSeparator inherits Rectangle {
+    height: 1px;
+    HorizontalLayout {
+        padding-left: Tokens.row-separator-inset;
+        Rectangle {
+            height: 1px;
+            background: Tokens.hairline;
+        }
+    }
+}
+
+// Generic row: icon · title/description · value slot (@children) · chevron.
+export component SettingRow inherits Rectangle {
+    in property <image> icon;
+    in property <bool> has-icon: true;
+    in property <color> icon-color: Tokens.on-surface-dim;
+    in property <string> title;
+    in property <string> description;
+    in property <bool> show-chevron: false;
+    in property <bool> hoverable: false;
+    callback clicked <=> touch.clicked;
+
+    height: root.description == "" ? Tokens.row-height-single : Tokens.row-height-double;
+    background: root.hoverable && touch.has-hover
+        ? Tokens.surface-container-high
+        : transparent;
+
+    animate background { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
+
+    // accessible-role must be a compile-time constant in Slint 1.x — the
+    // clickable variant announces its action through the description.
+    accessible-role: text;
+    accessible-label: root.title;
+    accessible-description: root.hoverable
+        ? root.description + " (activatable row)"
+        : root.description;
+
+    touch := TouchArea {
+        enabled: root.hoverable;
+    }
+
+    HorizontalLayout {
+        padding-left: Tokens.space-lg;
+        padding-right: Tokens.space-lg;
+        spacing: Tokens.col-gap;
+
+        if root.has-icon : VerticalLayout {
+            alignment: center;
+            width: Tokens.icon-column-width;
+            Image {
+                source: root.icon;
+                width: Tokens.icon-size;
+                height: Tokens.icon-size;
+                colorize: root.icon-color;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 1px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Tokens.on-surface;
+                font-size: Tokens.font-title-small;
+                font-weight: Tokens.weight-medium;
+                overflow: elide;
+            }
+            if root.description != "" : Text {
+                text: root.description;
+                color: Tokens.on-surface-dim;
+                font-size: Tokens.font-label-large;
+                overflow: elide;
+            }
+        }
+
+        // Value / action slot — call-site children land here, vertically
+        // centered on the row axis.
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
+
+        if root.show-chevron : VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("../../assets/icons/chevron-right.svg");
+                width: Tokens.icon-size-sm;
+                height: Tokens.icon-size-sm;
+                colorize: Tokens.on-surface-faint;
+            }
+        }
+    }
+}
+
+// Status pill: bordered capsule with a semantic dot and a label.
+export component StatusPill inherits Rectangle {
+    in property <string> text;
+    in property <color> dot-color: Tokens.on-surface-faint;
+
+    height: 26px;
+    width: pill-layout.preferred-width;
+    border-radius: self.height / 2;
+    border-width: 1px;
+    border-color: Tokens.border-interactive;
+    background: transparent;
+
+    pill-layout := HorizontalLayout {
+        padding-left: Tokens.space-md;
+        padding-right: Tokens.space-md;
+        spacing: 6px;
+        alignment: center;
+
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 7px;
+                height: 7px;
+                border-radius: 3.5px;
+                background: root.dot-color;
+            }
+        }
+        Text {
+            text: root.text;
+            color: Tokens.on-surface;
+            font-size: Tokens.font-label-large;
+            font-weight: Tokens.weight-medium;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Micro meter (4 px) — e.g. snapshot retention 7/10.
+export component MicroMeter inherits Rectangle {
+    in property <float> fraction: 0.0;
+
+    height: 4px;
+    border-radius: Tokens.radius-pill;
+    background: Tokens.surface-container-high;
+    clip: true;
+
+    Rectangle {
+        x: 0;
+        width: parent.width * Math.max(0.0, Math.min(1.0, root.fraction));
+        height: parent.height;
+        border-radius: Tokens.radius-pill;
+        background: Tokens.accent;
+    }
+}

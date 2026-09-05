@@ -1,10 +1,13 @@
 // crates/gui/ui/components/section_header.slint
-// All-caps small label used as a section divider inside a page.
+// Stacja: quiet 13 px medium label used as a section divider inside a
+// page (the group border carries the visual weight, not this label).
+// Uppercase styling is reserved for table column headers.
 
 import { Tokens } from "../tokens.slint";
 
 export component SectionHeader inherits Text {
     color: Tokens.on-surface-dim;
-    font-size: Tokens.font-meta;
-    font-weight: Tokens.weight-strong;
+    font-size: Tokens.font-label-large;
+    font-weight: Tokens.weight-medium;
+    letter-spacing: Tokens.letter-spacing-label;
 }

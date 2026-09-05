@@ -1,8 +1,9 @@
 // crates/gui/ui/components/danger_button.slint
 //
-// Destructive primary action button. Red outline at rest, fills on press.
-// Use ONLY inside Confirmation Sheets after type-to-confirm passes
-// (see docs/GUI_V2_SPEC_v2.md §6 destructive-action protocol step 3).
+// Destructive primary action button. Stacja visual escalation: rest =
+// error-tinted fill with error outline and error text; only the armed /
+// pressed state fills solid `error`. Use ONLY inside Confirmation Sheets
+// after type-to-confirm passes (docs/GUI_V2_SPEC_v2.md §6 step 3).
 // Outside a sheet — wrong tool; use Confirmation Sheet first.
 // Anatomy: §13 component public APIs.
 
@@ -14,13 +15,13 @@ export component DangerButton inherits Rectangle {
     callback clicked <=> touch.clicked;
 
     height: Tokens.button-height-lg;
-    border-radius: Tokens.radius-md;
+    border-radius: Tokens.radius-sm;
     border-width: 1px;
     border-color: root.enabled ? Tokens.error : Tokens.surface-2;
     background: root.enabled
         ? (touch.pressed
             ? Tokens.error
-            : (touch.has-hover ? Tokens.surface-error-tint : transparent))
+            : (touch.has-hover ? Tokens.surface-error-tint-strong : Tokens.surface-error-tint))
         : transparent;
 
     animate background, border-color { duration: Tokens.reduced-motion ? 0ms : Tokens.motion-fast; }
@@ -32,7 +33,9 @@ export component DangerButton inherits Rectangle {
 
     Text {
         text: root.text;
-        color: root.enabled ? Tokens.error : Tokens.on-surface-disabled;
+        color: root.enabled
+            ? (touch.pressed ? Tokens.on-error : Tokens.error)
+            : Tokens.on-surface-disabled;
         font-size: Tokens.font-body-medium;
         font-weight: Tokens.weight-strong;
         horizontal-alignment: center;

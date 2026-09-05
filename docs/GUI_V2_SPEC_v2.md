@@ -298,6 +298,16 @@ Sysadmin red-team correctly noted that `auth_admin_keep` is a polkit-side 5-minu
 
 ## 8. Token system v2 (post-WCAG)
 
+> **Superseded (2026-07-27, Stacja v2.1):** the color values in this section
+> describe the original Catppuccin Mocha mapping and were already replaced
+> once by Granite (commit `80fa4dd`). The current authority is
+> [`crates/gui/ui/tokens.slint`](../crates/gui/ui/tokens.slint) — Stacja
+> palette, four runtime palettes (dark / light / HC-dark / HC-light) applied
+> by `crates/gui/src/theme.rs`, per the Phase C spec in the DesignSync
+> project "BootControl GUI Redesign" (`phases/2026-07-27-faza-C-spec.md`).
+> The *structure* of this section (semantic roles, WCAG discipline,
+> focus-ring composite, reduced-motion plumbing) still applies.
+
 Replaces UX_BRIEF.md §4 token table. Every text/background pair recomputed for WCAG AA (4.5:1 normal text, 3:1 large) and AAA (7:1 / 4.5:1).
 
 ### Color tokens (Catppuccin Mocha → semantic)

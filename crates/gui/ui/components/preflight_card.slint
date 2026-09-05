@@ -19,23 +19,18 @@ component PreflightRow inherits Rectangle {
         spacing: Tokens.space-md;
         alignment: start;
 
-        // Status icon
-        Rectangle {
-            width: 20px;
-            height: 20px;
-            border-radius: 10px;
-            background: root.check.state == "pass" ? Tokens.success
-                : (root.check.state == "fail" ? Tokens.error
-                : (root.check.state == "running" ? Tokens.accent-info : Tokens.surface-2));
-            Text {
-                text: root.check.state == "pass" ? "✓"
-                    : (root.check.state == "fail" ? "✕"
-                    : (root.check.state == "running" ? "⋯" : "·"));
-                color: Tokens.on-accent;
-                font-size: Tokens.font-meta;
-                font-weight: Tokens.weight-strong;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+        // Status icon (Material glyph colorized by state — no emoji)
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.check.state == "pass" ? @image-url("../../assets/icons/check-circle-fill.svg")
+                    : (root.check.state == "fail" ? @image-url("../../assets/icons/error-fill.svg")
+                    : @image-url("../../assets/icons/progress-activity.svg"));
+                width: Tokens.icon-size;
+                height: Tokens.icon-size;
+                colorize: root.check.state == "pass" ? Tokens.success
+                    : (root.check.state == "fail" ? Tokens.error
+                    : (root.check.state == "running" ? Tokens.accent-info : Tokens.on-surface-faint));
             }
         }
 

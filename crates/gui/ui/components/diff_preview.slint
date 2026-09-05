@@ -34,7 +34,8 @@ export component DiffPreview inherits Rectangle {
                 if line.file_path != "" : Text {
                     text: line.file_path;
                     color: Tokens.on-surface-muted;
-                    font-size: Tokens.font-meta;
+                    font-size: Tokens.font-mono-meta;
+                    font-family: Tokens.font-family-mono;
                     font-weight: Tokens.weight-strong;
                     vertical-alignment: center;
                 }
@@ -43,7 +44,8 @@ export component DiffPreview inherits Rectangle {
                     text: line.side == "add" ? "+" : (line.side == "remove" ? "-" : " ");
                     color: line.side == "add" ? Tokens.success
                         : (line.side == "remove" ? Tokens.error : Tokens.on-surface-faint);
-                    font-size: Tokens.font-label-large;
+                    font-size: Tokens.font-mono-meta;
+                    font-family: Tokens.font-family-mono;
                     font-weight: Tokens.weight-strong;
                     width: 12px;
                     vertical-alignment: center;
@@ -53,7 +55,8 @@ export component DiffPreview inherits Rectangle {
                     text: line.text;
                     color: line.side == "add" ? Tokens.success
                         : (line.side == "remove" ? Tokens.error : Tokens.on-surface);
-                    font-size: Tokens.font-label-large;
+                    font-size: Tokens.font-mono-meta;
+                    font-family: Tokens.font-family-mono;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                 }
