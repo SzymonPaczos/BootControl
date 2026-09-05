@@ -6,8 +6,9 @@
 //! All writes use the same atomic-rename + flock pattern as [`crate::grub_manager`].
 
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::{BufReader, Read, Write},
+    os::unix::fs::PermissionsExt,
     path::Path,
 };
 
@@ -17,6 +18,7 @@ use bootcontrol_core::{
     hash::{compute_etag_str, verify_etag},
 };
 use nix::fcntl::{Flock, FlockArg};
+use tempfile::{Builder, NamedTempFile};
 use tracing::{error, info, warn};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +101,15 @@ pub fn remove_kernel_param(
 // Private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+fn create_cmdline_temp(parent: &Path) -> Result<NamedTempFile, BootControlError> {
+    Builder::new()
+        .prefix(".cmdline.bootcontrol.")
+        .tempfile_in(parent)
+        .map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("create unique tmp file failed: {e}"),
+        })
+}
+
 /// Generic atomic update of a cmdline file.
 ///
 /// Opens the file, acquires an exclusive flock, verifies the ETag, applies
@@ -160,26 +171,33 @@ where
     let new_content = transform(&content)?;
 
     // ── Step 6: Atomic write ──────────────────────────────────────────────────
-    let tmp_path = path
-        .parent()
-        .unwrap_or(Path::new("/etc/kernel"))
-        .join("cmdline.bootcontrol.tmp");
-
-    let mut tmp = File::create(&tmp_path).map_err(|e| BootControlError::EspScanFailed {
-        reason: format!("create tmp file failed: {e}"),
-    })?;
+    let parent = path.parent().unwrap_or(Path::new("/etc/kernel"));
+    let mut tmp = create_cmdline_temp(parent)?;
+    let original_mode = locked
+        .metadata()
+        .map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("read cmdline metadata failed: {e}"),
+        })?
+        .permissions()
+        .mode();
+    tmp.as_file()
+        .set_permissions(fs::Permissions::from_mode(original_mode))
+        .map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("set tmp file mode failed: {e}"),
+        })?;
     tmp.write_all(new_content.as_bytes())
         .map_err(|e| BootControlError::EspScanFailed {
             reason: format!("write tmp file failed: {e}"),
         })?;
-    tmp.sync_all()
+    tmp.as_file()
+        .sync_all()
         .map_err(|e| BootControlError::EspScanFailed {
             reason: format!("fsync failed: {e}"),
         })?;
-    drop(tmp);
-    fs::rename(&tmp_path, path).map_err(|e| BootControlError::EspScanFailed {
-        reason: format!("atomic rename failed: {e}"),
-    })?;
+    tmp.persist(path)
+        .map_err(|e| BootControlError::EspScanFailed {
+            reason: format!("atomic rename failed: {}", e.error),
+        })?;
 
     info!(?path, "kernel cmdline updated");
     Ok(())
@@ -194,7 +212,7 @@ where
 mod tests {
     use super::*;
     use bootcontrol_core::hash::compute_etag_str;
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
 
     fn write_temp(content: &str) -> NamedTempFile {
         let mut f = NamedTempFile::new().expect("tempfile");
@@ -204,6 +222,17 @@ mod tests {
     }
 
     const CMDLINE: &str = "root=/dev/sda1 rw quiet splash\n";
+
+    #[test]
+    fn temporary_files_are_unique_within_one_directory() {
+        let dir = TempDir::new().expect("tempdir");
+        let first = create_cmdline_temp(dir.path()).expect("first temporary file");
+        let second = create_cmdline_temp(dir.path()).expect("second temporary file");
+
+        assert_ne!(first.path(), second.path());
+        assert!(first.path().exists());
+        assert!(second.path().exists());
+    }
 
     // ── read_kernel_cmdline ───────────────────────────────────────────────────
 
