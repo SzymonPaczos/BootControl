@@ -45,9 +45,11 @@ Expected output (rough envelope, varies by platform):
   link layer. Use `BOOTCONTROL_DEMO=1` flow for behaviour testing of
   the frontends + `MockBackend`.
 
-The exact number floats as the test suite grows. The doctest ratchet in
-`.claude/audit.sh` (`DOCTEST_MIN_<crate>`) is the floor on per-crate
-documentation tests and will trip the weekly audit on regression.
+The exact number floats as the test suite grows. `.claude/audit.sh` enumerates
+tests through the Cargo/libtest runner (including ignored tests) rather than
+grepping source files. `TEST_MIN_<crate>` and `DOCTEST_MIN_<crate>` are measured
+per-crate floors and make the weekly audit fail on regression; crates without a
+library target report doctests as `n/a`.
 
 ---
 

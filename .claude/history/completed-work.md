@@ -210,3 +210,12 @@ testy GUI pozostały jawnie `ignored`; `cargo fmt --all --check` i pełny
 workspace clippy `--all-targets --all-features -D warnings` przeszły.
 Pozostałe 5 ostrzeżeń unmaintained i 5 unsound zachowano jako osobne P2 w
 backlogu.
+
+**Evidence pipeline testów** (`631b2a0`). `audit.sh` przestał liczyć testy i
+doctesty greppem po źródłach: raportuje enumerację Cargo/libtest, osobno
+`ignored`, a CLI bez targetu bibliotecznego ma doctest `n/a`. Progi zostały
+skalibrowane z realnego przebiegu 2026-09-05. Format, Clippy, runner, ratchet,
+`cargo-udeps` i regression guards są fail-closed; naprawiono też gubione w
+podpowłoce top 5 findings Clippy. Meta-test sabotuje żywy `.claude/audit.sh`
+i pokrywa 3 ścieżki: zdrową, czerwony Clippy oraz awarię runnera. Pełny baseline
+14 właściwości pozostaje częściowo otwarty w backlogu.

@@ -140,15 +140,6 @@ E2E dotyka **4 z 24** metod (`SetGrubValue`, `ReadGrubConfig`, `GetEtag`, `SignA
 **Propozycja kolejności:** (1) test inwariantu dla jednej metody mutującej jako wzorzec (mock Polkit + tempfile + asercja kolejności: brak snapshotu → operacja fail), (2) rozciągnięcie na pozostałe write-paths, (3) dopiero potem procenty. Cel nie jest „podnieść liczbę", tylko „żadna metoda pisząca do `/boot` nie jest nieprzetestowana".
 **Źródło:** pomiar pokrycia na życzenie właściciela po mergu napraw 2026-08-23. **Status:** otwarte.
 
-### Ratchet doctestów dla `crates/cli` jest fikcyjny — te testy nigdy się nie wykonują
-`.claude/audit.sh` trzyma `DOCTEST_MIN_cli=4` i raportuje ✅, licząc doctesty greppem po źródłach. `crates/cli` **nie ma targetu bibliotecznego** (`cargo test -p bootcontrol-cli --doc` → `error: no library targets found in package`), a Rust wykonuje doctesty wyłącznie dla targetu `lib`. Te 4 doctesty nie są uruchamiane nigdy — ratchet pilnuje liczby, która nie odpowiada żadnemu wykonaniu. Realne liczby z przebiegu: `cli` 5 testów / 0 doctestów, `gui` 0 / 0, `core` 239 / 47, `daemon` 204 / 34, `tui` 87 / 15, `client` 28 / 8.
-To ta sama klasa co wpis „Bramki lokalne są ślepe" (liczniki z grepa zamiast z przebiegu) — do naprawy razem z nim: liczniki mają pochodzić z `cargo test`, a crate bez targetu `lib` ma raportować `n/a`, nie ✅.
-**Źródło:** pomiar pokrycia 2026-08-23. **Status:** otwarte.
-
-### Bramki lokalne są ślepe na cały `crates/daemon`
-Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`. Na macOS `-Zunpretty=expanded` daje pustą bibliotekę, a `cargo test -p bootcontrold` wykonuje **0 testów** (zmierzone) — przy czym `.claude/audit.sh` raportuje „daemon | 169 #[test] | 85 doctest | ratchet ✅", bo liczy greppem po źródłach. Dlatego P0 wyżej przeżył 41 dni i pięć pominiętych audytów. Fix: `ci-local.sh` i `audit.sh` wołają `cargo check`/`clippy` dla `--target x86_64-unknown-linux-gnu` (target zainstalowany) i raportują `BLOCKED`, gdy go brakuje; liczniki testów z realnego przebiegu, nie z grepa.
-**Źródło:** audyt 2026-08-22 (warstwa głęboka). **Status:** **częściowo domknięte 2026-08-23** — `audit.sh` ma fail-closed `cargo build -p bootcontrold` (`97421a1`), a non-Linux raportuje `n/a`, nie pass. **Otwarte pozostaje sedno tego wpisu:** liczniki testów w `audit.sh` nadal pochodzą z grepa po źródłach, nie z realnego przebiegu — na macOS `cargo test -p bootcontrold` wykonuje 0 testów, a raport pokazuje „169 #[test]”. Do naprawy razem z pozycją o „top 5 findings”.
-
 ### Frontendy pokazują dane `MockBackend` jako prawdziwe, gdy daemon jest nieosiągalny
 `client/src/lib.rs:783-795`: na Linuksie po nieudanym `connect_bus()` `resolve_backend()` zwraca `MockBackend` — bez logu, bez sygnału. `MockBackend::set_value` zwraca `Ok(())`, więc `bootcontrol set GRUB_TIMEOUT 10` wypisuje `Successfully set GRUB_TIMEOUT=10` (`cli/src/main.rs:322-326`) i nie zapisuje nic. GUI wylicza `is_demo` niezależnie (`gui/src/main.rs:421`, tylko env + `cfg!`), więc baner demo się nie pokazuje — dwie derywacje jednego stanu. Zachowanie opisane jako celowe w doc-komentarzu (`lib.rs:766-769`), ale bez wpisu w `decisions.md` i bez sygnału w UI. Definicja P0 projektu: „kod kłamiący użytkownika".
 **Źródło:** audyt 2026-08-22 (warstwa głęboka). **Status:** otwarte — wariant naprawy do decyzji właściciela (propagacja błędu vs jawny tryb degradacji).
@@ -157,19 +148,18 @@ Cała treść `crates/daemon/src/lib.rs` jest pod `#[cfg(target_os = "linux")]`.
 **Naprawione 2026-08-23** w pętli napraw — commit `d0d2c93` na gałęzi `fix/audit-2026-08-23`, **czeka na merge** (wpis znika po mergu). Kierunek zgodny z ostrzeżeniem: `KNOWN` zwężone do 4 akcji, stałych NIE przywracano. Dodany test `known_actions_match_required_policy_actions` pinujący `polkit::KNOWN_ACTIONS` do `policy_check::REQUIRED_ACTIONS` (zweryfikowany mutacją) + fail-closed `cargo build -p bootcontrold` w `audit.sh` (`97421a1`). `policy_check.rs` przepisany z indeksów na `split_last()`.
 
 ### Evidence pipeline testów nie spełnia baseline'u 14 właściwości
-Istniejące wpisy o fikcyjnym ratchecie doctestów i źródłowych licznikach
-pokrywają najpilniejszy objaw, ale nie pełny kontrakt. Audyt 2026-09-04 wykazał
-brak dowodu dla: liczników z runnera, progów z pomiaru, meta-testów wszystkich
-gate'ów, rejestru wyjątków z ratchetem, retry=0/flakiness metric, deterministycznych
-waitów, self-testu parsera wyników, systematycznego PBT i pilota mutation testing.
-Plan: (1) po naprawieniu linku przyjąć baseline jawnie; (2) generować liczby z
-runnera i dodać self-test enumeracji; (3) live-file meta-testy + forced-failure
-dla każdego producenta; (4) rejestr skip/exception i flake metric bez retry;
-(5) usunąć sleep 1.1 s/5 s na rzecz sterowanego zegara/warunku; (6) PBT dla
-parser/serializer i pilotaż mutation testing bez arbitralnego progu. Powiązać,
-nie duplikować, z P0 o audit.sh i doctestach.
+Commit `631b2a0` domknął najpilniejszy objaw: liczby i progi pochodzą z
+enumeracji runnera, `ignored` jest jawne, CLI ma doctest `n/a`, parser i ścieżki
+fail-closed mają 3 meta-testy na żywym skrypcie. Nadal brak pełnego kontraktu:
+meta-testów pozostałych gate'ów, rejestru wyjątków z ratchetem,
+retry=0/flakiness metric, deterministycznych waitów, systematycznego PBT i
+pilota mutation testing. Plan: (1) po naprawieniu linku przyjąć baseline
+jawnie; (2) rozszerzyć forced-failure na każdego producenta; (3) rejestr
+skip/exception i flake metric bez retry; (4) usunąć sleep 1.1 s/5 s na rzecz
+sterowanego zegara/warunku; (5) PBT dla parser/serializer i pilotaż mutation
+testing bez arbitralnego progu.
 **Źródło:** audyt 2026-09-04, `test-quality-baseline.md` toolkitu.
-**Status:** otwarte; plan obowiązkowy po adopcji baseline'u.
+**Status:** częściowo zamknięte w `631b2a0`; pozostałe właściwości otwarte.
 
 ### Równoległe testy `uki_manager` kolidują na stałej nazwie pliku tymczasowego
 `atomic_cmdline_update` zawsze używa `<parent>/cmdline.bootcontrol.tmp`. Testy
@@ -225,9 +215,15 @@ GitHub przed betą: opis+topics, zrzuty/GIF w README, CONTRIBUTING, issue templa
 W `toolkit-sync.sh` gałąź `🔒 LOKALNY (zadeklarowany)` robi `continue` **przed** inkrementacją drift i przed porównaniem z lockiem, więc dowolna zmiana w zadeklarowanym pliku (np. `agents/reviewer.md`, `rules/multi-agent-delivery.md`) przechodzi jako `✅ kopie zgodne z masterem`, exit 0. Zweryfikowane na tym repo. Fix należy do **mastera** (`claude-toolkit`, dotyczy 7 projektów floty), nie do kopii: kolumna `sha256` w `toolkit.local`, werdykt `🔒 ZADEKLAROWANY, ALE ZMIENIONY` + `drift++`, test negatywny „mutacja bajtu → exit 1". Kolejność: **przed** wpięciem `check` jako preflightu (TOP #2) — inaczej preflight utrwali kłamstwo.
 **Źródło:** audyt 2026-08-22, Red Team F1 (HIGH). **Status:** otwarte, do promocji do mastera.
 
-### Cykl audytowy egzekwowany samym regexem daty; `audit.sh` nie umie `BLOCKED`
-`pre-push:33-49` sprawdza wyłącznie datę `^## Audyt YYYY-MM-DD` i czyta ją z **working tree** — niezacommitowana linia odblokowuje push i nigdy nie opuszcza maszyny. `audit.sh` ma `set -uo pipefail` **bez `-e`** i żadnej ścieżki wyjścia ≠ 0, więc `cargo-udeps: ❌ exec error` przeszedł jako zielony przebieg; nowa reguła „przebieg, który padł, nie ma prawa podać liczb" (`rules/audit.md` Krok 0) opisuje sygnał, którego skrypt nie potrafi wyemitować. Osobno `audit.sh:58` gubi top-5 findings clippy w subshellu (`… | while … done`). Fix: preflight parsuje najnowszą sekcję (`AUDITED_REVISION` + niepuste `SECURITY_REVIEW`/`RED_TEAM`) z **commita**, nie z dysku; `audit.sh` akumuluje `STATUS` i kończy `exit 2`; `while … done < <(…)`.
-**Źródło:** audyt 2026-08-22, Red Team F2 (HIGH). Scala i podnosi P2 „Audit-evidence gate" z 2026-07-12. **Status:** otwarte.
+### Cykl audytowy egzekwowany samym regexem daty
+`pre-push:33-49` sprawdza wyłącznie datę `^## Audyt YYYY-MM-DD` i czyta ją z
+**working tree** — niezacommitowana linia odblokowuje push i nigdy nie opuszcza
+maszyny. Część dotycząca `audit.sh` jest zamknięta w `631b2a0`: mechaniczne
+awarie kończą się niezerowo, a top 5 findings Clippy trafia do raportu. Pozostaje:
+preflight parsuje najnowszą sekcję (`AUDITED_REVISION` + niepuste
+`SECURITY_REVIEW`/`RED_TEAM`) z **commita**, nie z dysku.
+**Źródło:** audyt 2026-08-22, Red Team F2 (HIGH). **Status:** otwarte,
+zawężone w `631b2a0` do provenance pre-push.
 
 ### Drift dokumentacji control-plane: „sześć akcji Polkit"
 Kod ma 4 akcje (`polkit.rs`, `policy_check.rs:26-31`, `packaging/polkit/org.bootcontrol.policy`). Nadal mówią „sześć" i wymieniają usunięte `generate-keys`/`replace-pk`: `ARCHITECTURE.md:51`, `AGENTS.md:160`, **`crates/daemon/CLAUDE.md:40` (auto-ładowany przy pracy w crate'cie)**, `docs/UX_BRIEF.md:109`, `crates/daemon/src/main.rs:157` (log „all six per-intent actions declared"), `polkit.rs:18`, komentarz w `.policy:6-8`, `packaging/rpm/bootcontrol.spec:47`. To jest instrukcja dla agenta, żeby „naprawić" P0 (daemon nie kompiluje) przez przywrócenie skasowanych stałych. Ratchet po naprawie: grep-gate w `audit.sh` — liczba `<action id=` == liczba stałych w `polkit::actions` == `REQUIRED_ACTIONS.len()`, zero wystąpień `generate-keys|replace-pk` poza `history/` i `decisions.md`.
@@ -333,10 +329,6 @@ Wiersz w sekcji *Elevation of privilege*: „Caller adds `selinux=0`, `apparmor=
 ### `packaging/rpm/bootcontrol.spec:47` — opis paczki obiecuje sześć akcji Polkit, w tym dwie usunięte
 `%description` podpaczki `bootcontrold` wymienia „six per-intent actions: … generate-keys, replace-pk …" — obie usunięte 2026-07-12 razem z Paranoia Mode. To **nie changelog** (historia zostaje), tylko żywy opis widziany przez użytkownika w `dnf info bootcontrold`, więc paczka reklamowałaby zakresy autoryzacji, których daemon nie ma. Jedna linia: „four per-intent actions: rewrite-grub, write-bootloader, enroll-mok, restore-snapshot". Ten sam drift, który zadanie 3 pętli naprawiło w `crates/daemon/**` i `packaging/polkit/**` — inwentarz audytu ominął ten plik, a jest poza `docs(daemon)` scope tamtego commita.
 **Źródło:** pętla napraw audytu 2026-08-23, zadanie 3 (grep za resztkami „six actions"). **Status:** otwarte — jedna linia, czeka na decyzję właściciela.
-
-### `audit.sh`: „top 5 findings" clippy nigdy nie trafia do raportu (subshell)
-`.claude/audit.sh` (sekcja 3, Clippy): `grep … | head -5 | sed … | while IFS= read -r line; do section+="$line"$'\n'; done` — cały potok, razem z `while`, wykonuje się w **podpowłoce**, więc dopisania do `$section` przepadają przy jej zamknięciu. Efekt: przy czerwonym clippy raport pokazuje samą liczbę (`warnings=N errors=M`), a obiecana lista pierwszych pięciu findings jest cicho gubiona od początku istnienia skryptu. Poprawka to jedna linia — podstawienie procesu zamiast potoku: `while IFS= read -r l; do add "$l"; done < <(grep … | head -5)` (ten sam wzorzec użyty w nowym build gate, zadanie 2 pętli napraw). Kategoria: gate raportujący mniej, niż deklaruje. **Plik control-plane** — wymaga osobnego commita i przeglądu właściciela (zasada 7 briefu).
-**Źródło:** pętla napraw audytu 2026-08-23, zadanie 2 (praca w `audit.sh`). **Status:** otwarte — zapisane, nie rozpoczęte.
 
 ### Prywatny runbook disclosure (vulnerability response)
 Repo nie ma kanału disclosure ani runbooka triage podatności. Dla prywatnego repo w alfie dopuszczalny prywatny runbook zamiast `SECURITY.md` (`audit.md` §12). Decyzja: dodać teraz czy odłożyć do pierwszego publicznego release.
