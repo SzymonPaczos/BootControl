@@ -161,17 +161,6 @@ testing bez arbitralnego progu.
 **Źródło:** audyt 2026-09-04, `test-quality-baseline.md` toolkitu.
 **Status:** częściowo zamknięte w `631b2a0`; pozostałe właściwości otwarte.
 
-### Równoległe testy `uki_manager` kolidują na stałej nazwie pliku tymczasowego
-`atomic_cmdline_update` zawsze używa `<parent>/cmdline.bootcontrol.tmp`. Testy
-oparte na różnych `NamedTempFile` mają wspólny parent `/tmp`, więc równoległe
-`add_param_appends_to_cmdline` i `remove_param_removes_from_cmdline` ścierają
-sobie plik: pełny workspace run 2026-09-05 zakończył się `atomic rename failed:
-No such file or directory`, a oba testy osobno i cały daemon przy
-`--test-threads=1` przeszły. Wymagane: unikalny plik tymczasowy tworzony
-wyłącznie w katalogu celu oraz test równoległy bez globalnego locka/retry.
-**Źródło:** bramka naprawy snapshot ID 2026-09-05. **Status:** otwarte; nie
-mieszać z naprawą snapshotów.
-
 ### Hooki gitowe niezainstalowane → jedyna warstwa CI (local-first) była martwa
 `git config core.hooksPath` pusty w tym klonie; `.githooks/{pre-commit,commit-msg,pre-push}` obecne ale nieaktywne (`install-hooks.sh` nieuruchomiony lub commity z `--no-verify`). Efekt: preflight świeżości audytu nie zadziałał (42 dni bez audytu vs próg 7 dni) i zepsuty build (P0.1) trafił na `main`. Dodatkowo gate `ci-local.sh` jest **vacuously green** na macOS i cross-compile Windows, bo `crates/daemon/src/lib.rs:11` = `#![cfg(target_os = "linux")]` — daemon kompiluje się do pustki na non-Linux targecie, więc build break `polkit.rs` przechodzi wszędzie poza natywnym `cargo build` na Linuksie (potwierdzone: cross-compile `x86_64-pc-windows-gnu` exit 0 mimo zepsutego daemona). Fix: (a) wymusić `install-hooks.sh` w onboardingu + wyjaśnić jak tip powstał bez hooków; (b) `.claude/audit.sh` fail-closed `cargo build -p bootcontrold` (build breakage blokuje, nie jest liczbą w logu); (c) upewnić się, że pre-push liczy build/test natywnie na Linuksie.
 **Źródło:** Audyt 2026-08-23 (proces) + Security Reviewer F1 + Red Team DISCOVERED_TASK 2.

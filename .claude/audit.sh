@@ -179,7 +179,7 @@ add ""
 # naprawdę widziane przez runner wpływają na wynik. Minima zmierzono
 # 2026-09-05; są podłogą i mogą iść wyłącznie w górę.
 TEST_MIN_core=239
-TEST_MIN_daemon=234
+TEST_MIN_daemon=235
 TEST_MIN_client=28
 TEST_MIN_cli=5
 TEST_MIN_tui=87

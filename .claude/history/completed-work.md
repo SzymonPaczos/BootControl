@@ -219,3 +219,12 @@ skalibrowane z realnego przebiegu 2026-09-05. Format, Clippy, runner, ratchet,
 podpowłoce top 5 findings Clippy. Meta-test sabotuje żywy `.claude/audit.sh`
 i pokrywa 3 ścieżki: zdrową, czerwony Clippy oraz awarię runnera. Pełny baseline
 14 właściwości pozostaje częściowo otwarty w backlogu.
+
+**Kolizja plików tymczasowych UKI** (`dd331eb`). `atomic_cmdline_update`
+przestał współdzielić stałe `cmdline.bootcontrol.tmp` między niezależnymi
+plikami w jednym katalogu. Każda operacja tworzy teraz przez `O_EXCL` unikalny
+plik obok celu, zachowuje tryb oryginału, wykonuje `fsync` i atomowy rename;
+błąd przed utrwaleniem sprząta plik automatycznie. Test regresyjny był czerwony
+przed helperem i sprawdza jednoczesne istnienie dwóch różnych tempów. Dowody:
+7 testów modułu, 20/20 powtórzeń równoległych, 198 testów daemona, 37 doctestów
+i Clippy bez ostrzeżeń. Ratchet runnera daemona podniesiono 234 → 235.

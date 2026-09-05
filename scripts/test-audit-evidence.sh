@@ -80,7 +80,7 @@ fi
 
 case "$package" in
     bootcontrol-core) total=239; docs=47; skipped=0 ;;
-    bootcontrold) total=234; docs=37; skipped=0 ;;
+    bootcontrold) total=235; docs=37; skipped=0 ;;
     bootcontrol-client) total=28; docs=7; skipped=0 ;;
     bootcontrol-cli) total=5; docs=0; skipped=0 ;;
     bootcontrol-tui) total=87; docs=15; skipped=0 ;;
