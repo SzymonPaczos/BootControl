@@ -114,8 +114,8 @@ pub enum DaemonError {
 
 /// Przekształć [`SnapshotError`] na [`DaemonError`] z poprawną nazwą D-Bus.
 ///
-/// Wszystkie warianty `SnapshotError` mapują się na trzy publiczne nazwy
-/// D-Bus: `SnapshotNotFound`, `SnapshotCorrupt`, `SnapshotFailed`.
+/// Warianty integralności mapują się na błędy snapshotu, a konflikty blokady
+/// i wersji zachowują ogólne nazwy `ConcurrentModification` i `StateMismatch`.
 /// GUI rozpoznaje błąd po nazwie wariantu, nie po treści wiadomości.
 pub fn snapshot_to_daemon_error(e: SnapshotError) -> DaemonError {
     let msg = e.to_string();
@@ -123,6 +123,9 @@ pub fn snapshot_to_daemon_error(e: SnapshotError) -> DaemonError {
         SnapshotError::NotFound(_) => DaemonError::SnapshotNotFound(msg),
         SnapshotError::SchemaUpgradeRequired(_) => DaemonError::SnapshotCorrupt(msg),
         SnapshotError::Serde(_) => DaemonError::SnapshotCorrupt(msg),
+        SnapshotError::Corrupt(_) => DaemonError::SnapshotCorrupt(msg),
+        SnapshotError::ConcurrentModification(_) => DaemonError::ConcurrentModification(msg),
+        SnapshotError::StateMismatch { .. } => DaemonError::StateMismatch(msg),
         SnapshotError::Io(_) => DaemonError::SnapshotFailed(msg),
         // Both are caller-supplied or manifest-supplied garbage rather than a
         // missing snapshot: report them as a failed restore, not as NotFound,
@@ -337,6 +340,29 @@ mod tests {
         let e = SnapshotError::Io(std::io::Error::other("disk full"));
         let mapped = snapshot_to_daemon_error(e);
         assert!(matches!(mapped, DaemonError::SnapshotFailed(_)));
+    }
+
+    #[test]
+    fn snapshot_lock_conflict_maps_to_concurrent_modification() {
+        let mapped = snapshot_to_daemon_error(SnapshotError::ConcurrentModification(
+            "/etc/default/grub".into(),
+        ));
+        assert!(matches!(mapped, DaemonError::ConcurrentModification(_)));
+    }
+
+    #[test]
+    fn snapshot_etag_conflict_maps_to_state_mismatch() {
+        let mapped = snapshot_to_daemon_error(SnapshotError::StateMismatch {
+            expected: "old".into(),
+            actual: "new".into(),
+        });
+        assert!(matches!(mapped, DaemonError::StateMismatch(_)));
+    }
+
+    #[test]
+    fn snapshot_integrity_failure_maps_to_corrupt() {
+        let mapped = snapshot_to_daemon_error(SnapshotError::Corrupt("tampered".into()));
+        assert!(matches!(mapped, DaemonError::SnapshotCorrupt(_)));
     }
 
     #[test]

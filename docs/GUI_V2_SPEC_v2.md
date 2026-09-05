@@ -652,7 +652,7 @@ For each GUI v2 interaction, the equivalent `bootcontrol` CLI invocation. Table 
 | Generate Paranoia keys | `bootcontrol secureboot generate-keys` | ✓ parity (feature-gated) |
 | Replace PK | `bootcontrol secureboot replace-pk` | ⚠ GAP-CLI (Strict Mode only) |
 | List snapshots | `bootcontrol snapshot list` | ⚠ GAP-CLI (PR 5) |
-| Restore snapshot | `bootcontrol snapshot restore <id>` | ⚠ GAP-CLI (PR 5) |
+| Restore snapshot | `bootcontrol snapshot restore <id> <current-etag>` | ETag required; stale confirmation is rejected |
 | Stream live job log | `journalctl -u bootcontrold -f --output=json` | ✓ parity (via journalctl) |
 | Read recovery doc | `cat /var/lib/bootcontrol/RECOVERY.md` | ✓ parity |
 

@@ -119,8 +119,8 @@ impl ViewModel {
         self.backend.list_snapshots().await
     }
 
-    /// Restore a snapshot by id. Overwrites all files captured in its manifest.
+    /// Restore a snapshot using the primary-target ETag shown before confirmation.
     pub async fn restore_snapshot(&self, id: &str) -> Result<(), zbus::Error> {
-        self.backend.restore_snapshot(id).await
+        self.backend.restore_snapshot(id, &self.etag).await
     }
 }

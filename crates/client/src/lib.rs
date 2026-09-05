@@ -247,8 +247,8 @@ pub trait Manager {
     /// Returns a JSON array of `SnapshotInfoDto` objects.
     async fn list_snapshots(&self) -> zbus::Result<String>;
 
-    /// Restore a snapshot by id. Overwrites all files captured in the manifest.
-    async fn restore_snapshot(&self, id: &str) -> zbus::Result<()>;
+    /// Restore a snapshot by id under the caller's current target ETag.
+    async fn restore_snapshot(&self, id: &str, expected_etag: &str) -> zbus::Result<()>;
 
     // ── EFI boot menu ─────────────────────────────────────────────────────────
 
@@ -363,8 +363,8 @@ pub trait BootBackend: Send + Sync {
     /// List all snapshots, newest first.
     async fn list_snapshots(&self) -> zbus::Result<Vec<SnapshotInfoDto>>;
 
-    /// Restore a snapshot by id.
-    async fn restore_snapshot(&self, id: &str) -> zbus::Result<()>;
+    /// Restore a snapshot by id under the caller's current target ETag.
+    async fn restore_snapshot(&self, id: &str, expected_etag: &str) -> zbus::Result<()>;
 
     // ── EFI boot menu ─────────────────────────────────────────────────────────
 
@@ -488,9 +488,9 @@ impl BootBackend for DbusBackend {
             .map_err(|e| zbus::Error::Failure(format!("failed to deserialize snapshot list: {e}")))
     }
 
-    async fn restore_snapshot(&self, id: &str) -> zbus::Result<()> {
+    async fn restore_snapshot(&self, id: &str, expected_etag: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
-        proxy.restore_snapshot(id).await
+        proxy.restore_snapshot(id, expected_etag).await
     }
 
     async fn list_efi_boot_entries(&self) -> zbus::Result<String> {
@@ -665,7 +665,7 @@ impl BootBackend for MockBackend {
         ])
     }
 
-    async fn restore_snapshot(&self, _id: &str) -> zbus::Result<()> {
+    async fn restore_snapshot(&self, _id: &str, _expected_etag: &str) -> zbus::Result<()> {
         Ok(())
     }
 
@@ -1012,7 +1012,10 @@ mod tests {
     #[tokio::test]
     async fn mock_backend_restore_snapshot_succeeds_for_any_id() {
         let backend = MockBackend;
-        assert!(backend.restore_snapshot("any-id").await.is_ok());
+        assert!(backend
+            .restore_snapshot("any-id", "current-etag")
+            .await
+            .is_ok());
     }
 
     #[test]

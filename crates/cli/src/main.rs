@@ -175,6 +175,8 @@ enum SnapshotAction {
     Restore {
         /// Snapshot id as returned by `snapshot list`.
         id: String,
+        /// Current ETag of the primary target to prevent stale restores.
+        etag: String,
     },
 }
 
@@ -465,9 +467,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
-                SnapshotAction::Restore { id } => {
+                SnapshotAction::Restore { id, etag } => {
                     backend
-                        .restore_snapshot(&id)
+                        .restore_snapshot(&id, &etag)
                         .await
                         .map_err(|e| dbus_error_message(&e).to_string())?;
                     println!("Restored snapshot: {id}");

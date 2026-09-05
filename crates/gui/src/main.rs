@@ -258,7 +258,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
                 ui.set_confirmation_required_text("restore".into());
                 ui.set_confirmation_command_cli(
-                    format!("bootcontrol snapshot restore {id_str}").into(),
+                    format!("bootcontrol snapshot restore {id_str} <current-etag>").into(),
                 );
                 ui.set_confirmation_snapshot_id(id_str.into());
                 ui.set_confirmation_typed_text("".into());

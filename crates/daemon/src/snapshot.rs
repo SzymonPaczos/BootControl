@@ -39,11 +39,14 @@
 //! `keep_days`, whichever covers more snapshots. The default is 50 / 30
 //! per the user's verdict on Q5 in `GUI_V2_SPEC_v2.md` §2.
 
-use std::fs;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use bootcontrol_core::hash::compute_etag;
+use bootcontrol_core::hash::{compute_etag, verify_etag};
 use chrono::{DateTime, SecondsFormat, Utc};
+use nix::fcntl::{Flock, FlockArg};
 use serde::{Deserialize, Serialize};
 
 /// Errors raised by the snapshot module.
@@ -70,6 +73,17 @@ pub enum SnapshotError {
     InvalidId(String),
     /// The manifest asks to write a path the daemon does not manage.
     UnmanagedTarget(PathBuf),
+    /// Another process currently holds an exclusive lock on a restore target.
+    ConcurrentModification(PathBuf),
+    /// The caller's ETag no longer matches the primary restore target.
+    StateMismatch {
+        /// ETag supplied by the caller.
+        expected: String,
+        /// ETag computed under the target's exclusive lock.
+        actual: String,
+    },
+    /// The manifest or a captured file violates the snapshot integrity contract.
+    Corrupt(String),
 }
 
 impl std::fmt::Display for SnapshotError {
@@ -96,6 +110,18 @@ impl std::fmt::Display for SnapshotError {
                 "snapshot manifest targets {}, which is not a path this daemon manages",
                 p.display()
             ),
+            SnapshotError::ConcurrentModification(path) => write!(
+                f,
+                "snapshot restore target is locked by another writer: {}",
+                path.display()
+            ),
+            SnapshotError::StateMismatch { expected, actual } => write!(
+                f,
+                "snapshot restore ETag mismatch: expected {expected}, actual {actual}"
+            ),
+            SnapshotError::Corrupt(reason) => {
+                write!(f, "snapshot integrity check failed: {reason}")
+            }
         }
     }
 }
@@ -402,6 +428,7 @@ fn is_managed_target(target: &Path, allowed: &[PathBuf]) -> Result<bool, Snapsho
 /// * `root` - Directory containing BootControl snapshot directories.
 /// * `id` - Single snapshot directory name supplied by the D-Bus caller.
 /// * `allowed` - Files and directories the daemon is permitted to restore.
+/// * `expected_etag` - Current ETag of the first (primary) manifest target.
 ///
 /// # Errors
 ///
@@ -409,7 +436,11 @@ fn is_managed_target(target: &Path, allowed: &[PathBuf]) -> Result<bool, Snapsho
 /// * [`SnapshotError::UnmanagedTarget`] — a manifest entry points outside
 ///   `allowed`, is relative, or contains `..`.
 /// * [`SnapshotError::NotFound`] — `<root>/<id>/manifest.json` does not exist.
-/// * [`SnapshotError::Io`] — file read or write fails.
+/// * [`SnapshotError::ConcurrentModification`] — another writer holds a target lock.
+/// * [`SnapshotError::StateMismatch`] — `expected_etag` is stale.
+/// * [`SnapshotError::Corrupt`] — the manifest has no files, repeats a target,
+///   contains an invalid mode, or captured bytes fail their SHA-256 check.
+/// * [`SnapshotError::Io`] — file read or atomic write fails.
 /// * [`SnapshotError::Serde`] — manifest is malformed.
 ///
 /// # Examples
@@ -430,10 +461,16 @@ fn is_managed_target(target: &Path, allowed: &[PathBuf]) -> Result<bool, Snapsho
 /// #     audit_job_id: "4f87bb12-0000-0000-0000-000000000000",
 /// # }).unwrap();
 /// std::fs::write(&target, "GRUB_TIMEOUT=10\n").unwrap();
-/// restore(dir.path(), &info.id, std::slice::from_ref(&target)).unwrap();
+/// let etag = bootcontrol_core::hash::compute_etag_str("GRUB_TIMEOUT=10\n");
+/// restore(dir.path(), &info.id, std::slice::from_ref(&target), &etag).unwrap();
 /// assert_eq!(std::fs::read_to_string(&target).unwrap(), "GRUB_TIMEOUT=5\n");
 /// ```
-pub fn restore(root: &Path, id: &str, allowed: &[PathBuf]) -> Result<(), SnapshotError> {
+pub fn restore(
+    root: &Path,
+    id: &str,
+    allowed: &[PathBuf],
+    expected_etag: &str,
+) -> Result<(), SnapshotError> {
     if !is_plain_component(id) {
         return Err(SnapshotError::InvalidId(id.to_string()));
     }
@@ -449,6 +486,11 @@ pub fn restore(root: &Path, id: &str, allowed: &[PathBuf]) -> Result<(), Snapsho
             manifest.schema_version,
         ));
     }
+    if manifest.files.is_empty() {
+        return Err(SnapshotError::Corrupt(
+            "manifest contains no files".to_string(),
+        ));
+    }
     // Validate every target before writing any of them: a manifest listing
     // one managed and one unmanaged path must not leave the first written.
     for f in &manifest.files {
@@ -457,16 +499,134 @@ pub fn restore(root: &Path, id: &str, allowed: &[PathBuf]) -> Result<(), Snapsho
             return Err(SnapshotError::UnmanagedTarget(target));
         }
     }
+
+    let mut targets: Vec<PathBuf> = manifest
+        .files
+        .iter()
+        .map(|file| PathBuf::from(&file.path))
+        .collect();
+    targets.sort();
+    if targets.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(SnapshotError::Corrupt(
+            "manifest repeats a restore target".to_string(),
+        ));
+    }
+
+    // Lock every target in deterministic order before checking the primary
+    // ETag or preparing any replacement. This avoids partial writes when a
+    // later target is busy and avoids deadlocks between cooperative writers.
+    let mut locks = Vec::with_capacity(targets.len());
+    for target in &targets {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(target)?;
+        let locked =
+            Flock::lock(file, FlockArg::LockExclusiveNonblock).map_err(|(_file, errno)| {
+                if errno == nix::errno::Errno::EWOULDBLOCK {
+                    SnapshotError::ConcurrentModification(target.clone())
+                } else {
+                    SnapshotError::Io(std::io::Error::from_raw_os_error(errno as i32))
+                }
+            })?;
+        locks.push((target.clone(), locked));
+    }
+
+    let primary = PathBuf::from(&manifest.files[0].path);
+    let (_, primary_lock) = locks
+        .iter_mut()
+        .find(|(path, _)| *path == primary)
+        .ok_or_else(|| SnapshotError::Corrupt("primary target is missing".to_string()))?;
+    primary_lock.seek(SeekFrom::Start(0))?;
+    let mut current = Vec::new();
+    primary_lock.read_to_end(&mut current)?;
+    if !verify_etag(expected_etag, &current) {
+        return Err(SnapshotError::StateMismatch {
+            expected: expected_etag.to_string(),
+            actual: compute_etag(&current),
+        });
+    }
+
+    // Read and verify every captured payload before the first target changes.
+    let mut replacements = Vec::with_capacity(manifest.files.len());
     for f in &manifest.files {
         let captured = snap_dir.join(flatten_path(Path::new(&f.path)));
         let captured_bytes = fs::read(&captured)?;
-        let target = PathBuf::from(&f.path);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent)?;
+        let actual_sha = compute_etag(&captured_bytes);
+        if actual_sha != f.sha256 {
+            return Err(SnapshotError::Corrupt(format!(
+                "captured file {} has SHA-256 {actual_sha}, expected {}",
+                captured.display(),
+                f.sha256
+            )));
         }
-        fs::write(&target, &captured_bytes)?;
+        let target = PathBuf::from(&f.path);
+        if f.mode.len() != 4 || !f.mode.bytes().all(|byte| matches!(byte, b'0'..=b'7')) {
+            return Err(SnapshotError::Corrupt(format!(
+                "invalid mode {:?} for {}",
+                f.mode,
+                target.display()
+            )));
+        }
+        let mode = u32::from_str_radix(&f.mode, 8).map_err(|_| {
+            SnapshotError::Corrupt(format!(
+                "invalid mode {:?} for {}",
+                f.mode,
+                target.display()
+            ))
+        })?;
+        replacements.push((target, captured_bytes, mode));
+    }
+
+    for (index, (target, bytes, mode)) in replacements.iter().enumerate() {
+        atomic_restore_file(target, bytes, *mode, index)?;
     }
     Ok(())
+}
+
+fn atomic_restore_file(
+    target: &Path,
+    bytes: &[u8],
+    mode: u32,
+    index: usize,
+) -> Result<(), SnapshotError> {
+    let parent = target.parent().ok_or_else(|| {
+        SnapshotError::Corrupt(format!(
+            "restore target has no parent: {}",
+            target.display()
+        ))
+    })?;
+    let filename = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            SnapshotError::Corrupt(format!(
+                "restore target has no filename: {}",
+                target.display()
+            ))
+        })?;
+    let tmp_path = parent.join(format!(
+        ".{filename}.bootcontrol-restore-{}-{index}.tmp",
+        std::process::id()
+    ));
+    let write_result = (|| -> Result<(), SnapshotError> {
+        let mut tmp = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&tmp_path)?;
+        tmp.write_all(bytes)?;
+        tmp.set_permissions(fs::Permissions::from_mode(mode))?;
+        tmp.sync_all()?;
+        fs::rename(&tmp_path, target)?;
+        File::open(parent)?.sync_all()?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+    write_result
 }
 
 /// Apply retention policy. Keep at least `keep_count` snapshots OR every
@@ -527,6 +687,8 @@ fn file_mode_octal(_p: &Path) -> Result<String, SnapshotError> {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use nix::fcntl::{Flock, FlockArg};
+    use std::fs::OpenOptions;
     use tempfile::TempDir;
 
     fn make_target(dir: &Path, name: &str, content: &str) -> PathBuf {
@@ -670,14 +832,152 @@ mod tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "v2\n");
 
         // Restore puts v1 back.
-        restore(dir.path(), &info.id, std::slice::from_ref(&target)).unwrap();
+        let current_etag = compute_etag(b"v2\n");
+        restore(
+            dir.path(),
+            &info.id,
+            std::slice::from_ref(&target),
+            &current_etag,
+        )
+        .unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "v1\n");
+    }
+
+    #[test]
+    fn restore_refuses_a_target_locked_by_another_writer() {
+        let dir = TempDir::new().unwrap();
+        let target = make_target(dir.path(), "grub", "snapshot\n");
+        let info = create(req(dir.path(), "test_op", std::slice::from_ref(&target))).unwrap();
+        fs::write(&target, "current\n").unwrap();
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&target)
+            .unwrap();
+        let _lock = Flock::lock(lock_file, FlockArg::LockExclusiveNonblock).unwrap();
+
+        let current_etag = compute_etag(b"current\n");
+        let result = restore(
+            dir.path(),
+            &info.id,
+            std::slice::from_ref(&target),
+            &current_etag,
+        );
+
+        assert!(matches!(
+            result,
+            Err(SnapshotError::ConcurrentModification(ref path)) if path == &target
+        ));
+        assert_eq!(fs::read_to_string(&target).unwrap(), "current\n");
+    }
+
+    #[test]
+    fn restore_locks_every_target_before_replacing_the_first() {
+        let dir = TempDir::new().unwrap();
+        let first = make_target(dir.path(), "first", "snapshot-one\n");
+        let second = make_target(dir.path(), "second", "snapshot-two\n");
+        let files = [first.clone(), second.clone()];
+        let info = create(req(dir.path(), "test_op", &files)).unwrap();
+        fs::write(&first, "current-one\n").unwrap();
+        fs::write(&second, "current-two\n").unwrap();
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&second)
+            .unwrap();
+        let _lock = Flock::lock(lock_file, FlockArg::LockExclusiveNonblock).unwrap();
+
+        let result = restore(
+            dir.path(),
+            &info.id,
+            &files,
+            &compute_etag(b"current-one\n"),
+        );
+
+        assert!(matches!(
+            result,
+            Err(SnapshotError::ConcurrentModification(ref path)) if path == &second
+        ));
+        assert_eq!(fs::read_to_string(&first).unwrap(), "current-one\n");
+        assert_eq!(fs::read_to_string(&second).unwrap(), "current-two\n");
+    }
+
+    #[test]
+    fn restore_rejects_a_stale_primary_target_etag() {
+        let dir = TempDir::new().unwrap();
+        let target = make_target(dir.path(), "grub", "snapshot\n");
+        let info = create(req(dir.path(), "test_op", std::slice::from_ref(&target))).unwrap();
+        fs::write(&target, "current\n").unwrap();
+
+        let result = restore(
+            dir.path(),
+            &info.id,
+            std::slice::from_ref(&target),
+            "stale-etag",
+        );
+
+        assert!(matches!(result, Err(SnapshotError::StateMismatch { .. })));
+        assert_eq!(fs::read_to_string(&target).unwrap(), "current\n");
+    }
+
+    #[test]
+    fn restore_atomically_replaces_target_and_restores_mode() {
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = TempDir::new().unwrap();
+        let target = make_target(dir.path(), "grub", "snapshot\n");
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let info = create(req(dir.path(), "test_op", std::slice::from_ref(&target))).unwrap();
+        fs::write(&target, "current\n").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o644)).unwrap();
+        let inode_before = fs::metadata(&target).unwrap().ino();
+        let current_etag = compute_etag(b"current\n");
+
+        restore(
+            dir.path(),
+            &info.id,
+            std::slice::from_ref(&target),
+            &current_etag,
+        )
+        .unwrap();
+
+        let metadata = fs::metadata(&target).unwrap();
+        assert_ne!(metadata.ino(), inode_before, "restore must use rename");
+        assert_eq!(metadata.permissions().mode() & 0o7777, 0o600);
+        assert_eq!(fs::read_to_string(&target).unwrap(), "snapshot\n");
+    }
+
+    #[test]
+    fn restore_rejects_tampered_captured_bytes_before_writing() {
+        let dir = TempDir::new().unwrap();
+        let target = make_target(dir.path(), "grub", "snapshot\n");
+        let info = create(req(dir.path(), "test_op", std::slice::from_ref(&target))).unwrap();
+        fs::write(&target, "current\n").unwrap();
+        fs::write(
+            info.manifest_path
+                .parent()
+                .unwrap()
+                .join(flatten_path(&target)),
+            "tampered\n",
+        )
+        .unwrap();
+
+        let current_etag = compute_etag(b"current\n");
+        let result = restore(
+            dir.path(),
+            &info.id,
+            std::slice::from_ref(&target),
+            &current_etag,
+        );
+
+        assert!(matches!(result, Err(SnapshotError::Corrupt(_))));
+        assert_eq!(fs::read_to_string(&target).unwrap(), "current\n");
     }
 
     #[test]
     fn restore_unknown_id_returns_not_found() {
         let dir = TempDir::new().unwrap();
-        match restore(dir.path(), "no-such-id", &[]) {
+        match restore(dir.path(), "no-such-id", &[], "") {
             Err(SnapshotError::NotFound(id)) => assert_eq!(id, "no-such-id"),
             other => panic!("expected NotFound, got {:?}", other),
         }
@@ -724,9 +1024,10 @@ mod tests {
             r#"{{"schema_version":1,"ts":"2026-08-26T00:00:00Z","op":"evil",
                  "polkit_action":"org.bootcontrol.restore-snapshot","caller_uid":1000,
                  "etag_before":"00",
-                 "files":[{{"path":"{}","sha256":"00","mode":"0644"}}],
+                 "files":[{{"path":"{}","sha256":"{}","mode":"0644"}}],
                  "efivars":[],"audit_job_id":"job"}}"#,
-            target.display()
+            target.display(),
+            compute_etag(payload.as_bytes())
         );
         fs::write(snap_dir.join("manifest.json"), manifest).unwrap();
         snap_dir
@@ -760,6 +1061,7 @@ mod tests {
             &root,
             planted.to_str().unwrap(),
             std::slice::from_ref(&victim),
+            "",
         )
         .unwrap_err();
         assert!(
@@ -779,7 +1081,7 @@ mod tests {
         let root = dir.path().join("snapshots");
         fs::create_dir_all(&root).unwrap();
         for id in ["..", "../..", "../sibling", "a/../../b"] {
-            let err = restore(&root, id, &[]).unwrap_err();
+            let err = restore(&root, id, &[], "").unwrap_err();
             assert!(
                 matches!(err, SnapshotError::InvalidId(_)),
                 "id {id:?} must be rejected, got {err:?}"
@@ -793,7 +1095,7 @@ mod tests {
         let root = dir.path().join("snapshots");
         fs::create_dir_all(&root).unwrap();
         for id in ["", "nested/snap", "snap/", "snap\\evil", "."] {
-            let err = restore(&root, id, &[]).unwrap_err();
+            let err = restore(&root, id, &[], "").unwrap_err();
             assert!(
                 matches!(err, SnapshotError::InvalidId(_)),
                 "id {id:?} must be rejected, got {err:?}"
@@ -815,7 +1117,7 @@ mod tests {
 
         plant_snapshot(&root, "snap", &outsider, "pwned\n");
 
-        let err = restore(&root, "snap", &[managed]).unwrap_err();
+        let err = restore(&root, "snap", &[managed], "").unwrap_err();
         assert!(
             matches!(err, SnapshotError::UnmanagedTarget(_)),
             "target outside the managed set must be rejected, got {err:?}"
@@ -867,7 +1169,7 @@ mod tests {
         )
         .unwrap();
 
-        let err = restore(&root, "snap", std::slice::from_ref(&managed)).unwrap_err();
+        let err = restore(&root, "snap", std::slice::from_ref(&managed), "").unwrap_err();
         assert!(matches!(err, SnapshotError::UnmanagedTarget(_)));
         assert_eq!(fs::read_to_string(&managed).unwrap(), "original\n");
         assert!(!outsider.exists());
@@ -887,7 +1189,7 @@ mod tests {
         let climbing = managed_dir.join("..").join("escaped");
         plant_snapshot(&root, "snap", &climbing, "pwned\n");
 
-        let err = restore(&root, "snap", &[managed_dir]).unwrap_err();
+        let err = restore(&root, "snap", &[managed_dir], "").unwrap_err();
         assert!(
             matches!(err, SnapshotError::UnmanagedTarget(_)),
             "target with a parent component must be rejected, got {err:?}"
@@ -909,7 +1211,8 @@ mod tests {
 
         plant_snapshot(&root, "snap", &entry, "v1\n");
 
-        restore(&root, "snap", &[entries_dir]).unwrap();
+        let current_etag = compute_etag(b"v2\n");
+        restore(&root, "snap", &[entries_dir], &current_etag).unwrap();
         assert_eq!(fs::read_to_string(&entry).unwrap(), "v1\n");
     }
 
@@ -925,7 +1228,7 @@ mod tests {
 
         plant_snapshot(&root, "snap", &sibling, "pwned\n");
 
-        let err = restore(&root, "snap", &[managed]).unwrap_err();
+        let err = restore(&root, "snap", &[managed], "").unwrap_err();
         assert!(
             matches!(err, SnapshotError::UnmanagedTarget(_)),
             "got {err:?}"
@@ -950,7 +1253,7 @@ mod tests {
         symlink(&victim, &linked_target).unwrap();
         plant_snapshot(&root, "snap", &linked_target, "pwned\n");
 
-        let err = restore(&root, "snap", &[managed_dir]).unwrap_err();
+        let err = restore(&root, "snap", &[managed_dir], "").unwrap_err();
         assert!(
             matches!(err, SnapshotError::UnmanagedTarget(_)),
             "a symlink below an allowed directory must be rejected, got {err:?}"

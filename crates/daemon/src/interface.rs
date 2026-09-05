@@ -1387,40 +1387,34 @@ impl GrubManager {
     ///    bytes stored under `<snapshot_root>/<id>/`.
     /// 4. Audit `Completed` event with the exit code and stderr tail.
     ///
-    /// The same race window as `set_grub_value` applies: a concurrent
-    /// external mutation of `/etc/default/grub` between Polkit and the
-    /// `fs::write` inside `snapshot::restore` is not detected here.
-    /// Tightening this to per-target `flock` requires extending
-    /// `snapshot::restore` with a locked-write variant, deferred.
-    ///
     /// ## D-Bus signature
     ///
     /// ```text
-    /// RestoreSnapshot(s) -> ()
+    /// RestoreSnapshot(s, s) -> ()
     /// ```
     ///
     /// ## Arguments
     ///
     /// - `id` — Snapshot id as returned by `ListSnapshots`.
+    /// - `expected_etag` — Current ETag of the primary target, obtained before
+    ///   opening the confirmation flow.
     ///
     /// ## Errors
     ///
     /// - `org.bootcontrol.Error.PolkitDenied` — caller not authorized.
     /// - `org.bootcontrol.Error.SnapshotNotFound` — no snapshot with that id.
     /// - `org.bootcontrol.Error.SnapshotCorrupt` — manifest is malformed.
+    /// - `org.bootcontrol.Error.ConcurrentModification` — a target is locked.
+    /// - `org.bootcontrol.Error.StateMismatch` — `expected_etag` is stale.
     /// - `org.bootcontrol.Error.SnapshotFailed` — I/O error during restore.
     async fn restore_snapshot(
         &self,
         id: String,
+        expected_etag: String,
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(id = %id, root = ?self.snapshot_root, "D-Bus: RestoreSnapshot");
-
-        // Step 0: Immutable-distro pre-flight (Phase 6 PR1). Restore writes to
-        // the same on-disk paths as a forward operation, so it inherits the
-        // same atomic-distro rejection.
-        enforce_writable_distro().map_err(to_daemon_error)?;
 
         let caller_uid = resolve_uid(&header, connection, "RestoreSnapshot").await?;
         authorize_with_polkit(caller_uid, actions::RESTORE_SNAPSHOT)
@@ -1430,6 +1424,10 @@ impl GrubManager {
                 to_daemon_error(e)
             })?;
 
+        // Host inspection follows authorization. Restore writes to the same
+        // paths as a forward operation and inherits the immutable-host guard.
+        enforce_writable_distro().map_err(to_daemon_error)?;
+
         let job_id = new_job_id();
         let target_paths = vec![self.snapshot_root.join(&id).display().to_string()];
         audit::emit(&AuditEvent {
@@ -1437,7 +1435,7 @@ impl GrubManager {
             operation: "restore_snapshot",
             phase: Phase::Started,
             target_paths: target_paths.clone(),
-            etag_before: None,
+            etag_before: Some(expected_etag.clone()),
             etag_after: None,
             snapshot_id: Some(id.clone()),
             exit_code: None,
@@ -1447,8 +1445,13 @@ impl GrubManager {
             stderr_tail: String::new(),
         });
 
-        let result = snapshot::restore(&self.snapshot_root, &id, &self.managed_paths())
-            .map_err(snapshot_to_daemon_error);
+        let result = snapshot::restore(
+            &self.snapshot_root,
+            &id,
+            &self.managed_paths(),
+            &expected_etag,
+        )
+        .map_err(snapshot_to_daemon_error);
 
         let exit_code = if result.is_ok() { 0 } else { 1 };
         let stderr_tail = result
@@ -1461,7 +1464,7 @@ impl GrubManager {
             operation: "restore_snapshot",
             phase: Phase::Completed,
             target_paths,
-            etag_before: None,
+            etag_before: Some(expected_etag),
             etag_after: None,
             snapshot_id: Some(id),
             exit_code: Some(exit_code),
