@@ -296,17 +296,15 @@ Po wyjaśnieniu: back-fill PR-y do tabeli "Out-of-roadmap streams" w ROADMAP.md,
 `chore/cargo-fmt-workspace`, `fix/core-doc-overindented-list-item`, `fix/daemon-tests-etxtbsy-aarch64`, `fix/e2e-compile-errors` (wszystkie 2026-05-19, 95 dni), `feat/gui-v2-boot-entries` (2026-07-12, **6 commitów dotykających `crates/`**: parser menu-entry GRUB, `ListGrubEntries`, `fix(daemon): drop dangling refs to removed paranoia polkit actions` — prawdopodobna naprawa P0 „daemon nie kompiluje"), `ratunek/stash-gui-smoke-tests` (2026-07-22, packaging deb + AUR, 112 commitów za `main`, commit typu `wip:`), `feat/gui-v21-stacja` (2026-07-27). Konwencja: cel życia gałęzi <1 dzień, ostrzeżenie po 3. Zastępuje nieaktualny wpis „4 lokalne branche z 2026-05-19" (lokalnych już nie ma).
 **Źródło:** audyt 2026-08-22 (higiena repo, punkt 14a). **Status:** otwarte — decyzja per gałąź: scalić, przenieść pracę, czy skasować.
 
-### `cargo audit`: 6 vulnerabilities + 10 warnings
-Pomiar 2026-09-04 (`cargo-audit 0.22.1`, advisory DB 1239 wpisów) wykrywa:
-`crossbeam-epoch` RUSTSEC-2026-0204, `quick-xml` RUSTSEC-2026-0194/0195 w
-wersjach 0.38.4 i 0.39.2 oraz nowy `zbus_polkit` RUSTSEC-2026-0278 na
-uprzywilejowanej ścieżce autoryzacji. Warningi: 5 unmaintained + 5 unsound.
-`cargo update --dry-run --offline` raportuje 46 kompatybilnych aktualizacji;
-pełne sprawdzenie yanked zostało zablokowane timeoutem rejestru. Osobno ocenić
-osiągalność i zaktualizować lock/deps z pełnymi testami; nie mieszać z audytem.
-`cargo-udeps` nadal nie jest zainstalowane, więc metryka dead-code nie istnieje.
-**Źródło:** audyt 2026-08-22 (pierwszy pomiar), odświeżone 2026-09-04.
-**Status:** otwarte, pogorszenie 5→6 vulnerabilities.
+### `cargo audit`: 10 ostrzeżeń w zależnościach pośrednich
+Aktywne podatności (`crossbeam-epoch`, dwa warianty `quick-xml` oraz
+`zbus_polkit` na uprzywilejowanej ścieżce autoryzacji) usunięto w `5661fe1`;
+pomiar 2026-09-05 zwraca **0 vulnerabilities**. Pozostało 5 ostrzeżeń
+unmaintained i 5 unsound w zależnościach pośrednich. Osobno ocenić ich
+osiągalność i dostępne migracje. `cargo-udeps` nadal nie jest zainstalowane,
+więc metryka dead-code nie istnieje.
+**Źródło:** audyt 2026-08-22, odświeżone 2026-09-04 i 2026-09-05.
+**Status:** aktywne podatności zamknięte; ostrzeżenia otwarte (P2).
 
 ### Drobne findingi bezpieczeństwa i control-plane z audytu 2026-08-22
 (1) `BackupNvram` (`interface.rs:728-799`) nie woła `enforce_writable_distro()`. Finding `SignAndEnrollUki` z tego samego punktu został zamknięty w `a06bb68`: metoda egzekwuje immutable-distro guard oraz ogranicza podpisywanie do bezpiecznych UKI bieżącej instalacji na zarządzanym ESP. (2) `.claude/settings.json` dopuszcza `Bash(cargo clean *)` — wildcard obejmuje `--target-dir /dowolna/ścieżka`, czyli rekurencyjne kasowanie poza `target/` bez promptu (SR F5, MEDIUM). (3) Reviewer i Security Reviewer nie mają żadnego niezależnego dowodu bramek: brak CI (decyzja 2026-05-20), brak `Bash`, a `.claude/reviews/` i `.claude/work-graphs/` nie istnieją mimo `multi-agent-delivery.md §2.1` — jedynym dowodem jest `Gates:` pisany przez autora zmiany o samym sobie (RT F5, MEDIUM; decyzja właściciela: allowlista read-only `Bash` dla obu ról albo obowiązkowy review record). (4) `expect()` ×2 w `daemon/src/main.rs:78-79` przy budżecie 0 (startup, przed jakimkolwiek zapisem — SR NOTE-B). (5) `docs/threat-model.md:94` deklaruje `Subject::SystemBusName`, kod używa `unix-user` z UID (`polkit.rs:108-118`) — nie jest spoofowalne, ale rozjeżdża rozumowanie o `auth_admin_keep` (SR NOTE-A). (6) Test-only override'y env w binarce produkcyjnej: `BOOTCONTROL_IMMUTABLE_DISTRO_OVERRIDE` potrafi wyłączyć pre-flight, `BOOTCONTROL_MOK_KEY`/`_CERT` przekierowują klucz podpisujący (SR NOTE-C).

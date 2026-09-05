@@ -192,3 +192,21 @@ zmigrowany na `as_chunks` z testem pinującym granicę obcięcia
 
 Pełny zapis z dowodami per zadanie:
 [`history/task-briefs/audit-2026-08-23-fixes.md`](task-briefs/audit-2026-08-23-fixes.md).
+
+---
+
+## 2026-09-05 — Aktywne podatności zależności (`5661fe1`)
+
+Usunięto wszystkie 6 aktywnych findingów RustSec wykrytych audytem
+2026-09-04: `crossbeam-epoch` RUSTSEC-2026-0204, `quick-xml`
+RUSTSEC-2026-0194/0195 w obu obecnych wersjach oraz `zbus_polkit`
+RUSTSEC-2026-0278 na uprzywilejowanej ścieżce autoryzacji. Zmiana podnosi
+bezpośredni `zbus_polkit` do 5.1.0 i punktowo odświeża bezpieczne zależności
+pośrednie bez migracji frameworków GUI/TUI.
+
+Dowody zamknięcia: `cargo audit --no-fetch` = 0 vulnerabilities; kompilacja
+daemon/TUI/GUI/gui-spike; 269 testów i doctestów przeszło, 3 istniejące smoke
+testy GUI pozostały jawnie `ignored`; `cargo fmt --all --check` i pełny
+workspace clippy `--all-targets --all-features -D warnings` przeszły.
+Pozostałe 5 ostrzeżeń unmaintained i 5 unsound zachowano jako osobne P2 w
+backlogu.
