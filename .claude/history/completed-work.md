@@ -13,6 +13,17 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Weryfikacyjny cleanup backlogu
+
+Backlog odchudzono wyłącznie na podstawie bieżącego HEAD i historii gita.
+Przeniesiono z niego zamkniętą adopcję toolkitu `2026.08.21` (`f42bab5`),
+naprawę buildu daemona i fail-closed `audit.sh` z merge'a `aaf1caa`, instalację
+hooków oraz udokumentowanie `./scripts/install-hooks.sh` w README (`54232fd`).
+Usunięto też duplikat findingu audit-evidence, historyczne wykonane fragmenty
+aktywnych zadań i nieaktualny brief pętli (`c242e1f`). Niescalone implementacje
+— na przykład failsafe z `1932f9c` — pozostały w backlogu jako praca otwarta.
+Zamkniętą bramkę release G1 dokumentuje doc-honesty pass `00a9a9c`.
+
 ## 2026-09-05 — Przenośny baseline audytu i toolkit 2026.09.05
 
 Źródłowy `claude-toolkit` naprawiono w `a6816cf`: `weekly-audit` niesie teraz
