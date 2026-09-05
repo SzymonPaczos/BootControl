@@ -13,6 +13,17 @@ through `git log`.
 
 ---
 
+## 2026-09-05 — Zamknięcie HIGH atomic restore
+
+`445b3d9` zmienia `RestoreSnapshot` na kontrakt wymagający bieżącego ETagu.
+Daemon po Polkit blokuje wszystkie cele w deterministycznej kolejności,
+weryfikuje ETag pod blokadą oraz sprawdza SHA-256 każdej kopii przed pierwszym
+zapisem. Pliki są zastępowane przez `create_new → write → chmod → fsync →
+rename → fsync(parent)`, z zachowaniem trybu z manifestu. CLI, klient D-Bus i
+GUI przekazują ETag sprzed potwierdzenia. Dowód: czerwony test z cudzym flockiem,
+23 testy snapshotów, 25 testów mapowania błędów, testy klienta i CLI oraz 37
+doctestów daemona. Finding Security Review 2026-08-22 F3 usunięty z backlogu.
+
 ## 2026-09-05 — Zamknięcie kolizji sekundowych ID snapshotów
 
 `58afe02` dodaje do ID snapshotu skrócony hash unikalnego audit JOB_ID oraz

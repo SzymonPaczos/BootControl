@@ -221,10 +221,6 @@ Wymóg właściciela: program wyraźnie raportuje, co wykrył i skąd — dziś 
 GitHub przed betą: opis+topics, zrzuty/GIF w README, CONTRIBUTING, issue templates, ruleset main, naprawa placeholderów `YOUR_USERNAME` (README:122, `bootcontrold.socket`), releases (G6). Strona animowana (landing): treść po A1/A2, publikacja przy G7.
 **Źródło:** decyzja zakresu 2026-07-12. **Status:** zatwierdzone — czeka na kolejkę (#6–7).
 
-### Ścieżka restore bez ETag, flock i atomic rename
-`snapshot.rs:317-325` pisze `fs::write(&target, …)` bez `flock(LOCK_EX|LOCK_NB)`, bez weryfikacji ETag i bez `.tmp → fsync → rename`. `RestoreSnapshot` nie przyjmuje nawet parametru ETag; ograniczenie jest przyznane w komentarzu `interface.rs:1269-1273`, ale nigdy nie trafiło do rejestru ryzyk. Łamie aktywną decyzję 2026-05-03 „Stateless daemon, ETag + flock". Dla kontrastu `grub_manager.rs:188-296` realizuje pełny wzorzec. Dodatkowo `ManifestFile.mode` nie jest przywracany — restore może rozluźnić uprawnienia pliku bootowego. Test: trzymaj `flock(LOCK_EX)` na pliku docelowym, wywołaj `RestoreSnapshot` → `ConcurrentModification`, plik niezmieniony.
-**Źródło:** audyt 2026-08-22, Security Reviewer F3 (HIGH). **Status:** otwarte.
-
 ### `toolkit.local` wycisza plik control-plane bez przypięcia treści
 W `toolkit-sync.sh` gałąź `🔒 LOKALNY (zadeklarowany)` robi `continue` **przed** inkrementacją drift i przed porównaniem z lockiem, więc dowolna zmiana w zadeklarowanym pliku (np. `agents/reviewer.md`, `rules/multi-agent-delivery.md`) przechodzi jako `✅ kopie zgodne z masterem`, exit 0. Zweryfikowane na tym repo. Fix należy do **mastera** (`claude-toolkit`, dotyczy 7 projektów floty), nie do kopii: kolumna `sha256` w `toolkit.local`, werdykt `🔒 ZADEKLAROWANY, ALE ZMIENIONY` + `drift++`, test negatywny „mutacja bajtu → exit 1". Kolejność: **przed** wpięciem `check` jako preflightu (TOP #2) — inaczej preflight utrwali kłamstwo.
 **Źródło:** audyt 2026-08-22, Red Team F1 (HIGH). **Status:** otwarte, do promocji do mastera.
