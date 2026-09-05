@@ -199,7 +199,10 @@ mod tests {
     #[cfg(feature = "polkit-mock")]
     #[tokio::test]
     async fn mock_rejects_reserved_paranoia_actions() {
-        for action in [actions::GENERATE_KEYS, actions::REPLACE_PK] {
+        for action in [
+            "org.bootcontrol.generate-keys",
+            "org.bootcontrol.replace-pk",
+        ] {
             assert!(authorize_with_polkit(":1.42", action).await.is_err());
         }
     }
