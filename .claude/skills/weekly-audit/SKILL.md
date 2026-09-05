@@ -4,7 +4,7 @@ description: Przeprowadza cotygodniowy/okresowy audyt jakości kodu projektu —
 compatibility: Wymaga bash i git; kroki korzystające z GitHuba wymagają zalogowanego gh. Zaprojektowane dla agentów czytających SKILL.md (Claude Code i pokrewne).
 metadata:
   author: claude-toolkit
-  version: "2026.09.04"
+  version: "2026.09.05"
 ---
 
 # Cotygodniowy audyt jakości kodu
@@ -134,7 +134,7 @@ TODO/FIXME, liczba plików testowych, moduły bez importera (`grep -rl`).
 
 **Jakość suity testowej — własności, nie liczba plików.** Liczba plików
 testowych mierzy pojemniki; o ochronie decydują WŁASNOŚCI suity. Przejdź
-checklist z [`conventions/test-quality-baseline.md`](../../conventions/test-quality-baseline.md)
+checklist z [`test-quality-baseline.md`](references/test-quality-baseline.md)
 (14 własności, każda ze zmierzoną awarią za sobą: producent klasyfikujący
 własną awarię, testy niemogące zniknąć po cichu, progi z pomiaru, meta-testy
 bramek, lane split writerów, waity deterministyczne…). Wynik jedną linią
