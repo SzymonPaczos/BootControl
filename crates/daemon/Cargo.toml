@@ -6,6 +6,12 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# `--all-features` enables `polkit-mock`, which intentionally compiles out the
+# production Polkit client. A default-feature cargo-udeps run verifies that the
+# dependency is live on the real authorization path.
+[package.metadata.cargo-udeps.ignore]
+normal = ["zbus_polkit"]
+
 [features]
 polkit-mock = []
 

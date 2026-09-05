@@ -730,7 +730,6 @@ name = "bootcontrol-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bootcontrol-core",
  "serde",
  "serde_json",
  "tokio",
@@ -765,7 +764,6 @@ dependencies = [
  "anyhow",
  "arboard",
  "bootcontrol-client",
- "bootcontrol-core",
  "nix 0.29.0",
  "rfd",
  "serde",
