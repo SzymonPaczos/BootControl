@@ -23,6 +23,13 @@ The product goal for 1.0 is: **replace Grub Customizer, distribute widely, stay 
 
 The phase tables below are the **historical delivery record** (commit evidence) — they no longer drive priorities.
 
+**Integration update (2026-09-06):** all local and fetched origin branches are
+reconciled on `main`. GRUB menu parsing and `ListGrubEntries` (`3a3098a`),
+Stacja theming/pages (`9f81274`), failsafe wiring and idle-exit (`858e326`)
+are merged. GUI A1 client/view integration and A2 typed settings remain open;
+G2 still requires VM recovery evidence. The next repair loop is recorded in
+[`.claude/task-briefs/repair-loop-2026-09-06.md`](./.claude/task-briefs/repair-loop-2026-09-06.md).
+
 ---
 
 ## Phase 0 — Foundation `v0.1` ✅ Complete

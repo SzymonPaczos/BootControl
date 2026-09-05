@@ -48,7 +48,7 @@ Naming in Unix systems is an API. These identifiers are frozen — changing them
 | systemd socket | `bootcontrold.socket` |
 | D-Bus interface | `org.bootcontrol.Manager` |
 | D-Bus error namespace | `org.bootcontrol.Error.<Variant>` |
-| Polkit Action IDs (6, per-intent) | `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.generate-keys`, `org.bootcontrol.replace-pk`, `org.bootcontrol.restore-snapshot` (single source of truth: [`packaging/polkit/org.bootcontrol.policy`](./packaging/polkit/org.bootcontrol.policy) + `crates/daemon/src/polkit.rs`; the base five are specified in [`docs/GUI_V2_SPEC_v2.md`](./docs/GUI_V2_SPEC_v2.md) §7, `restore-snapshot` was added with the snapshot work; legacy `org.bootcontrol.manage` deprecated) |
+| Active Polkit Action IDs (4, per-intent) | `org.bootcontrol.rewrite-grub`, `org.bootcontrol.write-bootloader`, `org.bootcontrol.enroll-mok`, `org.bootcontrol.restore-snapshot` (single source of truth: [`packaging/polkit/org.bootcontrol.policy`](./packaging/polkit/org.bootcontrol.policy) + `polkit::KNOWN_ACTIONS`; historical `generate-keys` / `replace-pk` are rejected, as is legacy `org.bootcontrol.manage`) |
 
 ### D-Bus Error Convention
 
@@ -95,7 +95,7 @@ The daemon is **not resident**. It uses `systemd` socket activation:
 
 **Why:** A boot manager is used infrequently. Keeping a root process alive in the background violates the principle of minimal attack surface. Socket activation and async jobs naturally enforce the Stateless Design constraint.
 
-**Implementation status (2026-07-12):** socket activation ships (`bootcontrold.socket`); the async-job layer (`JobId`, `sd_notify(EXTEND_TIMEOUT_USEC)`) and the 60-second idle shutdown are design intent — none of it is implemented yet (no `sd_notify`/`JobId` in `crates/daemon`; no idle timeout in the systemd unit).
+**Implementation status (2026-09-06):** D-Bus/systemd activation and 60-second idle shutdown are implemented (`2297b2f`); the service uses `Type=dbus`. The async-job layer (`JobId`), protection of active long-running operations from idle shutdown, and the role of `sd_notify(EXTEND_TIMEOUT_USEC)` remain open. Idle-exit tests alone do not establish long-running operation safety.
 
 **CI Testing Strategy — Session Bus + Polkit Mock:**
 
@@ -125,7 +125,7 @@ Within that boundary, the recovery mechanisms are per-bootloader:
 
 | Bootloader | Mechanism | Status |
 |-----------|-----------|--------|
-| GRUB | **Failsafe menu entry** — a minimal known-good `menuentry` written to `/etc/bootcontrol/failsafe.cfg` after every successful GRUB write. Built exclusively from `/proc/version` + `/proc/mounts` (running kernel, `root=<uuid> ro`), never from the config being written. Config-level only — not an EFI entry. | ⚠️ Partially implemented — the snippet is written by `crates/daemon/src/failsafe.rs`, but no shipped `/etc/grub.d/` hook includes it in `grub.cfg` yet (gate G2) |
+| GRUB | **Failsafe menu entry** — a minimal known-good `menuentry` written to `/etc/bootcontrol/failsafe.cfg` after every successful GRUB write. Built exclusively from `/proc/version` + `/proc/mounts` (running kernel, `root=<uuid> ro`), never from the config being written. Config-level only — not an EFI entry. | ✅ Wiring implemented (`1932f9c`) — `packaging/grub.d/40_bootcontrol` includes the snippet in `grub.cfg`; full VM recovery verification remains gate G2 |
 | systemd-boot / UKI | **systemd `BootCounting`** (`systemd-bless-boot`) — each write should set the "tries left" counter (e.g. `+3`) so the boot loader falls back to the previous entry after repeated boot failures. | ⚠️ Design intent — **not yet implemented**: no write-path sets the counter today (verification/implementation tracked as release gate G2 in `.claude/task-briefs/release-readiness.md`) |
 | All backends | Pre-write **snapshots** (`/var/lib/bootcontrol/snapshots/`) restorable via `RestoreSnapshot`, plus the CLI `--rescue` chroot module. | ✅ Implemented |
 

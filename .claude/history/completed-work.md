@@ -13,6 +13,33 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — Integracja wszystkich gałęzi i uzgodnienie backlogu
+
+Weryfikacja `8e8b757`: fmt, Clippy all-targets/all-features, 626 testów i
+doctestów oraz Windows cross-check przeszły. Workspace jawnie pominął
+9 testów (6 E2E uruchomionych osobno, 3 GUI smoke nadal ignored).
+Izolowany session bus: runner raportuje 6/6, w tym 5 wykonanych testów
+D-Bus; harness MOK pominięty przez brak OVMF (potwierdzone z `--nocapture`).
+Pierwszą próbę E2E zablokował sandbox przy tworzeniu socketu; ponowiono
+poza sandboxem z tymczasową magistralą. Nie wykonano rebootu ani testu
+recovery na sprzęcie. Sprawdzono odsyłacze nowych/zmienionych briefów.
+
+- Naprawy bezpieczeństwa i cleanup backlogu: fast-forward do `948c31d`.
+- Release readiness: merge `858e326`, w tym failsafe `1932f9c`, idle-exit
+  `2297b2f`, autoryzacja oryginalnego nadawcy D-Bus `c3fcee8` i poprawki
+  unitu systemd. Zachowano nowszy kontrakt snapshotów i cztery aktywne akcje.
+- GUI Stacja i handoff: merge `9f81274`; parser `grub.cfg` i ListGrubEntries:
+  merge `3a3098a`. To zamyka części implementacyjne, nie całe GUI A1/A2.
+- Historyczne gałęzie fmt/Rustdoc/portability/E2E uzgodnione z nowszym kodem.
+  Schowek z Maka `9eb17fb` zachowany jako rodzic merge'a `f19e886` ze strategią
+  ours: packaging, smoke dependencies i session-bus helper już istnieją;
+  stare GUI, `.DS_Store` i osierocony gitlink nie zostały przywrócone.
+- Z backlogu usunięto brak wiring failsafe i niescalone gałęzie. Zawężono
+  lifecycle do długich operacji oraz drift threat modelu do sanitizera.
+  `status.md` przestał opisywać naprawiony build daemona jako zepsuty.
+- G2 pozostaje otwarta: działający hook nie jest dowodem recovery w VM.
+  Plan kolejnej pętli: `task-briefs/repair-loop-2026-09-06.md`.
+
 ## 2026-09-05 — Weryfikacyjny cleanup backlogu
 
 Backlog odchudzono wyłącznie na podstawie bieżącego HEAD i historii gita.

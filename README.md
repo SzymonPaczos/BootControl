@@ -246,7 +246,7 @@ short tour stays in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §V.
 - 🔒 **ETag freshness check** — config-file writes reject stale reads and concurrent modification (UEFI-variable writes are single atomic operations; ETag/snapshot coverage for them is tracked pre-beta)
 - 🔒 **POSIX flock** — exclusive file lock prevents TOCTOU race conditions
 - 🔒 **Payload blacklist** — blocks injection of dangerous kernel parameters (`init=`, `selinux=0`, etc.)
-- 🔒 **Failsafe menu entry (GRUB)** — a minimal known-good `menuentry` (running kernel, `root=<uuid> ro` only) regenerated after every successful GRUB write; config-level only, never an EFI boot entry. **Note:** the generated snippet is not yet auto-included in `grub.cfg` — the packaging hook is pending (release gate G2)
+- 🔒 **Failsafe menu entry (GRUB)** — a minimal known-good `menuentry` (running kernel, `root=<uuid> ro` only) regenerated after every successful GRUB write; config-level only, never an EFI boot entry. The packaged `/etc/grub.d/40_bootcontrol` hook includes the snippet in `grub.cfg`; full VM recovery verification remains release gate G2
 - 🔒 **Bail-out policy** — any complex Bash in `/etc/default/grub` causes an immediate error, never a partial edit
 - 🔒 **Snapshot before config-file writes** — pre-write contents archived to `/var/lib/bootcontrol/snapshots/`, rollback restores byte-for-byte; integrated in the GRUB write-path today, remaining write-paths tracked pre-beta
 - 🔒 **Atomic-distro pre-flight** — bare ostree / SteamOS / NixOS / Vanilla OS: writes refused with an actionable error; rpm-ostree: kernel-arg changes delegated to `rpm-ostree kargs`

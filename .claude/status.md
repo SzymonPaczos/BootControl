@@ -1,63 +1,20 @@
 # Status — Known Issues
 
-Bieżący stan zepsutych / niekompletnych funkcji BootControl. Co naprawić →
-[`.claude/backlog.md`](backlog.md). Co zrobione → [`.claude/history/completed-work.md`](history/completed-work.md).
+Stan po integracji gałęzi 2026-09-06. Otwarta praca → [backlog.md](backlog.md),
+zamknięcia → [history/completed-work.md](history/completed-work.md).
 
-> Ten plik trzymamy **lekki** — wpis = realne, *aktualnie odczuwane* breakage,
-> nie historia naprawionych usterek. Każdy wpis ma link do bug-source
-> (commit/issue/ROADMAP), żeby nie był to suchy katalog problemów.
+| Funkcja | Aktualny brak |
+|---------|---------------|
+| Frontendy bez daemona | `resolve_backend()` może pokazać sukces MockBackend bez rzeczywistego zapisu (P0). |
+| Uprzywilejowane metody D-Bus | Brak systematycznych testów kolejności autoryzacji i zapisu (P0). |
+| GUI Secure Boot | Puste ścieżki i brak wspólnego confirmation flow. |
+| GUI Boot Entries / Bootloader | Parser i D-Bus listing scalone; integracja klienta/GUI i typed settings nadal otwarte. |
+| Długie operacje daemona | Idle-exit działa, lecz JobId i ochrona aktywnej operacji wymagają domknięcia. |
+| Recovery / release | Hook failsafe scalony; G2 wymaga nadal dowodu recovery w VM, G3 fizycznego sprzętu. |
 
-## Złamane / niekompletne funkcje
+Build daemona, traversal snapshotów i loader entries, atomic restore,
+MOK confinement, kolizje snapshotów/UKI oraz wiring failsafe są na `main`.
+Nie są już zadaniami oczekującymi na merge.
 
-| Funkcja | Stan | Czego brakuje | Źródło |
-|---------|------|---------------|--------|
-| **Build daemona (Linux)** | **naprawione na gałęzi `fix/audit-2026-08-23` (`d0d2c93`) — czeka na merge; na `main` nadal zepsute** | merge gałęzi napraw do `main` (decyzja właściciela po przeglądzie) | Audyt 2026-08-23 → backlog **P0**; pętla napraw 2026-08-23 |
-| GUI Secure Boot panel (MOK enroll, NVRAM backup) | zepsute — przyciski zawsze failują walidację daemona | GUI przekazuje puste ścieżki (`view_model.rs:108-115`) | recenzja Codex 2026-07-12 #4 → backlog P1 |
-| Failsafe menu entry (GRUB) | nieskuteczny — snippet generowany, ale nie trafia do `grub.cfg` | hook `/etc/grub.d/` w packagingu + test VM | recenzja Codex 2026-07-12 #1 → backlog P1, bramka G2 |
-| **`crates/daemon` — cały crate** | **nie kompiluje się na Linuksie od 2026-07-12** | `polkit.rs:85-86` używa stałych `GENERATE_KEYS`/`REPLACE_PK` usuniętych z `actions` commitem `4fcf14c` | audyt 2026-08-22 → backlog P0 |
-| Frontendy bez daemona (CLI/TUI/GUI) | kłamią — pokazują dane `MockBackend` i meldują `Successfully set …`, nic nie zapisując | jawny sygnał degradacji albo propagacja błędu z `resolve_backend()` | audyt 2026-08-22 → backlog P0 |
-
-## Priorytety (kolejność prac)
-
-Pełna lista → [`.claude/backlog.md`](backlog.md). Stan po audycie 2026-08-23:
-
-0. **[P0] Build daemona** — **naprawiony** w pętli napraw 2026-08-23 na gałęzi
-   `fix/audit-2026-08-23` (`d0d2c93`): lista akcji zwężona do 4 zamiast
-   przywracania usuniętych stałych, plus test pinujący `polkit::KNOWN_ACTIONS`
-   do `policy_check::REQUIRED_ACTIONS`. **Na `main` nadal zepsute** — znika
-   dopiero po mergu. Pozostała praca: przegląd właściciela + merge.
-0b. **[P1] Hooki gitowe** — zainstalowane w tym klonie 2026-08-23
-   (`core.hooksPath` = `.githooks`). Otwarte pozostaje wymuszenie
-   `install-hooks.sh` w onboardingu dla nowych klonów oraz to, że
-   `ci-local.sh` jest vacuously green na non-Linux — częściowo domknięte
-   fail-closed build gate'em w `audit.sh` (`97421a1`).
-
-Stan po audycie 2026-07-12 i sesji planu wydawniczego 2026-07-12:
-
-0. **P0 z audytu 2026-08-22** — daemon nie kompiluje się na Linuksie, bramki
-   lokalne tego nie widzą, frontendy kłamią bez daemona. `RestoreSnapshot`
-   zamknięto commitami `b9cbd1e` i `445b3d9`. Dopóki daemon się nie
-   buduje, żadna bramka w tym repo nie mówi prawdy. Backlog P0; handoff
-   na Linuksa: [`task-briefs/linux-handoff-2026-08-22.md`](task-briefs/linux-handoff-2026-08-22.md).
-1. **Release readiness — 6 otwartych bramek do publicznej bety** (`0.9.0-beta.1`;
-   G1 doc-honesty zamknięta 2026-07-12, commit `00a9a9c`) — kanoniczny plan:
-   [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md);
-   semantyka wersji: `decisions.md` 2026-07-12. Backlog P1.
-2. **Naprawy z recenzji Codex 2026-07-12 (P1):** failsafe wiring do
-   `grub.cfg` + GUI Secure Boot (puste ścieżki) — backlog P1, tabela wyżej.
-3. **Control-plane gate** (Red Team 2026-07-12 F1) — czeka na decyzję
-   właściciela. Backlog P1.
-4. **P2** — z audytu 2026-07-12 (audit-evidence gate, `cargo --locked`/deny,
-   symlink hardening `BackupNvram`, stare branche) i z recenzji Codex
-   2026-07-12 (ETag/snapshot coverage, OVMF harness — paranoia rename zamknięty usunięciem funkcji 2026-07-12,
-   macierz distro, daemon lifecycle) + starsze (Faza A, `gui-spike`) —
-   czekają na decyzje właściciela.
-
-## Memory checkpoint (2026-05-23)
-
-Pierwszy pełny audyt po adopcji 2026-05-23: znalezione 2 P0 (Polkit per-intent,
-rpm-ostree sanitize) + 2 P1 (blacklist consolidation, startup policy validation)
-+ 4 P2 (audit.sh filter, snapshot literal, docs drift, Faza A). Po follow-up
-commitach wszystkie P0/P1 + P2.1/P2.2/P2.3 zamknięte; P2.4 (Faza A) i nowy
-"gui-spike decision" zostają jako P2 czekające na właściciela. Compliance
-`decisions.md`: 19/19 aktywnych decyzji respektowanych = **100%**.
+Kolejność następnej pracy i kryteria zakończenia:
+[repair-loop-2026-09-06.md](task-briefs/repair-loop-2026-09-06.md).

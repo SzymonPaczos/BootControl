@@ -1,7 +1,7 @@
 # Release readiness — droga do publicznej bety (`0.9.0-beta.1`)
 
 **Task-Id:** release-readiness
-**Status:** zapisane — nie rozpoczęte
+**Status:** w trakcie — aktualizacja po integracji 2026-09-06
 **Zadanie źródłowe:** sesja planistyczna 2026-07-12 (przegląd projektu + wykonalność + plan wydawniczy)
 **Powiązanie:** To zadanie wynikło z rozmowy właściciela 2026-07-12 o podziale cyklu
 wydawniczego na alfa/beta/stable i o warunkach publicznego ogłoszenia projektu.
@@ -67,6 +67,12 @@ w ogóle niezaimplementowany (→ G2), backend Windows nieistniejący (Phase 7
 oznaczona ❌ od strony Windows).
 
 ### G2 — Weryfikacja failsafe na GRUB-ie (dni)
+
+**Aktualizacja 2026-09-06:** `1932f9c` i `ffa076f` są na main: hook
+`packaging/grub.d/40_bootcontrol` oraz test wiring są scalone. Poniższy opis
+braku hooka jest historyczny. G2 nadal otwarta do pełnego dowodu recovery
+w VM i rozstrzygnięcia BootCounting.
+
 BootCounting (`systemd-bless-boot`) to natywny mechanizm systemd-boot; czysty
 GRUB nie implementuje boot loader interface (Fedora używa `boot_success` w
 grubenv — inny mechanizm). Automatyczny rollback — główny marketing claim —

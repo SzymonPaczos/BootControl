@@ -8,6 +8,9 @@ funkcji w [`status.md`](status.md).
 
 Priorytety: **P0** krytyczne · **P1** ważne · **P2** porządkowe.
 
+Plan następnej pętli: [`task-briefs/repair-loop-2026-09-06.md`](task-briefs/repair-loop-2026-09-06.md).
+Stan po scaleniu gałęzi lokalnych i origin 2026-09-06.
+
 ## P0 — krytyczne
 
 ### `pre-push` sprawdza working tree zamiast pushowanego commita
@@ -48,7 +51,7 @@ systematycznego PBT i pilota mutation testing.
 
 ### Release readiness — sześć bramek do publicznej bety
 
-Otwarte są: G2 failsafe, G3 write-path na sprzęcie, G4 instalacja paczek E2E,
+Otwarte są: G2 recovery w VM (hook failsafe już scalony), G3 write-path na sprzęcie, G4 instalacja paczek E2E,
 G5 `SECURITY.md`, G6 tag i artefakty oraz G7 materiał ogłoszeniowy. Kryteria są w
 [`task-briefs/release-readiness.md`](task-briefs/release-readiness.md).
 **Źródło:** plan 2026-07-12. **Status:** sześć bramek otwartych.
@@ -61,14 +64,6 @@ Gate powinien wykrywać chronione ścieżki w zakresie pushowanych commitów i
 wymuszać oddzielny commit/review.
 **Źródło:** Red Team 2026-07-12. **Status:** czeka na decyzję właściciela.
 
-### Failsafe menu entry nie jest wpinany do `grub.cfg`
-
-Bieżący HEAD nie zawiera skryptu `/etc/grub.d/`, który dołącza
-`/etc/bootcontrol/failsafe.cfg`. Commit `1932f9c` rozwiązuje to na innej,
-niescalonej gałęzi, więc zadanie pozostaje otwarte do świadomego przeniesienia
-lub scalenia wraz z testem instalacyjnym.
-**Źródło:** recenzja 2026-07-12; bramka G2. **Status:** otwarte.
-
 ### GUI Secure Boot ma niedokończone wejścia i confirmation flow
 
 GUI przekazuje puste ścieżki do `sign_and_enroll_uki` i `backup_nvram`, a oba
@@ -79,8 +74,11 @@ protokół działań destrukcyjnych.
 
 ### GUI v2 — strony Boot Entries i Bootloader (Tor A)
 
-Boot Entries nadal używa tabeli key=value, Bootloader jest placeholderem, a
-Settings statycznym tekstem. Zatwierdzona kolejność: A1 Boot Entries → A2
+Parser `grub.cfg` i `ListGrubEntries` są już scalone (`cf7ddaf`, `34668c3`),
+podobnie warstwa wizualna Stacja (`c5fb3f3`). Pozostaje podłączenie listy do
+klienta i GUI, Inspector oraz staged changes; Bootloader nadal jest
+placeholderem. Settings ma nowy układ, lecz wartości nadal prezentuje
+statycznym tekstem i wymaga kontrolek edycji. Zatwierdzona kolejność: A1 Boot Entries → A2
 Bootloader → A3 szybkie poprawki. Briefy:
 [`gui-v2-boot-entries.md`](task-briefs/gui-v2-boot-entries.md) i
 [`gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
@@ -124,11 +122,12 @@ oraz niepustych pól Security Review/Red Team. To jedno zadanie zastępuje dawny
 duplikat „Audit-evidence gate".
 **Źródło:** Red Team 2026-07-12 i audyt 2026-08-22. **Status:** otwarte.
 
-### Drift dokumentacji: cztery pliki nadal opisują sześć akcji Polkit
+### Drift dokumentacji aktywnych akcji Polkit
 
-Nieaktualne są `ARCHITECTURE.md`, `AGENTS.md`, `docs/UX_BRIEF.md` i
-`packaging/rpm/bootcontrol.spec`; ratchet liczby akcji w `audit.sh` również nie
-istnieje.
+Do uzgodnienia pozostają `AGENTS.md` i `docs/UX_BRIEF.md`;
+`ARCHITECTURE.md` i opis RPM zostały poprawione przy integracji. Aktywne są
+cztery akcje; dwa identyfikatory usuniętych operacji pozostają historyczne.
+Ratchet liczby akcji w `audit.sh` nadal wymaga weryfikacji.
 **Źródło:** audyt 2026-08-22. **Status:** otwarte, zawężone.
 
 ## P2 — porządkowe
@@ -152,11 +151,13 @@ Runner obsługuje Ubuntu, Fedorę i Arch, podczas gdy Phase 8 deklarowała pię�
 dystrybucji. Należy dodać dwa środowiska albo formalnie zawęzić macierz.
 **Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
 
-### Lifecycle daemona nie realizuje deklaracji on-demand
+### Lifecycle daemona — asynchroniczne operacje
 
-Brakuje idle-exit 60 s, `sd_notify` i asynchronicznego JobId; unit zawiera
-`WantedBy=multi-user.target`. Należy zaimplementować kontrakt lub skorygować
-architekturę, a `Type=notify` zweryfikować na realnym systemie.
+Idle-exit 60 s jest scalony (`2297b2f`), unit używa `Type=dbus` i nie ma
+`WantedBy=multi-user.target`. Pozostają `JobId`, ochrona długich operacji
+przed idle-exit i uzgodnienie roli `sd_notify`. Wymagany test operacji
+trwającej dłużej niż timeout; samo resetowanie timera ruchem D-Bus nie
+dowodzi ochrony aktywnej operacji.
 **Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
 
 ### `ci-local.sh`: `--locked` i skan zależności
@@ -192,15 +193,6 @@ Manifesty i README deklarują GPL-3.0, lecz bieżący HEAD nie ma `LICENSE` ani
 `COPYING`. Blokuje to poprawne przygotowanie dystrybucji.
 **Źródło:** audyt 2026-08-22; zweryfikowane 2026-09-05. **Status:** otwarte.
 
-### Siedem niescalonych gałęzi remote-tracking
-
-Lokalne refy `origin/*` niepołączone z `main`: cztery poprawki z 2026-05-19,
-`feat/gui-v2-boot-entries`, `feat/gui-v21-stacja` i
-`ratunek/stash-gui-smoke-tests`. Każda wymaga osobnej decyzji: scalić,
-przenieść wybrane commity czy usunąć ref po weryfikacji z origin.
-**Źródło:** audyt 2026-08-22; lokalne refy zweryfikowane 2026-09-05.
-**Status:** otwarte.
-
 ### `cargo audit`: dziesięć ostrzeżeń tranzytywnych
 
 Pomiar 2026-09-05 wykazał 5 ostrzeżeń unmaintained i 5 unsound. Pozostaje
@@ -228,8 +220,9 @@ po becie. Szczegóły:
 
 ### Drift `docs/threat-model.md`
 
-Dokument błędnie deklaruje `Subject::SystemBusName`, gdy kod używa UID
-`unix-user`, oraz odrzucanie `module_blacklist=`, którego sanitizer nie ma.
+Pozostała fałszywa deklaracja odrzucania `module_blacklist=`, którego
+sanitizer nie ma. Rozjazd podmiotu Polkit zamknięty przez `c3fcee8`: kod
+używa teraz nazwy oryginalnego nadawcy D-Bus (`SystemBusName`).
 Preferowany kierunek wymaga decyzji: poprawić dokument do kodu czy rozszerzyć
 politykę sanitizera.
 **Źródło:** audyt 2026-08-22/23. **Status:** czeka na triage.
