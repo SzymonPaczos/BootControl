@@ -37,4 +37,5 @@ mod concurrent_write;
 mod etag_mismatch;
 mod grub_roundtrip;
 pub mod helpers;
+mod idle_shutdown;
 mod secureboot_mok;

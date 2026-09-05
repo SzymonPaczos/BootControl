@@ -40,6 +40,7 @@ trait BootControlManager {
 #[ignore]
 #[tokio::test]
 async fn grub_roundtrip_write_verify_etag_changes() -> anyhow::Result<()> {
+    let _test_guard = crate::helpers::DAEMON_TEST_LOCK.lock().await;
     let handle = spawn_daemon(MINIMAL_GRUB).await?;
 
     let proxy = BootControlManagerProxy::new(&handle.conn).await?;

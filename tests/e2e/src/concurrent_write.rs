@@ -54,6 +54,7 @@ fn dbus_error_name(err: &zbus::Error) -> Option<&str> {
 #[ignore]
 #[tokio::test]
 async fn concurrent_write_returns_concurrent_modification_error() -> anyhow::Result<()> {
+    let _test_guard = crate::helpers::DAEMON_TEST_LOCK.lock().await;
     use std::fs::OpenOptions;
 
     let handle = spawn_daemon(MINIMAL_GRUB).await?;

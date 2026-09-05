@@ -26,14 +26,14 @@ use std::io;
 use std::sync::Arc;
 
 use app::{App, GrubEntry, Mode};
-use bootcontrol_client::{BootBackend, dbus_error_message, resolve_backend};
+use bootcontrol_client::{dbus_error_message, resolve_backend, BootBackend};
 use crossterm::{
     event::{EventStream, KeyCode, KeyEvent, KeyModifiers},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use events::{AppEvent, is_quit_key, next_event};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use events::{is_quit_key, next_event, AppEvent};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
@@ -411,12 +411,12 @@ async fn commit_uki_edit(app: &mut App, backend: &dyn BootBackend) {
     match backend.add_kernel_param(&new_param, &etag).await {
         Ok(()) => {
             // If we replaced an existing param, also remove the old one.
-            if let Some(old) = old_param
-                && old != new_param
-            {
-                // Reload ETag after add, then remove old.
-                if let Ok((_, new_etag)) = backend.read_kernel_cmdline().await {
-                    let _ = backend.remove_kernel_param(&old, &new_etag).await;
+            if let Some(old) = old_param {
+                if old != new_param {
+                    // Reload ETag after add, then remove old.
+                    if let Ok((_, new_etag)) = backend.read_kernel_cmdline().await {
+                        let _ = backend.remove_kernel_param(&old, &new_etag).await;
+                    }
                 }
             }
             app.cancel_edit();

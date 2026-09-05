@@ -5,7 +5,7 @@ After=dbus.service
 Requires=dbus.service
 
 [Service]
-Type=notify
+Type=dbus
 ExecStart=/usr/bin/bootcontrold
 User=root
 Group=root
@@ -15,12 +15,15 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=bootcontrold
 BusName=org.bootcontrol.Manager
+ConfigurationDirectory=bootcontrol
+StateDirectory=bootcontrol
 
 # Security constraints
 ProtectSystem=full
 ProtectHome=yes
 RestrictNamespaces=yes
-
-[Install]
-WantedBy=multi-user.target
-Also=bootcontrold.socket
+ReadWritePaths=-/boot/efi
+ReadWritePaths=-/boot/grub
+ReadWritePaths=-/boot/loader
+ReadWritePaths=-/etc/default
+ReadWritePaths=-/etc/kernel

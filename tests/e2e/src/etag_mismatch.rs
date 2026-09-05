@@ -52,6 +52,7 @@ fn dbus_error_name(err: &zbus::Error) -> Option<&str> {
 #[ignore]
 #[tokio::test]
 async fn etag_mismatch_returns_state_mismatch_error() -> anyhow::Result<()> {
+    let _test_guard = crate::helpers::DAEMON_TEST_LOCK.lock().await;
     let handle = spawn_daemon(MINIMAL_GRUB).await?;
 
     let proxy = BootControlManagerProxy::new(&handle.conn).await?;

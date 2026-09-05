@@ -29,6 +29,9 @@ use tempfile::{NamedTempFile, TempDir};
 use tokio::time::{sleep, timeout};
 use zbus::Connection;
 
+/// Serializes daemon E2E tests that share one well-known D-Bus name.
+pub static DAEMON_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /// Well-known D-Bus name that `bootcontrold` registers.
@@ -85,6 +88,17 @@ impl Drop for DaemonHandle {
     }
 }
 
+impl DaemonHandle {
+    /// Check whether the daemon exited without sending it a signal.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the operating system cannot query the child.
+    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.process.try_wait()
+    }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /// Compile `bootcontrold` with the `polkit-mock` feature, spawn it on the
@@ -101,6 +115,30 @@ impl Drop for DaemonHandle {
 /// Returns an error if the build fails, the daemon cannot be spawned, or the
 /// daemon does not register its bus name within [`STARTUP_TIMEOUT`].
 pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle> {
+    spawn_daemon_inner(initial_content, None).await
+}
+
+/// Spawn `bootcontrold` with an explicit idle timeout for lifecycle tests.
+///
+/// # Arguments
+///
+/// * `initial_content` — Content written to the temporary GRUB file.
+/// * `idle_timeout_secs` — Number of inactive seconds before daemon exit.
+///
+/// # Errors
+///
+/// Returns an error under the same conditions as [`spawn_daemon`].
+pub async fn spawn_daemon_with_idle_timeout(
+    initial_content: &str,
+    idle_timeout_secs: u64,
+) -> anyhow::Result<DaemonHandle> {
+    spawn_daemon_inner(initial_content, Some(idle_timeout_secs)).await
+}
+
+async fn spawn_daemon_inner(
+    initial_content: &str,
+    idle_timeout_secs: Option<u64>,
+) -> anyhow::Result<DaemonHandle> {
     // ── Step 1: Write the initial GRUB config to a temp file ─────────────────
     let grub_file = write_temp_grub(initial_content)?;
     let grub_path = grub_file.path().to_owned();
@@ -144,7 +182,8 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
     let binary_path = build_daemon_binary().context("failed to build bootcontrold")?;
 
     // ── Step 4: Spawn the daemon process ─────────────────────────────────────
-    let process = Command::new(&binary_path)
+    let mut command = Command::new(&binary_path);
+    command
         .env("BOOTCONTROL_BUS", "session")
         .env("BOOTCONTROL_GRUB_PATH", &grub_path)
         .env("BOOTCONTROL_FAILSAFE_PATH", &failsafe_path)
@@ -153,9 +192,11 @@ pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle>
         // Silence daemon logs unless RUST_LOG is explicitly set by the caller.
         .env_remove("RUST_LOG")
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .context("failed to spawn bootcontrold")?;
+        .stderr(Stdio::null());
+    if let Some(seconds) = idle_timeout_secs {
+        command.env("BOOTCONTROL_IDLE_TIMEOUT_SECS", seconds.to_string());
+    }
+    let process = command.spawn().context("failed to spawn bootcontrold")?;
 
     // ── Step 5: Open the test-side D-Bus connection ───────────────────────────
     let conn = Connection::session()

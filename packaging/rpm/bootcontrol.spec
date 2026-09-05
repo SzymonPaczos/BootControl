@@ -36,15 +36,16 @@ Requires:       systemd
 
 %description -n bootcontrold
 The socket-activated, privilege-separated daemon that backs all BootControl
-frontends. It runs as root, is activated on demand by systemd, and shuts down
+frontends. It runs as root, is activated on demand through D-Bus and systemd,
+and shuts down
 after 60 seconds of inactivity. All write operations are authorized via Polkit
 and protected by SHA-256 ETag concurrency checks.
 
 This package contains:
   - The bootcontrold daemon binary
-  - systemd unit and socket files for socket activation
+  - systemd service and compatibility socket unit
   - D-Bus system bus policy (org.bootcontrol.Manager)
-  - Polkit action policy (six per-intent actions: rewrite-grub, write-bootloader, enroll-mok, generate-keys, replace-pk, restore-snapshot)
+  - Polkit action policy (four active per-intent actions: rewrite-grub, write-bootloader, enroll-mok, restore-snapshot)
 
 # ---------------------------------------------------------------------------
 # %prep
@@ -82,10 +83,16 @@ install -Dm644 packaging/systemd/bootcontrold.socket \
 # D-Bus system bus policy
 install -Dm644 packaging/dbus/org.bootcontrol.Manager.conf \
     %{buildroot}%{_datadir}/dbus-1/system.d/org.bootcontrol.Manager.conf
+install -Dm644 packaging/dbus/org.bootcontrol.Manager.service \
+    %{buildroot}%{_datadir}/dbus-1/system-services/org.bootcontrol.Manager.service
 
 # Polkit action policy
 install -Dm644 packaging/polkit/org.bootcontrol.policy \
     %{buildroot}%{_datadir}/polkit-1/actions/org.bootcontrol.policy
+
+# GRUB failsafe menu hook
+install -Dm755 packaging/grub.d/40_bootcontrol \
+    %{buildroot}%{_sysconfdir}/grub.d/40_bootcontrol
 
 # ---------------------------------------------------------------------------
 # %files — main package (bootcontrol)
@@ -106,20 +113,22 @@ install -Dm644 packaging/polkit/org.bootcontrol.policy \
 %{_unitdir}/bootcontrold.service
 %{_unitdir}/bootcontrold.socket
 %{_datadir}/dbus-1/system.d/org.bootcontrol.Manager.conf
+%{_datadir}/dbus-1/system-services/org.bootcontrol.Manager.service
 %{_datadir}/polkit-1/actions/org.bootcontrol.policy
+%config %{_sysconfdir}/grub.d/40_bootcontrol
 
 # ---------------------------------------------------------------------------
 # systemd scriptlets for bootcontrold
 # ---------------------------------------------------------------------------
 
 %post -n bootcontrold
-%systemd_post bootcontrold.socket
+%systemd_post bootcontrold.service
 
 %preun -n bootcontrold
-%systemd_preun bootcontrold.socket
+%systemd_preun bootcontrold.service
 
 %postun -n bootcontrold
-%systemd_postun_with_restart bootcontrold.socket
+%systemd_postun_with_restart bootcontrold.service
 
 # ---------------------------------------------------------------------------
 # %changelog

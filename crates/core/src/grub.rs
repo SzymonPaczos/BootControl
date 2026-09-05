@@ -11,9 +11,10 @@
 //! **If any executable Bash construct is detected, the parser aborts
 //! immediately** and returns
 //! [`BootControlError::ComplexBashDetected`](crate::error::BootControlError::ComplexBashDetected).
-//! BootControl never attempts to parse around or work through complex Bash,
-//! regardless of where in the file it appears. This is a hard safety
-//! invariant, not a best-effort heuristic.
+//! BootControl never attempts to parse around or work through complex Bash.
+//! The sole exception is Ubuntu's exact, vendor-supplied
+//! `GRUB_DISTRIBUTOR` expression; it is recognised as an opaque value and
+//! preserved verbatim. Near-matches remain rejected.
 //!
 //! ## What the parser accepts (strict subset)
 //!
@@ -62,6 +63,13 @@ const BASH_TRIGGERS: &[(&str, &str)] = &[
     ("|", "pipe operator"),
     ("{", "compound command block"),
 ];
+
+/// Exact vendor expression shipped by Ubuntu 26.04 in `/etc/default/grub`.
+///
+/// This value is treated as opaque data. BootControl does not evaluate it and
+/// accepts no variants, preventing the exception from becoming a general
+/// command-substitution bypass.
+const UBUNTU_OS_RELEASE_DISTRIBUTOR: &str = "`( . /etc/os-release && echo ${NAME} )`";
 
 /// Bash *keyword* prefixes that must appear as the first non-whitespace token
 /// on a line to trigger a bail-out. We check keywords separately from
@@ -161,6 +169,13 @@ fn parse_line(line: &str) -> LineKind {
 
         // Validate the key: must be a legal shell identifier.
         if is_valid_key(key_part) {
+            if key_part == "GRUB_DISTRIBUTOR" && value_part == UBUNTU_OS_RELEASE_DISTRIBUTOR {
+                return LineKind::Assignment {
+                    key: key_part.to_string(),
+                    value: value_part.to_string(),
+                };
+            }
+
             // Check the value part for bash constructs BEFORE accepting it.
             // Even in a "KEY=..." line the value could be `$(command)`.
             if let Some(offender) = detect_dangerous_value(value_part) {
@@ -537,6 +552,30 @@ GRUB_CMDLINE_LINUX=\"\"
             "quiet splash"
         );
         assert_eq!(cfg.get("GRUB_CMDLINE_LINUX").unwrap(), "");
+    }
+
+    #[test]
+    fn parses_ubuntu_os_release_distributor_assignment() {
+        let input = "\
+GRUB_DEFAULT=0
+GRUB_DISTRIBUTOR=`( . /etc/os-release && echo ${NAME} )`
+GRUB_TIMEOUT=0
+";
+        let cfg = assert_parses_ok(input);
+        assert_eq!(
+            cfg.get("GRUB_DISTRIBUTOR").unwrap(),
+            "`( . /etc/os-release && echo ${NAME} )`"
+        );
+        assert_eq!(
+            cfg.lines[1],
+            "GRUB_DISTRIBUTOR=`( . /etc/os-release && echo ${NAME} )`"
+        );
+    }
+
+    #[test]
+    fn rejects_modified_os_release_distributor_subshell() {
+        assert_complex_bash("GRUB_DISTRIBUTOR=`( . /etc/os-release && echo ${NAME} && id )`\n");
+        assert_complex_bash("OTHER=`( . /etc/os-release && echo ${NAME} )`\n");
     }
 
     #[test]

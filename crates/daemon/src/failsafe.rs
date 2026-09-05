@@ -396,6 +396,7 @@ fn build_tmp_path(target: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
     use tempfile::TempDir;
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -425,6 +426,10 @@ mod tests {
             // Safety: test environment, deliberately simple
             .expect("write must succeed in tempdir");
         cfg_path
+    }
+
+    fn grub_hook_path() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging/grub.d/40_bootcontrol")
     }
 
     // ── tests ─────────────────────────────────────────────────────────────────
@@ -536,6 +541,47 @@ mod tests {
             !content.contains("quiet splash"),
             "snippet must not contain user cmdline args:\n{content}"
         );
+    }
+
+    /// Requirement: the packaged GRUB hook emits the generated snippet
+    /// verbatim so `grub-mkconfig` can include it in the final menu.
+    #[test]
+    fn grub_hook_emits_readable_failsafe_config() {
+        let dir = TempDir::new().expect("tempdir");
+        let cfg_path = dir.path().join("failsafe.cfg");
+        let content = "menuentry \"BootControl test\" {\n}\n";
+        fs::write(&cfg_path, content).expect("write fixture");
+
+        let output = Command::new("sh")
+            .arg(grub_hook_path())
+            .env("BOOTCONTROL_FAILSAFE_CFG", &cfg_path)
+            .output()
+            .expect("run GRUB hook");
+
+        assert!(output.status.success(), "hook must exit successfully");
+        assert_eq!(output.stdout, content.as_bytes());
+        assert!(output.stderr.is_empty(), "hook must not emit diagnostics");
+    }
+
+    /// Requirement: a first boot before the daemon has generated its snippet
+    /// remains valid and produces no partial GRUB syntax.
+    #[test]
+    fn grub_hook_is_silent_when_failsafe_config_is_missing() {
+        let dir = TempDir::new().expect("tempdir");
+        let missing_path = dir.path().join("missing.cfg");
+
+        let output = Command::new("sh")
+            .arg(grub_hook_path())
+            .env("BOOTCONTROL_FAILSAFE_CFG", missing_path)
+            .output()
+            .expect("run GRUB hook");
+
+        assert!(output.status.success(), "missing config is not an error");
+        assert!(
+            output.stdout.is_empty(),
+            "missing config emits no GRUB code"
+        );
+        assert!(output.stderr.is_empty(), "hook must not emit diagnostics");
     }
 
     // ── unit tests for pure helpers ───────────────────────────────────────────

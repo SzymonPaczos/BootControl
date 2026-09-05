@@ -1,2 +1,8 @@
 target/release/bootcontrold usr/bin/
 docs/man/bootcontrold.8 usr/share/man/man8/
+packaging/dbus/org.bootcontrol.Manager.conf usr/share/dbus-1/system.d/
+packaging/dbus/org.bootcontrol.Manager.service usr/share/dbus-1/system-services/
+packaging/grub.d/40_bootcontrol etc/grub.d/
+packaging/polkit/org.bootcontrol.policy usr/share/polkit-1/actions/
+packaging/systemd/bootcontrold.service lib/systemd/system/
+packaging/systemd/bootcontrold.socket lib/systemd/system/

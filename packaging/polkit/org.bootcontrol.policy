@@ -16,7 +16,7 @@
 -->
 <policyconfig>
   <vendor>BootControl</vendor>
-  <vendor_url>https://github.com/YOUR_USERNAME/bootcontrol</vendor_url>
+  <vendor_url>https://github.com/szymonpaczos/bootcontrol</vendor_url>
 
   <action id="org.bootcontrol.rewrite-grub">
     <description>Rewrite GRUB configuration</description>

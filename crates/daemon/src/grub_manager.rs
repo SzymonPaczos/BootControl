@@ -646,6 +646,35 @@ GRUB_DISTRIBUTOR=\"Ubuntu\"
     }
 
     #[test]
+    fn set_grub_value_preserves_ubuntu_distributor_expression() {
+        let original = "\
+GRUB_DEFAULT=0
+GRUB_DISTRIBUTOR=`( . /etc/os-release && echo ${NAME} )`
+GRUB_TIMEOUT=0
+";
+        let f = write_temp(original);
+        let etag = fetch_etag(f.path()).expect("fetch etag");
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+
+        let result = set_grub_value(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "5",
+            &etag,
+            &failsafe_dir.path().join("failsafe.cfg"),
+            &grub_cfg_dir.path().join("grub.cfg"),
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("Ubuntu vendor expression should not block a safe edit");
+
+        let written = fs::read_to_string(f.path()).expect("re-read");
+        assert!(written.contains("GRUB_DISTRIBUTOR=`( . /etc/os-release && echo ${NAME} )`"));
+        assert!(written.contains("GRUB_TIMEOUT=5"));
+    }
+
+    #[test]
     fn set_grub_value_preserves_other_assignments_verbatim() {
         let f = write_temp(SIMPLE_GRUB);
         let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
