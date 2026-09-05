@@ -262,13 +262,22 @@ add ""
 add "### Dead code / nieużywane deps"
 if command -v cargo-udeps >/dev/null 2>&1; then
     UDEPS_TMP="$(mktemp)"
-    if cargo +nightly udeps --workspace --all-features >"$UDEPS_TMP" 2>&1; then
-        UDEPS_UNUSED=$(grep -c "unused" "$UDEPS_TMP" || true)
-        add "- cargo-udeps: $UDEPS_UNUSED unused (output w \`$UDEPS_TMP\` — przejrzyj)."
-    else
-        add "- cargo-udeps: ❌ exec error (sprawdź toolchain nightly)"
-        AUDIT_FAILED=1
-    fi
+    cargo +nightly udeps --workspace --all-features --all-targets \
+        >"$UDEPS_TMP" 2>&1
+    UDEPS_RC=$?
+    case "$UDEPS_RC" in
+        0)
+            add "- cargo-udeps: 0 unused dependencies."
+            ;;
+        1)
+            UDEPS_UNUSED=$(grep -c '─── "' "$UDEPS_TMP" || true)
+            add "- cargo-udeps: $UDEPS_UNUSED unused dependencies (finding, nie błąd wykonania)."
+            ;;
+        *)
+            add "- cargo-udeps: ❌ exec error (exit $UDEPS_RC)"
+            AUDIT_FAILED=1
+            ;;
+    esac
     rm -f "$UDEPS_TMP"
 else
     add "- cargo-udeps: ⚠️  niezainstalowane (\`cargo install cargo-udeps --locked\` żeby aktywować)."

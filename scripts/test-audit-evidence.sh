@@ -36,7 +36,22 @@ if [ "${1:-}" = "--version" ]; then
 fi
 
 case "$*" in
-    "build -p bootcontrold"|"fmt --all -- --check"|"+nightly udeps --workspace --all-features")
+    "build -p bootcontrold"|"fmt --all -- --check")
+        exit 0
+        ;;
+    "+nightly udeps --workspace --all-features --all-targets")
+        if [ "${FORCE_UDEPS_ERROR:-0}" = "1" ]; then
+            printf 'forced cargo-udeps execution error\n' >&2
+            exit 2
+        fi
+        if [ "${FORCE_UDEPS_FINDINGS:-0}" = "1" ]; then
+            printf '%s\n' 'unused dependencies:' \
+                '`crate-a v0.1.0 (/fixture/a)`' \
+                '└─── dependencies' \
+                '     ├─── "unused-one"' \
+                '     └─── "unused-two"'
+            exit 1
+        fi
         exit 0
         ;;
     "clippy --workspace --all-targets --all-features -- -D warnings")
@@ -150,5 +165,21 @@ if run_audit "$budget"; then
 fi
 grep -Fq '| core | 0 | 1 | 0 | 0/0/0 (strict) ❌ |' "$budget"
 grep -Fq '**⚠ PANIC BUDGET BREACH**: core ' "$budget"
+printf 'fn healthy_again() {}\n' > "$REPO/crates/core/src/lib.rs"
 
-echo 'audit evidence meta-tests: 4/4 passed'
+udeps_findings="$TMP_ROOT/udeps-findings.out"
+if ! run_audit "$udeps_findings" FORCE_UDEPS_FINDINGS=1; then
+    cat "$udeps_findings" >&2
+    echo 'expected cargo-udeps findings to be reported without an exec error' >&2
+    exit 1
+fi
+grep -Fq 'cargo-udeps: 2 unused dependencies' "$udeps_findings"
+
+udeps_error="$TMP_ROOT/udeps-error.out"
+if run_audit "$udeps_error" FORCE_UDEPS_ERROR=1; then
+    echo 'expected cargo-udeps execution error to make audit.sh fail' >&2
+    exit 1
+fi
+grep -Fq 'cargo-udeps: ❌ exec error (exit 2)' "$udeps_error"
+
+echo 'audit evidence meta-tests: 6/6 passed'
