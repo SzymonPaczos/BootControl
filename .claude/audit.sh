@@ -115,6 +115,7 @@ add "### \`unwrap\` / \`expect\` / \`panic!\` w production (poza mod tests i doc
 add ""
 add "| Crate | unwrap | expect | panic! | Budżet |"
 add "|-------|--------|--------|--------|--------|"
+PANIC_BUDGET_BREACH=""
 count_in_production() {
     # $1 = ERE pattern, $2 = src_dir
     # Używa `grep -E | wc -l` zamiast `grep -cE`, bo grep -c exit 1 na zero
@@ -142,14 +143,24 @@ for c in $CRATES; do
     # Budżety per decisions.md (2026-05-03 unwrap banned). Core/daemon strict,
     # frontend mniej rygorystyczne. Doctesty i mod tests już odfiltrowane.
     case "$c" in
-        core|daemon) BUDGET="0/0/0 (strict)" ;;
-        client) BUDGET="≤2/≤2/0" ;;
-        cli|tui|gui) BUDGET="≤5/≤5/≤1" ;;
-        *) BUDGET="?" ;;
+        core|daemon) MAX_UNWRAP=0; MAX_EXPECT=0; MAX_PANIC=0; BUDGET="0/0/0 (strict)" ;;
+        client) MAX_UNWRAP=2; MAX_EXPECT=2; MAX_PANIC=0; BUDGET="≤2/≤2/0" ;;
+        cli|tui|gui) MAX_UNWRAP=5; MAX_EXPECT=5; MAX_PANIC=1; BUDGET="≤5/≤5/≤1" ;;
+        *) MAX_UNWRAP=0; MAX_EXPECT=0; MAX_PANIC=0; BUDGET="?" ;;
     esac
+    if [ "$UNWRAP" -gt "$MAX_UNWRAP" ] || [ "$EXPECT" -gt "$MAX_EXPECT" ] \
+            || [ "$PANIC" -gt "$MAX_PANIC" ]; then
+        BUDGET="$BUDGET ❌"
+        PANIC_BUDGET_BREACH+="$c "
+        AUDIT_FAILED=1
+    fi
     add "| $c | $UNWRAP | $EXPECT | $PANIC | $BUDGET |"
 done
 add ""
+if [ -n "$PANIC_BUDGET_BREACH" ]; then
+    add "**⚠ PANIC BUDGET BREACH**: $PANIC_BUDGET_BREACH"
+    add ""
+fi
 
 # === 5. TODO / FIXME / HACK / XXX =============================================
 add "### TODO / FIXME / HACK / XXX w kodzie"

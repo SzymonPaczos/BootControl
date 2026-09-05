@@ -217,7 +217,8 @@ doctesty greppem po źródłach: raportuje enumerację Cargo/libtest, osobno
 skalibrowane z realnego przebiegu 2026-09-05. Format, Clippy, runner, ratchet,
 `cargo-udeps` i regression guards są fail-closed; naprawiono też gubione w
 podpowłoce top 5 findings Clippy. Meta-test sabotuje żywy `.claude/audit.sh`
-i pokrywa 3 ścieżki: zdrową, czerwony Clippy oraz awarię runnera. Pełny baseline
+i pokrywa ścieżki: zdrową, czerwony Clippy, awarię runnera i przekroczenie
+budżetu panic. Pełny baseline
 14 właściwości pozostaje częściowo otwarty w backlogu.
 
 **Kolizja plików tymczasowych UKI** (`dd331eb`). `atomic_cmdline_update`
@@ -228,3 +229,10 @@ błąd przed utrwaleniem sprząta plik automatycznie. Test regresyjny był czerw
 przed helperem i sprawdza jednoczesne istnienie dwóch różnych tempów. Dowody:
 7 testów modułu, 20/20 powtórzeń równoległych, 198 testów daemona, 37 doctestów
 i Clippy bez ostrzeżeń. Ratchet runnera daemona podniesiono 234 → 235.
+
+**Ścisły budżet panic w core/daemon** (`b6b1216`). Parser identyfikatorów GRUB
+obsługuje pusty iterator bez `expect`, a daemon propaguje błędy tworzenia
+buildera session/system D-Bus do `main()` zamiast panikować podczas startu.
+Izolowany przebieg `audit.sh` potwierdza 0/0/0 w obu crate'ach. Audit gate ma
+teraz czwarty meta-test: sztuczny produkcyjny `expect` przekracza budżet,
+pojawia się w raporcie i wymusza niezerowy exit.

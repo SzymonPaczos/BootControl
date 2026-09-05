@@ -142,4 +142,13 @@ if run_audit "$runner" FORCE_TEST_PACKAGE_FAILURE=bootcontrold; then
 fi
 grep -Fq '| daemon | BLOCKED | BLOCKED | BLOCKED | ❌ runner failed |' "$runner"
 
-echo 'audit evidence meta-tests: 3/3 passed'
+printf 'fn forced_violation() { None::<u8>.expect("forced"); }\n' > "$REPO/crates/core/src/lib.rs"
+budget="$TMP_ROOT/budget.out"
+if run_audit "$budget"; then
+    echo 'expected a strict panic-budget violation to make audit.sh fail' >&2
+    exit 1
+fi
+grep -Fq '| core | 0 | 1 | 0 | 0/0/0 (strict) ❌ |' "$budget"
+grep -Fq '**⚠ PANIC BUDGET BREACH**: core ' "$budget"
+
+echo 'audit evidence meta-tests: 4/4 passed'
