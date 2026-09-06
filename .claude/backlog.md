@@ -83,14 +83,6 @@ negatywny „mutacja bajtu → exit 1".
 **Źródło:** audyt 2026-08-22; ponownie zweryfikowane na toolkicie 2026.09.05.
 **Status:** otwarte w masterze toolkitu.
 
-### Drift dokumentacji aktywnych akcji Polkit
-
-Do uzgodnienia pozostają `AGENTS.md` i `docs/UX_BRIEF.md`;
-`ARCHITECTURE.md` i opis RPM zostały poprawione przy integracji. Aktywne są
-cztery akcje; dwa identyfikatory usuniętych operacji pozostają historyczne.
-Ratchet liczby akcji w `audit.sh` nadal wymaga weryfikacji.
-**Źródło:** audyt 2026-08-22. **Status:** otwarte, zawężone.
-
 ## P2 — porządkowe
 
 ### ETag i snapshoty poza GRUB write-path

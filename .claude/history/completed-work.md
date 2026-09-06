@@ -13,6 +13,18 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — Dokumentacja czterech aktywnych akcji Polkit
+
+`AGENTS.md` i `docs/UX_BRIEF.md` wymieniają cztery aktywne akcje i odróżniają
+usunięte `generate-keys`/`replace-pk`. Opis poziomów autoryzacji odpowiada XML.
+Porównanie XML z `REQUIRED_ACTIONS` daje identyczne cztery identyfikatory;
+istniejące testy Polkit weryfikują zgodność `KNOWN_ACTIONS` z tą listą i
+odrzucanie usuniętych akcji. Test zgodności przeszedł bez `polkit-mock`;
+pozostałe testy są uruchamiane z `--all-features`.
+Zweryfikowano również `audit.sh`: nie ma osobnego ratchetu liczby akcji;
+ta zmiana nie przedstawia go jako istniejącej bramki. Mechaniczne review
+zmian control-plane pozostaje osobną otwartą pozycją.
+
 ## 2026-09-06 — Pełny tekst zadeklarowanej licencji
 
 Dodano `LICENSE` z niezmienionym tekstem GNU GPL v3, zgodnie z istniejącą
