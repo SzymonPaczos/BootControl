@@ -3,6 +3,7 @@ use super::*;
 use bootcontrol_core::{backends::grub::GrubBackend, error::BootControlError};
 use std::io::{BufRead, BufReader};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::fs::PermissionsExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
@@ -56,7 +57,15 @@ impl Fixture {
     async fn start_on(allowed: bool, distro: Option<ImmutableDistro>) -> Self {
         let root = tempfile::tempdir().unwrap();
         let grub = root.path().join("grub");
-        std::fs::write(&grub, "GRUB_TIMEOUT=5\n").unwrap();
+        std::fs::write(&grub, "# preserved\nGRUB_DEFAULT=0\nGRUB_TIMEOUT=5\n").unwrap();
+        std::fs::write(
+            root.path().join("grub.cfg"),
+            "menuentry 'Linux' --id linux {\n}\n\
+             submenu 'Advanced' {\n\
+               menuentry 'Recovery' --id recovery {\n}\n\
+             }\n",
+        )
+        .unwrap();
         let snapshots = root.path().join("snapshots");
         std::fs::create_dir(&snapshots).unwrap();
         let efivars = root.path().join("efivars");
@@ -159,6 +168,12 @@ impl Fixture {
         bootcontrol_core::hash::compute_etag(&std::fs::read(&self.grub).unwrap())
     }
 
+    fn menu_etag(&self) -> String {
+        bootcontrol_core::hash::compute_etag(
+            &std::fs::read(self.root.path().join("grub.cfg")).unwrap(),
+        )
+    }
+
     fn assert_authorized_once(&self, action: &str) {
         assert_eq!(
             *self.auth.calls.lock().unwrap(),
@@ -177,6 +192,71 @@ fn assert_error<T: std::fmt::Debug>(result: zbus::Result<T>, variant: &str) {
         }
         other => panic!("expected {variant}, got {other:?}"),
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn grub_default_dbus_write_authorizes_snapshots_and_preserves_comments() {
+    let f = Fixture::start(true).await;
+    let _path_guard = crate::grub_rebuild::tests::lock_path();
+    let bin = f.root.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let stub = bin.join("grub-mkconfig");
+    std::fs::write(&stub, "#!/bin/sh\nexit 0\n").unwrap();
+    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&stub, permissions).unwrap();
+    let old_path = std::env::var("PATH").unwrap_or_default();
+    std::env::set_var("PATH", &bin);
+    let client = f.client.clone();
+    let destination = f.destination.clone();
+    let menu_etag = f.menu_etag();
+    let config_etag = f.etag();
+    let result: zbus::Result<()> = std::thread::spawn(move || {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                let proxy = zbus::Proxy::new(
+                    &client,
+                    destination,
+                    "/org/bootcontrol/Manager",
+                    "org.bootcontrol.Manager",
+                )
+                .await
+                .unwrap();
+                proxy
+                    .call("SetGrubDefault", &("1>0", menu_etag, config_etag))
+                    .await
+            })
+    })
+    .join()
+    .unwrap();
+    std::env::set_var("PATH", old_path);
+
+    result.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&f.grub).unwrap(),
+        "# preserved\nGRUB_DEFAULT=1>0\nGRUB_TIMEOUT=5\n"
+    );
+    assert_eq!(std::fs::read_dir(&f.snapshots).unwrap().count(), 1);
+    f.assert_authorized_once(actions::REWRITE_GRUB);
+}
+
+#[tokio::test]
+async fn grub_default_snapshot_failure_prevents_config_write() {
+    let f = Fixture::start(true).await;
+    std::fs::remove_dir(&f.snapshots).unwrap();
+    std::fs::write(&f.snapshots, "not a directory").unwrap();
+    let before = std::fs::read(&f.grub).unwrap();
+
+    let result: zbus::Result<()> = f
+        .proxy()
+        .await
+        .call("SetGrubDefault", &("1>0", f.menu_etag(), f.etag()))
+        .await;
+
+    assert_error(result, "EspScanFailed");
+    assert_eq!(std::fs::read(&f.grub).unwrap(), before);
+    f.assert_authorized_once(actions::REWRITE_GRUB);
 }
 
 // Observe actual opens/reads/writes, rather than treating unchanged bytes as
@@ -289,7 +369,7 @@ async fn restore_invalid_manifest_cannot_modify_target() {
     assert_error(result, "SnapshotCorrupt");
     assert_eq!(
         std::fs::read_to_string(&f.grub).unwrap(),
-        "GRUB_TIMEOUT=5\n"
+        "# preserved\nGRUB_DEFAULT=0\nGRUB_TIMEOUT=5\n"
     );
 }
 
@@ -306,7 +386,7 @@ async fn restore_valid_request_restores_captured_bytes() {
     result.unwrap();
     assert_eq!(
         std::fs::read_to_string(&f.grub).unwrap(),
-        "GRUB_TIMEOUT=5\n"
+        "# preserved\nGRUB_DEFAULT=0\nGRUB_TIMEOUT=5\n"
     );
     f.assert_authorized_once(actions::RESTORE_SNAPSHOT);
 }
@@ -314,6 +394,7 @@ async fn restore_valid_request_restores_captured_bytes() {
 #[derive(Clone, Copy, Debug)]
 enum Mutation {
     Grub,
+    GrubDefault,
     Rebuild,
     Backup,
     Sign,
@@ -330,7 +411,7 @@ enum Mutation {
 impl Mutation {
     fn action(self) -> &'static str {
         match self {
-            Self::Grub | Self::Rebuild | Self::AddParam | Self::RemoveParam => {
+            Self::Grub | Self::GrubDefault | Self::Rebuild | Self::AddParam | Self::RemoveParam => {
                 actions::REWRITE_GRUB
             }
             Self::Backup | Self::Sign => actions::ENROLL_MOK,
@@ -345,6 +426,11 @@ impl Mutation {
             Self::Grub => {
                 proxy
                     .call("SetGrubValue", &("GRUB_TIMEOUT", "10", etag))
+                    .await
+            }
+            Self::GrubDefault => {
+                proxy
+                    .call("SetGrubDefault", &("0", "menu-etag", etag))
                     .await
             }
             Self::Rebuild => proxy.call("RebuildGrubConfig", &()).await,
@@ -412,6 +498,10 @@ macro_rules! write_boundary {
 }
 
 write_boundary!(grub_write_authorization_precedes_host_and_file_io, Grub);
+write_boundary!(
+    grub_default_authorization_precedes_host_and_file_io,
+    GrubDefault
+);
 write_boundary!(rebuild_authorization_precedes_host_and_file_io, Rebuild);
 write_boundary!(nvram_backup_authorization_precedes_host_and_file_io, Backup);
 write_boundary!(mok_signing_authorization_precedes_host_and_file_io, Sign);
@@ -543,7 +633,7 @@ async fn nvram_backup_bad_destination_preserves_source_and_target() {
     assert_error(result, "NvramBackupFailed");
     assert_eq!(
         std::fs::read_to_string(&f.grub).unwrap(),
-        "GRUB_TIMEOUT=5\n"
+        "# preserved\nGRUB_DEFAULT=0\nGRUB_TIMEOUT=5\n"
     );
     assert_eq!(std::fs::read_to_string(&source).unwrap(), "certificate");
     f.assert_authorized_once(actions::ENROLL_MOK);

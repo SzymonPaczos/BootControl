@@ -11,6 +11,7 @@ struct Response {
     json: String,
     etag: String,
     fail: bool,
+    default_call: Option<(String, String, String)>,
 }
 
 struct Service(Arc<Mutex<Response>>);
@@ -23,6 +24,21 @@ impl Service {
             Err(zbus::fdo::Error::Failed("grub.cfg read failed".into()))
         } else {
             Ok((response.json.clone(), response.etag.clone()))
+        }
+    }
+
+    fn set_grub_default(
+        &self,
+        selected_path: String,
+        menu_etag: String,
+        config_etag: String,
+    ) -> zbus::fdo::Result<()> {
+        let mut response = self.0.lock().unwrap();
+        if response.fail {
+            Err(zbus::fdo::Error::Failed("default write failed".into()))
+        } else {
+            response.default_call = Some((selected_path, menu_etag, config_etag));
+            Ok(())
         }
     }
 }
@@ -75,6 +91,7 @@ async fn dbus_adapter_returns_complete_menu_shape_and_etag() {
         .into(),
         etag: "menu-etag".into(),
         fail: false,
+        default_call: None,
     }));
     let (_bus, _server, backend) = fixture(response).await;
 
@@ -94,6 +111,7 @@ async fn malformed_json_and_daemon_failure_are_errors() {
         json: r#"[{"title":"missing required fields"}]"#.into(),
         etag: "menu-etag".into(),
         fail: false,
+        default_call: None,
     }));
     let (_bus, _server, backend) = fixture(response.clone()).await;
 
@@ -113,4 +131,32 @@ async fn demo_backend_uses_the_same_menu_contract() {
     assert!(entries.iter().any(|entry| entry.is_submenu));
     assert!(entries.iter().any(|entry| entry.depth > 0));
     assert!(entries.iter().all(|entry| !entry.path.is_empty()));
+}
+
+#[tokio::test]
+async fn default_selection_forwards_path_and_both_versions() {
+    let response = Arc::new(Mutex::new(Response {
+        json: "[]".into(),
+        etag: "menu-etag".into(),
+        fail: false,
+        default_call: None,
+    }));
+    let (_bus, _server, backend) = fixture(response.clone()).await;
+
+    backend
+        .set_grub_default("1>0", "menu-etag", "config-etag")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.lock().unwrap().default_call,
+        Some(("1>0".into(), "menu-etag".into(), "config-etag".into()))
+    );
+
+    response.lock().unwrap().fail = true;
+    let error = backend
+        .set_grub_default("0", "new-menu", "new-config")
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("default write failed"));
 }

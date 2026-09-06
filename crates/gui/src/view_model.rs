@@ -153,6 +153,38 @@ impl ViewModel {
         self.backend.list_grub_entries().await
     }
 
+    /// Persist a versioned GRUB default-menu selection through the daemon.
+    ///
+    /// # Arguments
+    ///
+    /// * `selected_path` - Bootable path returned by the current menu list.
+    /// * `menu_etag` - Version of generated `grub.cfg`.
+    /// * `config_etag` - Version of `/etc/default/grub`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original structured D-Bus error from authorization,
+    /// optimistic-lock validation, snapshotting, writing, or rebuilding.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # async fn example(model: &bootcontrol_gui::view_model::ViewModel) -> zbus::Result<()> {
+    /// model.set_grub_default("1>0", "menu-etag", "config-etag").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn set_grub_default(
+        &self,
+        selected_path: &str,
+        menu_etag: &str,
+        config_etag: &str,
+    ) -> Result<(), zbus::Error> {
+        self.backend
+            .set_grub_default(selected_path, menu_etag, config_etag)
+            .await
+    }
+
     /// Back up EFI NVRAM variables. Returns JSON list of backed-up file paths.
     pub async fn backup_nvram(&self) -> Result<String, zbus::Error> {
         self.backend.backup_nvram("").await

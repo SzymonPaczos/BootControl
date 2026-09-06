@@ -4,6 +4,8 @@ import { ScrollView } from "std-widgets.slint";
 import { Tokens } from "../tokens.slint";
 import { GrubMenuRow } from "../types.slint";
 import { GhostButton } from "../components/ghost_button.slint";
+import { PrimaryButton } from "../components/primary_button.slint";
+import { ActionFooter } from "../components/action_footer.slint";
 
 component InspectorValue inherits VerticalLayout {
     in property <string> label;
@@ -30,9 +32,14 @@ export component BootEntriesPage inherits Rectangle {
     in property <string> error-message: "";
     in property <string> menu-etag: "";
     in property <int> selected-index: -1;
+    in property <string> default-path: "";
+    in property <int> pending-count: 0;
     callback refresh();
     callback select-entry(int);
     callback move-selection(int);
+    callback stage-default();
+    callback discard();
+    callback apply();
 
     vertical-stretch: 1;
     background: Tokens.surface-container;
@@ -42,6 +49,8 @@ export component BootEntriesPage inherits Rectangle {
     clip: true;
 
     list-focus := FocusScope {
+        width: parent.width;
+        height: parent.height - action-footer.height;
         key-pressed(event) => {
             if event.text == Key.UpArrow {
                 root.move-selection(-1);
@@ -165,6 +174,14 @@ export component BootEntriesPage inherits Rectangle {
                                         ? Tokens.accent-info
                                         : Tokens.on-surface-muted;
                                 }
+                                if !entry.is_submenu && entry.path == root.default-path : Text {
+                                    text: "★";
+                                    color: Tokens.accent-info;
+                                    font-size: Tokens.font-title-small;
+                                    accessible-label: root.pending-count > 0
+                                        ? "Staged default entry"
+                                        : "Current default entry";
+                                }
                                 VerticalLayout {
                                     alignment: center;
                                     spacing: 2px;
@@ -239,8 +256,24 @@ export component BootEntriesPage inherits Rectangle {
                         color: Tokens.on-surface-faint;
                         font-size: Tokens.font-meta;
                     }
+                    if !root.entries[root.selected-index].is_submenu : PrimaryButton {
+                        text: root.entries[root.selected-index].path == root.default-path
+                            ? (root.pending-count > 0 ? "Staged as default" : "Current default")
+                            : "Set as default";
+                        enabled: root.entries[root.selected-index].path != root.default-path;
+                        clicked => { root.stage-default(); }
+                    }
                 }
             }
         }
+    }
+
+    action-footer := ActionFooter {
+        x: 0;
+        y: parent.height - self.height;
+        width: parent.width;
+        pending-count: root.pending-count;
+        discard => { root.discard(); }
+        apply => { root.apply(); }
     }
 }
