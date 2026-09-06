@@ -41,7 +41,7 @@ use crate::{
     audit::{self, message_ids, AuditEvent, Phase},
     dbus_error::{snapshot_to_daemon_error, to_daemon_error, DaemonError},
     grub_manager, grub_rebuild,
-    immutable_distro::{enforce_writable_distro, probe_immutable_distro},
+    immutable_distro::probe_immutable_distro,
     polkit::{actions, authorize_with_polkit},
     rpm_ostree, sanitize,
     secureboot::mok::{
@@ -206,6 +206,48 @@ impl GrubManager {
             return hooks.authorize(sender, action);
         }
         authorize_with_polkit(sender, action).await
+    }
+
+    fn probe_distro(&self) -> Option<ImmutableDistro> {
+        #[cfg(test)]
+        if let Some(hooks) = &self.test_hooks {
+            hooks
+                .probes
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            return hooks.distro.clone();
+        }
+        probe_immutable_distro()
+    }
+
+    /// Reject immutable hosts after authorization.
+    ///
+    /// # Errors
+    /// Returns `ImmutableDistroDetected` for hosts without imperative writes.
+    fn require_writable_host(&self) -> Result<(), bootcontrol_core::error::BootControlError> {
+        match self.probe_distro() {
+            Some(distro) => Err(
+                bootcontrol_core::error::BootControlError::ImmutableDistroDetected {
+                    distro: distro.to_string(),
+                },
+            ),
+            None => Ok(()),
+        }
+    }
+
+    fn efivars_reader(&self) -> crate::uefi_vars_linux::EfivarFsReader {
+        #[cfg(test)]
+        if let Some(hooks) = &self.test_hooks {
+            return crate::uefi_vars_linux::EfivarFsReader::with_root(hooks.efivars.clone());
+        }
+        crate::uefi_vars_linux::EfivarFsReader::new()
+    }
+
+    fn nvram_source(&self) -> PathBuf {
+        #[cfg(test)]
+        if let Some(hooks) = &self.test_hooks {
+            return hooks.efivars.clone();
+        }
+        PathBuf::from(DEFAULT_EFIVARS_DIR)
     }
 
     /// Create a new [`GrubManager`] pointing at the given `grub_path`.
@@ -577,14 +619,6 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!(key = %key, "D-Bus: SetGrubValue");
 
-        // ── Step 0: Immutable-distro pre-flight (Phase 6 PR1) ────────────────
-        // Reject ostree / rpm-ostree hosts before asking the user to
-        // authenticate — the naive write would either fail on the read-only
-        // mount or be rolled back on the next rebase. See
-        // `immutable_distro::enforce_writable_distro` for the detection
-        // strategy.
-        enforce_writable_distro().map_err(to_daemon_error)?;
-
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
         // The D-Bus daemon tracks each connection's OS-level UID. We ask it
         // for the caller's unique bus name, then call
@@ -617,7 +651,7 @@ impl GrubManager {
         info!(caller_uid = %caller_uid, key = %key, "Resolved caller UID for Polkit");
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "SetGrubValue")?,
             actions::REWRITE_GRUB,
         )
@@ -626,6 +660,8 @@ impl GrubManager {
             warn!(caller_uid = %caller_uid, key = %key, "Polkit denied");
             to_daemon_error(e)
         })?;
+
+        self.require_writable_host().map_err(to_daemon_error)?;
 
         // ── Step 3: Payload sanitization ────────────────────────────────────
         sanitize::check_payload(&key, &value).map_err(|e| {
@@ -853,9 +889,6 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!("D-Bus: RebuildGrubConfig");
 
-        // ── Step 0: Immutable-distro pre-flight (Phase 6 PR1) ────────────────
-        enforce_writable_distro().map_err(to_daemon_error)?;
-
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
         let caller_uid: u32 = {
             let sender = header
@@ -881,7 +914,7 @@ impl GrubManager {
         };
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "RebuildGrubConfig")?,
             actions::REWRITE_GRUB,
         )
@@ -890,6 +923,8 @@ impl GrubManager {
             warn!(caller_uid = %caller_uid, "Polkit denied for RebuildGrubConfig");
             to_daemon_error(e)
         })?;
+
+        self.require_writable_host().map_err(to_daemon_error)?;
 
         // ── Step 2: Run grub-mkconfig ───────────────────────────────────────
         grub_rebuild::run_grub_mkconfig(&self.grub_cfg_path).map_err(to_daemon_error)
@@ -957,7 +992,7 @@ impl GrubManager {
         info!(caller_uid = %caller_uid, "Resolved caller UID for BackupNvram");
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "BackupNvram")?,
             actions::ENROLL_MOK,
         )
@@ -967,6 +1002,8 @@ impl GrubManager {
             to_daemon_error(e)
         })?;
 
+        self.require_writable_host().map_err(to_daemon_error)?;
+
         // ── Step 3: Resolve target directory ────────────────────────────────
         let resolved_target = if target_dir.is_empty() {
             std::path::PathBuf::from(DEFAULT_BACKUP_DIR)
@@ -975,12 +1012,10 @@ impl GrubManager {
         };
 
         // ── Step 4: Perform the backup ──────────────────────────────────────
-        let backup =
-            backup_efi_variables(std::path::Path::new(DEFAULT_EFIVARS_DIR), &resolved_target)
-                .map_err(|e| {
-                    warn!(error = %e, "NVRAM backup failed");
-                    to_daemon_error(e)
-                })?;
+        let backup = backup_efi_variables(&self.nvram_source(), &resolved_target).map_err(|e| {
+            warn!(error = %e, "NVRAM backup failed");
+            to_daemon_error(e)
+        })?;
 
         info!(file_count = backup.files.len(), "NVRAM backup completed");
 
@@ -1063,7 +1098,7 @@ impl GrubManager {
         info!(caller_uid = %caller_uid, uki_path = %uki_path, "Resolved caller UID for Polkit");
 
         // ── Step 2: Polkit authorization ────────────────────────────────────
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "SignAndEnrollUki")?,
             actions::ENROLL_MOK,
         )
@@ -1073,10 +1108,8 @@ impl GrubManager {
             to_daemon_error(e)
         })?;
 
-        // All host inspection stays after authorization. Secure Boot writes
-        // are refused on declarative/immutable systems just like the other
-        // boot mutation paths.
-        enforce_writable_distro().map_err(to_daemon_error)?;
+        // Secure Boot inherits the same authorized host preflight as config writes.
+        self.require_writable_host().map_err(to_daemon_error)?;
 
         // ── Step 3: Instantiate the signer ──────────────────────────────────
         let signer = SbsignMokSigner {
@@ -1228,15 +1261,15 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(id = %id, "D-Bus: SetLoaderDefault");
-        // Step 0: Immutable-distro pre-flight (Phase 6 PR1).
-        enforce_writable_distro().map_err(to_daemon_error)?;
         let _caller_uid = resolve_uid(&header, connection, "SetLoaderDefault").await?;
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "SetLoaderDefault")?,
             actions::WRITE_BOOTLOADER,
         )
         .await
         .map_err(to_daemon_error)?;
+
+        self.require_writable_host().map_err(to_daemon_error)?;
         systemd_boot_manager::set_loader_default(&self.loader_conf_path, &id, &etag)
             .map_err(to_daemon_error)
     }
@@ -1266,14 +1299,15 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(id = %id, new_title = %new_title, "D-Bus: RenameLoaderEntry");
-        enforce_writable_distro().map_err(to_daemon_error)?;
         let _caller_uid = resolve_uid(&header, connection, "RenameLoaderEntry").await?;
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "RenameLoaderEntry")?,
             actions::WRITE_BOOTLOADER,
         )
         .await
         .map_err(to_daemon_error)?;
+
+        self.require_writable_host().map_err(to_daemon_error)?;
         systemd_boot_manager::rename_loader_entry(&self.loader_entries_dir, &id, &new_title, &etag)
             .map_err(to_daemon_error)
     }
@@ -1356,15 +1390,15 @@ impl GrubManager {
         //   classic mutable host  → uki_manager (write `/etc/kernel/cmdline`)
         //   rpm-ostree host       → rpm-ostree kargs --append=<param>
         //   bare ostree host      → reject (no supported delegation target)
-        match probe_immutable_distro() {
+        let _caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
+        self.authorize(
+            &resolve_bus_name(&header, "AddKernelParam")?,
+            actions::REWRITE_GRUB,
+        )
+        .await
+        .map_err(to_daemon_error)?;
+        match self.probe_distro() {
             Some(ImmutableDistro::RpmOstree) => {
-                let _caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
-                authorize_with_polkit(
-                    &resolve_bus_name(&header, "AddKernelParam")?,
-                    actions::REWRITE_GRUB,
-                )
-                .await
-                .map_err(to_daemon_error)?;
                 return rpm_ostree::kargs_append(&param, &etag).map_err(to_daemon_error);
             }
             Some(other) => {
@@ -1381,13 +1415,6 @@ impl GrubManager {
             None => {}
         }
 
-        let _caller_uid = resolve_uid(&header, connection, "AddKernelParam").await?;
-        authorize_with_polkit(
-            &resolve_bus_name(&header, "AddKernelParam")?,
-            actions::REWRITE_GRUB,
-        )
-        .await
-        .map_err(to_daemon_error)?;
         uki_manager::add_kernel_param(&self.kernel_cmdline_path, &param, &etag)
             .map_err(to_daemon_error)
     }
@@ -1421,15 +1448,15 @@ impl GrubManager {
     ) -> Result<(), DaemonError> {
         info!(param = %param, "D-Bus: RemoveKernelParam");
         // Phase 6 PR2: dispatch on host class (see AddKernelParam).
-        match probe_immutable_distro() {
+        let _caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
+        self.authorize(
+            &resolve_bus_name(&header, "RemoveKernelParam")?,
+            actions::REWRITE_GRUB,
+        )
+        .await
+        .map_err(to_daemon_error)?;
+        match self.probe_distro() {
             Some(ImmutableDistro::RpmOstree) => {
-                let _caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
-                authorize_with_polkit(
-                    &resolve_bus_name(&header, "RemoveKernelParam")?,
-                    actions::REWRITE_GRUB,
-                )
-                .await
-                .map_err(to_daemon_error)?;
                 return rpm_ostree::kargs_delete(&param, &etag).map_err(to_daemon_error);
             }
             Some(other) => {
@@ -1446,13 +1473,6 @@ impl GrubManager {
             None => {}
         }
 
-        let _caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
-        authorize_with_polkit(
-            &resolve_bus_name(&header, "RemoveKernelParam")?,
-            actions::REWRITE_GRUB,
-        )
-        .await
-        .map_err(to_daemon_error)?;
         uki_manager::remove_kernel_param(&self.kernel_cmdline_path, &param, &etag)
             .map_err(to_daemon_error)
     }
@@ -1552,9 +1572,8 @@ impl GrubManager {
             to_daemon_error(e)
         })?;
 
-        // Host inspection follows authorization. Restore writes to the same
-        // paths as a forward operation and inherits the immutable-host guard.
-        enforce_writable_distro().map_err(to_daemon_error)?;
+        // Restore inherits the host policy of forward configuration writes.
+        self.require_writable_host().map_err(to_daemon_error)?;
 
         let job_id = new_job_id();
         let target_paths = vec![self.snapshot_root.join(&id).display().to_string()];
@@ -1620,7 +1639,7 @@ impl GrubManager {
     ///   payload was shorter than the load-option header.
     async fn list_efi_boot_entries(&self) -> Result<String, DaemonError> {
         info!("D-Bus: ListEfiBootEntries");
-        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        let reader = self.efivars_reader();
         let entries =
             crate::uefi_vars_linux::list_boot_entries(&reader).map_err(to_daemon_error)?;
         let dtos: Vec<EfiBootEntryDto> = entries
@@ -1646,7 +1665,7 @@ impl GrubManager {
     ///   of 2 bytes.
     async fn get_boot_order(&self) -> Result<Vec<u16>, DaemonError> {
         info!("D-Bus: GetBootOrder");
-        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        let reader = self.efivars_reader();
         use bootcontrol_core::uefi_vars::UefiVarReader;
         let payload = reader.read_global("BootOrder").map_err(to_daemon_error)?;
         bootcontrol_core::uefi_vars::parse_boot_order(&payload).map_err(to_daemon_error)
@@ -1669,15 +1688,16 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(new_order = ?new_order, "D-Bus: SetBootOrder");
-        enforce_writable_distro().map_err(to_daemon_error)?;
         let _caller_uid = resolve_uid(&header, connection, "SetBootOrder").await?;
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "SetBootOrder")?,
             actions::WRITE_BOOTLOADER,
         )
         .await
         .map_err(to_daemon_error)?;
-        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+
+        self.require_writable_host().map_err(to_daemon_error)?;
+        let reader = self.efivars_reader();
         bootcontrol_core::uefi_vars::set_boot_order(&reader, &reader, &new_order)
             .map_err(to_daemon_error)
     }
@@ -1688,7 +1708,7 @@ impl GrubManager {
     /// Idempotent and read-only — no Polkit.
     async fn get_boot_next(&self) -> Result<i32, DaemonError> {
         info!("D-Bus: GetBootNext");
-        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+        let reader = self.efivars_reader();
         use bootcontrol_core::uefi_vars::UefiVarReader;
         match reader.read_global("BootNext") {
             Ok(payload) => bootcontrol_core::uefi_vars::parse_single_u16_var("BootNext", &payload)
@@ -1717,15 +1737,16 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!(index = index, "D-Bus: SetBootNext");
-        enforce_writable_distro().map_err(to_daemon_error)?;
         let _caller_uid = resolve_uid(&header, connection, "SetBootNext").await?;
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "SetBootNext")?,
             actions::WRITE_BOOTLOADER,
         )
         .await
         .map_err(to_daemon_error)?;
-        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+
+        self.require_writable_host().map_err(to_daemon_error)?;
+        let reader = self.efivars_reader();
         bootcontrol_core::uefi_vars::set_boot_next(&reader, &reader, index, true)
             .map_err(to_daemon_error)
     }
@@ -1738,15 +1759,16 @@ impl GrubManager {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
         info!("D-Bus: ClearBootNext");
-        enforce_writable_distro().map_err(to_daemon_error)?;
         let _caller_uid = resolve_uid(&header, connection, "ClearBootNext").await?;
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "ClearBootNext")?,
             actions::WRITE_BOOTLOADER,
         )
         .await
         .map_err(to_daemon_error)?;
-        let reader = crate::uefi_vars_linux::EfivarFsReader::new();
+
+        self.require_writable_host().map_err(to_daemon_error)?;
+        let reader = self.efivars_reader();
         bootcontrol_core::uefi_vars::clear_boot_next(&reader).map_err(to_daemon_error)
     }
 }
