@@ -38,8 +38,22 @@ class PushGate(unittest.TestCase):
         self.ci.write_text('#!/usr/bin/env bash\nset -eu\nprintf "%s\\n" "$(git rev-parse HEAD)" >> "$GATE_TRACE"\n! grep -q BAD payload\n')
         self.ci.chmod(0o755)
         (self.repo / 'payload').write_text('GOOD\n')
+        checker = HOOK.parents[1] / 'scripts/check-audit-evidence.py'
+        if checker.exists():
+            shutil.copy(checker, self.repo / 'scripts/check-audit-evidence.py')
+        self.audited = self.commit()
+        self.write_audit()
         self.base = self.commit()
         self.git('push', '-q', 'origin', 'main')
+
+    def write_audit(self, **overrides):
+        fields = {'AUDITED_REVISION': self.audited,
+                  'SECURITY_REVIEW': 'PASS (fixture review)',
+                  'RED_TEAM': 'NOT_DUE (fixture scope unchanged)'}
+        fields.update(overrides)
+        (self.repo/'.claude/audit-log.md').write_text(
+            f'## Audyt {date.today()}\n\n```text\n' +
+            ''.join(f'{key}: {value}\n' for key, value in fields.items()) + '```\n')
 
     def git(self, *args):
         return subprocess.check_output(['git', *args], cwd=self.repo, env=self.env, stderr=subprocess.STDOUT, text=True).strip()
@@ -111,6 +125,54 @@ class PushGate(unittest.TestCase):
         result = subprocess.run(['git', 'push', 'origin', 'main'], cwd=self.repo, env=self.env, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertEqual(self.git('rev-parse', 'origin/main'), self.base)
+
+    def test_date_alone_is_not_audit_evidence(self):
+        (self.repo/'.claude/audit-log.md').write_text(f'## Audyt {date.today()}\n')
+        self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0)
+
+    def test_unreachable_or_unknown_audited_revision_is_rejected(self):
+        orphan = self.git('commit-tree', self.git('rev-parse', 'HEAD^{tree}'), '-m', 'unrelated')
+        for revision in [orphan, 'f'*40, 'HEAD', 'main']:
+            self.write_audit(AUDITED_REVISION=revision)
+            self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0, revision)
+
+    def test_placeholder_or_absent_review_is_rejected(self):
+        for field in ['SECURITY_REVIEW', 'RED_TEAM']:
+            for value in ['', 'TODO', 'n/a', 'NOT_DUE']:
+                self.write_audit(**{field: value})
+                self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0, (field, value))
+
+    def test_older_entry_cannot_supply_missing_current_evidence(self):
+        audit = self.repo/'.claude/audit-log.md'
+        audit.write_text(f'## Audyt {date.today()}\nno review\n\n' + audit.read_text())
+        self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0)
+
+    def test_working_tree_review_cannot_complete_pushed_audit(self):
+        self.write_audit(SECURITY_REVIEW='')
+        sha = self.commit()
+        self.write_audit()
+        self.assertNotEqual(self.run_hook(self.row(sha)).returncode, 0)
+
+    def test_duplicate_evidence_fields_are_rejected(self):
+        audit = self.repo/'.claude/audit-log.md'
+        audit.write_text(audit.read_text() + f'AUDITED_REVISION: {self.audited}\n')
+        self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0)
+
+    def test_symlinked_ci_cannot_read_uncommitted_runner(self):
+        external = self.root/'uncommitted-runner'
+        external.write_text('#!/bin/sh\nexit 0\n')
+        external.chmod(0o755)
+        self.ci.unlink()
+        self.ci.symlink_to(external)
+        self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0)
+
+    def test_symlinked_audit_is_not_committed_evidence(self):
+        audit = self.repo/'.claude/audit-log.md'
+        external = self.root/'uncommitted-audit'
+        external.write_text(audit.read_text())
+        audit.unlink()
+        audit.symlink_to(external)
+        self.assertNotEqual(self.run_hook(self.row(self.commit())).returncode, 0)
 
 if __name__ == '__main__':
     unittest.main()

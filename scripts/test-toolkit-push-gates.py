@@ -7,6 +7,7 @@ Usage: python3 scripts/test-toolkit-push-gates.py /path/to/toolkit
 """
 from pathlib import Path
 import subprocess
+import shlex
 import sys
 import tempfile
 
@@ -21,6 +22,11 @@ printf 'TODO/FIXME: fixture advisory layer reached\n'
 if git grep -nE '^(api_key|secret) = "' -- app.js cfg.py; then exit 1; fi
 CI
         chmod +x scripts/ci-local.sh'''
+fixture += '\n        cp ' + shlex.quote(str(hook.parents[1] / 'scripts/check-audit-evidence.py')) + ' scripts/check-audit-evidence.py'
+fixture += r'''
+        git -c core.hooksPath=/dev/null commit --allow-empty -qm fixture-seed
+        printf 'AUDITED_REVISION: %s\nSECURITY_REVIEW: PASS (fixture)\nRED_TEAM: NOT_DUE (fixture scope unchanged)\n' "$(git rev-parse HEAD)" >> .claude/audit-log.md
+'''
 text = source.read_text()
 assert text.count('mkdir -p .githooks') == 1, 'Toolkit fixture changed; review adapter'
 text = text.replace('mkdir -p .githooks', fixture)
