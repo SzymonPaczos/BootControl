@@ -16,6 +16,7 @@ pub struct ViewModel {
     pub loader_entries: Vec<LoaderEntryDto>,
     /// UKI kernel cmdline parameters (populated when backend = "uki").
     pub cmdline_params: Vec<String>,
+    state_ready: bool,
 }
 
 impl ViewModel {
@@ -25,9 +26,29 @@ impl ViewModel {
             backend,
             entries: HashMap::new(),
             etag: String::new(),
-            active_backend: "grub".to_string(),
+            active_backend: String::new(),
             loader_entries: Vec::new(),
             cmdline_params: Vec::new(),
+            state_ready: false,
+        }
+    }
+
+    fn invalidate_loaded_state(&mut self) {
+        self.entries.clear();
+        self.etag.clear();
+        self.active_backend.clear();
+        self.loader_entries.clear();
+        self.cmdline_params.clear();
+        self.state_ready = false;
+    }
+
+    fn require_loaded_state(&self) -> Result<(), zbus::Error> {
+        if self.state_ready && !self.etag.is_empty() {
+            Ok(())
+        } else {
+            Err(zbus::Error::Failure(
+                "view model is not ready for writes; reload live state first".into(),
+            ))
         }
     }
 
@@ -38,38 +59,38 @@ impl ViewModel {
     /// - `"systemd-boot"` → `list_loader_entries()` + `get_loader_conf_etag()`
     /// - `"uki"` → `read_kernel_cmdline()`
     pub async fn load(&mut self) -> Result<(), zbus::Error> {
-        self.active_backend = self
-            .backend
-            .get_active_backend()
-            .await
-            .unwrap_or_else(|_| "grub".to_string());
+        self.invalidate_loaded_state();
+        let active_backend = self.backend.get_active_backend().await?;
+        let mut loader_entries = Vec::new();
+        let mut cmdline_params = Vec::new();
 
-        if self.active_backend.contains("systemd-boot") {
-            self.loader_entries = self.backend.list_loader_entries().await?;
-            self.etag = self
-                .backend
-                .get_loader_conf_etag()
-                .await
-                .unwrap_or_default();
-            // Mirror entries as key-value pairs so existing GUI code works without changes.
-            self.entries = self
-                .loader_entries
+        let (entries, etag) = if active_backend.contains("systemd-boot") {
+            loader_entries = self.backend.list_loader_entries().await?;
+            let etag = self.backend.get_loader_conf_etag().await?;
+            let entries = loader_entries
                 .iter()
                 .map(|e| (e.id.clone(), e.title.clone().unwrap_or_default()))
                 .collect();
-        } else if self.active_backend.contains("uki") {
+            (entries, etag)
+        } else if active_backend.contains("uki") {
             let (params, etag) = self.backend.read_kernel_cmdline().await?;
-            self.cmdline_params = params.clone();
-            self.etag = etag;
-            // Mirror as key-value (param → empty value) for existing GUI table.
-            self.entries = params.into_iter().map(|p| (p, String::new())).collect();
+            let entries = params
+                .iter()
+                .cloned()
+                .map(|param| (param, String::new()))
+                .collect();
+            cmdline_params = params;
+            (entries, etag)
         } else {
-            // GRUB — existing path.
-            let (config, etag) = self.backend.read_config().await?;
-            self.entries = config;
-            self.etag = etag;
-        }
+            self.backend.read_config().await?
+        };
 
+        self.active_backend = active_backend;
+        self.entries = entries;
+        self.etag = etag;
+        self.loader_entries = loader_entries;
+        self.cmdline_params = cmdline_params;
+        self.state_ready = true;
         Ok(())
     }
 
@@ -80,6 +101,7 @@ impl ViewModel {
     /// - systemd-boot: not applicable via this method (use `set_default_entry`)
     /// - UKI: add `value` as a new kernel parameter
     pub async fn commit_edit(&mut self, key: &str, value: &str) -> Result<(), zbus::Error> {
+        self.require_loaded_state()?;
         if self.active_backend.contains("uki") {
             // For UKI the "value" field isn't used; the key is the full parameter.
             self.backend.add_kernel_param(key, &self.etag).await?;
@@ -91,11 +113,13 @@ impl ViewModel {
 
     /// Set the default systemd-boot entry (only meaningful for systemd-boot).
     pub async fn set_default_entry(&mut self, id: &str) -> Result<(), zbus::Error> {
+        self.require_loaded_state()?;
         self.backend.set_loader_default(id, &self.etag).await
     }
 
     /// Remove a UKI kernel parameter (only meaningful for UKI).
     pub async fn remove_kernel_param(&mut self, param: &str) -> Result<(), zbus::Error> {
+        self.require_loaded_state()?;
         self.backend.remove_kernel_param(param, &self.etag).await
     }
 
@@ -121,6 +145,7 @@ impl ViewModel {
 
     /// Restore a snapshot using the primary-target ETag shown before confirmation.
     pub async fn restore_snapshot(&self, id: &str) -> Result<(), zbus::Error> {
+        self.require_loaded_state()?;
         self.backend.restore_snapshot(id, &self.etag).await
     }
 }
