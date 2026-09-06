@@ -13,6 +13,20 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R2: Confirmation Sheet rebuild korzysta z bieżącego stanu
+
+Produkcyjny arkusz odbudowy GRUB pokazuje backend i ETag z ostatniego udanego
+odczytu. Nie tworzy fikcyjnego diffu, wyniku preflight ani ID snapshotu; brak
+backendu GRUB lub ETag blokuje zatwierdzenie. Odświeżenie i anulowanie rozbraja
+akcję, a udane potwierdzenie można zużyć tylko raz. Dane demonstracyjne są
+jawnie opisane jako symulowane. Implementacja: `e646425`. Test kontraktu był
+czerwony przed dodaniem modułu; po zmianie pięć scenariuszy real/demo,
+braku danych, anulowania i pojedynczego wywołania przechodzi. Cały
+`cargo test -p bootcontrol-gui` i Clippy GUI są zielone. Daemon nadal wykonuje
+Polkit i tworzy snapshot dopiero podczas operacji, dlatego produkcyjny arkusz
+nie przewiduje ich wyniku ani identyfikatora.
+Task-Ref: `next-backlog-loop-2026-09-06/R2`.
+
 ## 2026-09-06 — R1: błędy odświeżania GUI unieważniają stan zapisu
 
 `ViewModel::load()` propaguje błąd wykrywania backendu i odczytu ETag, czyści

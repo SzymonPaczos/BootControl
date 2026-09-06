@@ -1,6 +1,6 @@
 # Następna pętla backlogu — 2026-09-06
 
-**Status:** w realizacji. R1 wykonany (`ee32148`); bieżące zadanie: R2.
+**Status:** w realizacji. R1–R2 wykonane (`ee32148`, `e646425`); bieżące zadanie: R3.
 **Punkt startowy:** `main` = `origin/main` = `fd1f5f6`.
 **Polecenie właściciela:** realizować kolejne zadania backlogu w pętli;
 zweryfikowane wyniki przenosić do `history/completed-work.md`.
@@ -41,7 +41,7 @@ przedstaw dokładną przyczynę i kontynuuj niezależną pracę lokalną.
 | Krok | Zakres i powiązanie | Warunek zamknięcia | Zależność |
 |---|---|---|---|
 | R1 ✅ | GUI: propagowanie błędów backendu i ETag; backlog „GUI — błędy odświeżania stanu”; Phase 4, frontend view model | Awaria GetActiveBackend nie wybiera GRUB; awaria ETag nie tworzy pustej wersji ani gotowego do zapisu widoku. Testy poprawnego odczytu, awarii po wcześniejszym sukcesie i przełączenia backendu | Wykonane w `ee32148` |
-| R2 | GUI: prawdziwy Confirmation Sheet dla istniejącej odbudowy GRUB; Phase 3.5, confirmation flow | Poza Demo Mode nie ma fikcyjnego PASS, diffu ani ID snapshotu. Podgląd odpowiada konkretnej operacji i danym; brak wymaganych danych blokuje zatwierdzenie. Polkit nadal sprawdza daemon. Testy real/demo, anulowania, awarii i pojedynczego wywołania operacji | R1 |
+| R2 ✅ | GUI: prawdziwy Confirmation Sheet dla istniejącej odbudowy GRUB; Phase 3.5, confirmation flow | Poza Demo Mode nie ma fikcyjnego PASS, diffu ani ID snapshotu. Podgląd odpowiada konkretnej operacji i danym; brak wymaganych danych blokuje zatwierdzenie. Polkit nadal sprawdza daemon. Testy real/demo, anulowania, awarii i pojedynczego wywołania operacji | Wykonane w `e646425` |
 | R3 | Lifecycle: ochrona aktywnej operacji przed idle-exit; podzakres pozycji „asynchroniczne operacje” | Kontrolowana operacja trwająca dłużej niż timeout kończy się bez ubicia daemona; po jej końcu daemon wychodzi po pełnym okresie bezczynności. Test także błędu, anulowania i nakładających się wywołań | Brak; JobId/sd_notify nie są zamykane samą ochroną aktywnego wywołania |
 | R4 | GRUB: snapshot i zapis pod jedną ochroną współbieżności; podzakres ETag/snapshot, Phase 3.5 snapshot integration | Snapshot odpowiada dokładnie zastępowanym bajtom; blokada/stary ETag odrzuca żądanie bez zmiany celu, a błąd snapshotu przerywa zapis. Test wymuszonego przeplotu, zachowania komentarzy i restore | Istniejący kontrakt stateless + ETag + flock; osobny plan implementacji przed zmianą protokołu blokowania |
 | R5 | Boot Entries A1 — adapter klienta: DTO i ListGrubEntries w BootBackend/DbusBackend/MockBackend | Przechodzi odczyt rzeczywistego D-Bus: tytuł, ID, ścieżka submenu, depth, is_submenu i ETag menu. Niepoprawny JSON i błąd odczytu są błędami; Demo Mode ma zgodne dane | Istniejący parser i ListGrubEntries; nie implementować ich ponownie |

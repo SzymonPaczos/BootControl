@@ -23,16 +23,6 @@ _(brak otwartych pozycji po pętli 2026-09-06; ograniczenia pokrycia opisuje
 
 ## P1 — ważne
 
-### GUI — fikcyjne dane Confirmation Sheet poza Demo Mode
-
-Potwierdzenie rebuild używa `stub_snapshot_id`, `build_stub_diff` i
-`build_stub_preflight_passing` oraz bezwarunkowego „all pass”. Potrzebny
-jest podgląd rzeczywistej operacji i stan braku danych zamiast fikcyjnych
-wyników; brak wymaganych danych ma blokować zatwierdzenie.
-**Źródło:** finding z briefu UX 2026-07-27; potwierdzone w
-`crates/gui/src/main.rs` 2026-09-06.
-**Status:** otwarte — R2 następnej pętli.
-
 ### Evidence pipeline nie spełnia całego baseline'u jakości testów
 
 Brakuje meta-testów wszystkich producentów dowodu, rejestru wyjątków z
