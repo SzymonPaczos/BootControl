@@ -13,12 +13,34 @@ Stan po pętli napraw 2026-09-06; dowody zamknięć w historii wykonanej pracy.
 Kolejna wykonana iteracja: [backlog-loop-2026-09-06.md](task-briefs/backlog-loop-2026-09-06.md)
 — zamknięte błędy interfejsów, ścieżki NVRAM, LICENSE i drift Polkit.
 
+Aktywny plan następnej pętli: [next-backlog-loop-2026-09-06.md](task-briefs/next-backlog-loop-2026-09-06.md).
+Plan nie oznacza wykonania pozycji.
+
 ## P0 — krytyczne
 
 _(brak otwartych pozycji po pętli 2026-09-06; ograniczenia pokrycia opisuje
 [macierz testów D-Bus](../docs/testing/write-boundaries.md))_
 
 ## P1 — ważne
+
+### GUI — błędy odświeżania stanu backendu i ETag
+
+`ViewModel::load()` wybiera GRUB po błędzie `get_active_backend()` i pusty
+ETag po błędzie `get_loader_conf_etag()`. Potrzebne jest propagowanie błędu
+oraz unieważnienie możliwości zapisu z niekompletnym stanem, także po
+wcześniejszym poprawnym odczycie.
+**Źródło:** zweryfikowane w `crates/gui/src/view_model.rs` 2026-09-06.
+**Status:** otwarte — R1 następnej pętli.
+
+### GUI — fikcyjne dane Confirmation Sheet poza Demo Mode
+
+Potwierdzenie rebuild używa `stub_snapshot_id`, `build_stub_diff` i
+`build_stub_preflight_passing` oraz bezwarunkowego „all pass”. Potrzebny
+jest podgląd rzeczywistej operacji i stan braku danych zamiast fikcyjnych
+wyników; brak wymaganych danych ma blokować zatwierdzenie.
+**Źródło:** finding z briefu UX 2026-07-27; potwierdzone w
+`crates/gui/src/main.rs` 2026-09-06.
+**Status:** otwarte — R2 następnej pętli.
 
 ### Evidence pipeline nie spełnia całego baseline'u jakości testów
 

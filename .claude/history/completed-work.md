@@ -13,6 +13,15 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — Publikacja zweryfikowanej pętli backlogu
+
+Zmiany z drugiego komputera (`8c7470a`) i lokalną pętlę scalono i wypchnięto
+na `main` (`fd1f5f6`). Poprawki runnera: `114452d`, `fd1f5f6`. Końcowy
+pre-push: 675 testów/doctestów, 16 testów hooka, Windows cross-check i E2E PASS;
+MOK pomija harness bez OVMF. GitHub i lokalny SHA zgodne, katalog czysty.
+Dowód lokalny: `/tmp/bootcontrol-publish-main.log`. Następne planowane
+zadania pozostają w backlogu.
+
 ## 2026-09-06 — Izolacja fixture D-Bus i programów testowych
 
 Pełny pre-push ujawnił wyścig PATH: 25 testów D-Bus nie mogło uruchomić

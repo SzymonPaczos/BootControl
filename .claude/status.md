@@ -26,3 +26,7 @@ CLI propaguje błędy odczytu, TUI rozróżnia dodawanie i edycję UKI oraz poka
 częściowe błędy, GUI podaje poprawną komendę rebuild. Backup NVRAM jest
 ograniczony do katalogu zarządzanego i nie nadpisuje istniejących kopii;
 pusty argument tworzy nowy podkatalog. Dodano LICENSE i ujednolicono Polkit docs.
+
+Następna zaplanowana pętla: [next-backlog-loop-2026-09-06.md](task-briefs/next-backlog-loop-2026-09-06.md).
+Rozpoczyna się od propagowania błędów odświeżania GUI i usunięcia fikcyjnych
+danych Confirmation Sheet. Zaplanowane pozycje pozostają w backlogu do weryfikacji.

@@ -29,8 +29,12 @@ Log: `/tmp/bootcontrol-backlog-loop-ci.log` (lokalny, poza repo).
 Po fetch uwzględniono również zdalny commit właściciela `8c7470a`
 (dokumentacja weekly-audit i toolkit.lock). Nie zmienia on kodu, zależności
 ani pipeline'u objętego powyższym CI. Wszystkie dostępne gałęzie scalono
-lokalnie do main. Publikacja wymaga oddzielnej zgody na `git push origin main`:
-automatyczna kontrola odrzuciła push, uznając zgodę na merge za niewystarczającą.
+lokalnie do main. Po późniejszym wyraźnym poleceniu publikacji wysłano całość
+na `origin/main` (`fd1f5f6`). Końcowy pre-push przeszedł: 675 testów/doctestów,
+16 testów hooka, Windows cross-check i runner E2E. Po drodze poprawiono
+ścieżkę artefaktu Cargo (`114452d`) i izolację fixture (`fd1f5f6`); ograniczenie
+MOK/OVMF pozostaje. Lokalne i zdalne SHA potwierdzono jako zgodne.
+Aktualna kolejka: [next-backlog-loop-2026-09-06.md](next-backlog-loop-2026-09-06.md).
 
 ## Kolejne zadania
 
