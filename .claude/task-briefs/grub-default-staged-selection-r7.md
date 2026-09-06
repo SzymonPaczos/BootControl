@@ -1,7 +1,7 @@
 # R7 — staged wybór domyślnego wpisu GRUB
 
 **Task-Ref:** `next-backlog-loop-2026-09-06/R7`
-**Status:** w realizacji
+**Status:** wykonane w `6a92868`
 **Roadmap:** Phase 3.5 / GUI v2 A1
 
 ## Wynik
