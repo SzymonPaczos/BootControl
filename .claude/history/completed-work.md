@@ -13,6 +13,14 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — GUI: prawidłowa komenda odbudowy GRUB
+
+Confirmation Sheet pokazuje `bootcontrol rebuild`, zgodnie z parserem CLI.
+Sprawdzono `bootcontrol rebuild --help` i test startu GUI
+(`cargo test -p bootcontrol-gui --bin bootcontrol-gui`). Zamknięta ostatnia
+część pozycji „CLI/TUI/GUI — pozostałe błędy interfejsów”; wcześniejsze
+poprawki CLI i TUI opisano poniżej. Log: `/tmp/backlog-gui-green.log`.
+
 ## 2026-09-06 — TUI: dodawanie i częściowo wykonane zmiany UKI
 
 Dodawanie parametru nie usuwa zaznaczonego wpisu. Edycja wypełnia bufor

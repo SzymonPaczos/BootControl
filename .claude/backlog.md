@@ -61,15 +61,6 @@ Bootloader → A3 szybkie poprawki. Briefy:
 [`gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
 **Źródło:** audyt UX i decyzja 2026-07-12. **Status:** zatwierdzone.
 
-### CLI/TUI/GUI — pozostałe błędy interfejsów
-
-GUI reklamuje nieistniejące `bootcontrol grub rebuild`. TUI zgłasza już
-częściowe błędy edycji UKI, odświeża stan i rozróżnia dodawanie od edycji. CLI `get-config` propaguje już błędy odczytu
-systemd-boot/UKI oraz ponownego wykrywania backendu (pętla 2026-09-06). Nagłówek TUI pokazuje już backend i Demo Mode
-(`b3670f5`); ten fragment jest zamknięty.
-**Źródło:** przegląd CLI/TUI 2026-07-12; ponownie zweryfikowane 2026-09-05.
-**Status:** otwarte.
-
 ### Raport „Boot environment"
 
 Frontend powinien pokazać wykryte bootloadery i ścieżki, aktywny backend oraz

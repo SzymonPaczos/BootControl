@@ -171,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "Will run grub-mkconfig against /boot/grub/grub.cfg using current /etc/default/grub.".into(),
                         );
                         ui.set_confirmation_required_text("rewrite GRUB".into());
-                        ui.set_confirmation_command_cli("bootcontrol grub rebuild".into());
+                        ui.set_confirmation_command_cli("bootcontrol rebuild".into());
                         ui.set_confirmation_snapshot_id(stub_snapshot_id("rewrite-grub").into());
 
                         let diff = build_stub_diff();
