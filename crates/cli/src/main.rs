@@ -245,10 +245,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::GetConfig => {
             let backend = resolve_backend().await?;
-            let active_backend = backend
-                .get_active_backend()
-                .await
-                .unwrap_or_else(|_| "unknown".to_string());
+            let active_backend = backend.get_active_backend().await?;
 
             println!("Active Backend: {}", active_backend);
 
@@ -273,7 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     }
-                    Err(e) => eprintln!("error: {}", dbus_error_message(&e)),
+                    Err(e) => return Err(dbus_error_message(&e).into()),
                 }
             } else if active_backend.contains("uki") {
                 // UKI: show kernel cmdline
@@ -285,7 +282,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("  {}", esc(p));
                         }
                     }
-                    Err(e) => eprintln!("error: {}", dbus_error_message(&e)),
+                    Err(e) => return Err(dbus_error_message(&e).into()),
                 }
             } else {
                 // GRUB: existing behavior

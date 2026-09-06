@@ -13,6 +13,15 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — CLI: niezerowy status przy błędzie odczytu konfiguracji
+
+`get-config` propaguje błędy systemd-boot/UKI i wykrywania backendu zamiast
+zwracać sukces lub przechodzić do GRUB po nieudanym probe.
+Dowód: `crates/cli/tests/config_read_errors.rs` — prywatny D-Bus, błędy obu
+backendów, awaria drugiego probe oraz poprawne odczyty. Przed zmianą 2/3 testy
+nie przechodziły; po zmianie cały `cargo test -p bootcontrol-cli` przechodzi.
+Logi lokalne: `/tmp/backlog-cli-red.log`, `/tmp/backlog-cli-green.log`.
+
 ## 2026-09-06 — Wykonana pętla P0 i pochodzenia audytu
 
 - `6c842c1`: pre-push sprawdza wysyłane SHA w oddzielnych worktree; obsługuje
