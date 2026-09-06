@@ -20,3 +20,9 @@ Zakończona pętla i dalsza kolejka:
 P0 z tej pętli zamknięte: wysyłane SHA sprawdzane w worktree, brak cichego
 fallbacku do MockBackend, autoryzacja przed preflight dla wszystkich 12
 metod mutujących. Zakres dowodu i ograniczenia: [macierz testów](../docs/testing/write-boundaries.md).
+
+Kolejna wykonana iteracja: [backlog-loop-2026-09-06.md](task-briefs/backlog-loop-2026-09-06.md).
+CLI propaguje błędy odczytu, TUI rozróżnia dodawanie i edycję UKI oraz pokazuje
+częściowe błędy, GUI podaje poprawną komendę rebuild. Backup NVRAM jest
+ograniczony do katalogu zarządzanego i nie nadpisuje istniejących kopii;
+pusty argument tworzy nowy podkatalog. Dodano LICENSE i ujednolicono Polkit docs.

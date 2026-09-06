@@ -10,6 +10,8 @@ Priorytety: **P0** krytyczne · **P1** ważne · **P2** porządkowe.
 
 Wykonana pętla: [`task-briefs/repair-loop-2026-09-06.md`](task-briefs/repair-loop-2026-09-06.md).
 Stan po pętli napraw 2026-09-06; dowody zamknięć w historii wykonanej pracy.
+Kolejna wykonana iteracja: [backlog-loop-2026-09-06.md](task-briefs/backlog-loop-2026-09-06.md)
+— zamknięte błędy interfejsów, ścieżki NVRAM, LICENSE i drift Polkit.
 
 ## P0 — krytyczne
 
