@@ -13,6 +13,17 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R1: błędy odświeżania GUI unieważniają stan zapisu
+
+`ViewModel::load()` propaguje błąd wykrywania backendu i odczytu ETag, czyści
+wcześniej załadowane dane przed odświeżeniem i udostępnia zapis dopiero po
+pełnym sukcesie. Przełączenie backendu usuwa dane właściwe dla poprzedniego
+backendu. Implementacja: `ee32148`. Test regresji był czerwony 3/3 przed
+poprawką; po zmianie `cargo test -p bootcontrol-gui` przechodzi (4 wykonane,
+3 istniejące smoke testy pozostają ignored), a Clippy dla wszystkich targetów
+GUI jest czysty. Confirmation Sheet pozostaje zakresem R2.
+Task-Ref: `next-backlog-loop-2026-09-06/R1`.
+
 ## 2026-09-06 — Publikacja zweryfikowanej pętli backlogu
 
 Zmiany z drugiego komputera (`8c7470a`) i lokalną pętlę scalono i wypchnięto

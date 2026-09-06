@@ -23,15 +23,6 @@ _(brak otwartych pozycji po pętli 2026-09-06; ograniczenia pokrycia opisuje
 
 ## P1 — ważne
 
-### GUI — błędy odświeżania stanu backendu i ETag
-
-`ViewModel::load()` wybiera GRUB po błędzie `get_active_backend()` i pusty
-ETag po błędzie `get_loader_conf_etag()`. Potrzebne jest propagowanie błędu
-oraz unieważnienie możliwości zapisu z niekompletnym stanem, także po
-wcześniejszym poprawnym odczycie.
-**Źródło:** zweryfikowane w `crates/gui/src/view_model.rs` 2026-09-06.
-**Status:** otwarte — R1 następnej pętli.
-
 ### GUI — fikcyjne dane Confirmation Sheet poza Demo Mode
 
 Potwierdzenie rebuild używa `stub_snapshot_id`, `build_stub_diff` i
