@@ -13,6 +13,19 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R4: snapshot GRUB powstaje pod lockiem zapisu
+
+`SetGrubValue` bierze `flock`, czyta i sprawdza ETag, a następnie przekazuje
+dokładne zablokowane bajty do snapshotu przed atomicznym zapisem. Snapshot nie
+otwiera ponownie celu; jego błąd przerywa operację przed zmianą pliku.
+Implementacja: `fd334c0`; plan transakcji:
+`task-briefs/grub-snapshot-transaction-r4.md`. Test wymusza konflikt drugiego
+locka wewnątrz callbacku, sprawdza zmianę i odtwarza pierwotne bajty wraz z
+komentarzami. Istniejące testy D-Bus pokrywają stary ETag, obcy lock i błąd
+snapshotu bez zmiany celu. `cargo test -p bootcontrold --all-features`:
+288 testów i doctestów PASS; Clippy czysty. Kontrakty snapshot/ETag pozostałych
+backendów pozostają w backlogu. Task-Ref: `next-backlog-loop-2026-09-06/R4`.
+
 ## 2026-09-06 — R3: aktywne wywołania blokują idle-exit daemona
 
 Każda z 24 metod D-Bus trzyma współdzielony guard lifecycle do końca wyniku,

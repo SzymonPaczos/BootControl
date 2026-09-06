@@ -90,15 +90,15 @@ negatywny „mutacja bajtu → exit 1".
 
 ## P2 — porządkowe
 
-### ETag i snapshoty poza GRUB write-path
+### ETag i snapshoty pozostałych write-pathów
 
 Nie wszystkie write-pathy mają jednolity kontrakt ETag/snapshot; w szczególności
 operacje efivars wymagają formalnego rozstrzygnięcia względem decyzji o
-stateless daemonie. Snapshot GRUB jest tworzony przed blokadą celu; pełna
-transakcja snapshot+flock nadal wymaga domknięcia. Nowe testy D-Bus dowodzą
-autoryzacji i istniejących odmów, nie wdrożenia tych brakujących kontraktów.
+stateless daemonie. Transakcja snapshot+flock dla `SetGrubValue` jest zamknięta
+w R4 (`fd334c0`). Nowe testy D-Bus dowodzą autoryzacji i istniejących odmów,
+nie wdrożenia brakujących kontraktów pozostałych backendów.
 Dokładny zakres: [macierz testów](../docs/testing/write-boundaries.md).
-**Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
+**Źródło:** recenzja 2026-07-12. **Status:** pozostały write-pathy poza GRUB.
 
 ### OVMF harness ma realnie potwierdzać boot i enrollment
 
