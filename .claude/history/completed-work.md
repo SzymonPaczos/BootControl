@@ -13,6 +13,12 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — Pełny tekst zadeklarowanej licencji
+
+Dodano `LICENSE` z niezmienionym tekstem GNU GPL v3, zgodnie z istniejącą
+decyzją i manifestami. Źródło: systemowy `/usr/share/common-licenses/GPL-3`;
+`cmp` potwierdził identyczność bajtową. Nie zmieniono wyboru licencji.
+
 ## 2026-09-06 — BackupNvram: zamknięcie ścieżek i ochrona poprzednich kopii
 
 D-Bus akceptuje cele wyłącznie w `/var/lib/bootcontrol/certs`, bez `..`.

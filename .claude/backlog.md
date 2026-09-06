@@ -144,12 +144,6 @@ ROADMAP nie definiuje jednoznacznie celu strumienia ani mapowania pierwszych
 dwóch PR-ów. Po decyzji trzeba uzupełnić Goal, Exit criteria i tabelę PR-ów.
 **Źródło:** audyt 2026-05-23. **Status:** czeka na decyzję właściciela.
 
-### Brak pliku `LICENSE` przy deklarowanym GPL-3.0
-
-Manifesty i README deklarują GPL-3.0, lecz bieżący HEAD nie ma `LICENSE` ani
-`COPYING`. Blokuje to poprawne przygotowanie dystrybucji.
-**Źródło:** audyt 2026-08-22; zweryfikowane 2026-09-05. **Status:** otwarte.
-
 ### `cargo audit`: dziesięć ostrzeżeń tranzytywnych
 
 Pomiar 2026-09-05 wykazał 5 ostrzeżeń unmaintained i 5 unsound. Pozostaje
