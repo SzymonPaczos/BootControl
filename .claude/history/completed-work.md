@@ -13,6 +13,18 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R3: aktywne wywołania blokują idle-exit daemona
+
+Każda z 24 metod D-Bus trzyma współdzielony guard lifecycle do końca wyniku,
+błędu albo anulowania. Timer bezczynności zaczyna pełny okres dopiero po
+zakończeniu ostatniego nakładającego się wywołania, a ruch D-Bus nadal go
+resetuje. Implementacja: `4bef11f`. Cztery deterministyczne testy z czasem
+wirtualnym pokrywają długą operację, błąd, anulowanie i nakładanie; trzy E2E
+lifecycle przechodzą, w tym rzeczywisty rebuild trwający 2 s przy timeoutcie
+1 s. `cargo test -p bootcontrold --all-features`: 287 testów i doctestów PASS;
+Clippy czysty. Asynchroniczne `JobId` i decyzja o `sd_notify` pozostają w
+backlogu. Task-Ref: `next-backlog-loop-2026-09-06/R3`.
+
 ## 2026-09-06 — R2: Confirmation Sheet rebuild korzysta z bieżącego stanu
 
 Produkcyjny arkusz odbudowy GRUB pokazuje backend i ETag z ostatniego udanego

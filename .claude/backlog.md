@@ -115,10 +115,9 @@ dystrybucji. Należy dodać dwa środowiska albo formalnie zawęzić macierz.
 ### Lifecycle daemona — asynchroniczne operacje
 
 Idle-exit 60 s jest scalony (`2297b2f`), unit używa `Type=dbus` i nie ma
-`WantedBy=multi-user.target`. Pozostają `JobId`, ochrona długich operacji
-przed idle-exit i uzgodnienie roli `sd_notify`. Wymagany test operacji
-trwającej dłużej niż timeout; samo resetowanie timera ruchem D-Bus nie
-dowodzi ochrony aktywnej operacji.
+`WantedBy=multi-user.target`. Ochrona aktywnych wywołań przed idle-exit jest
+scalona w R3 (`4bef11f`), wraz z testem operacji dłuższej niż timeout.
+Pozostają asynchroniczne `JobId` i uzgodnienie roli `sd_notify`.
 **Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
 
 ### `ci-local.sh`: `--locked` i skan zależności
