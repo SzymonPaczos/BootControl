@@ -6,7 +6,7 @@
 //! `.claude/rules/decisions.md` (2026-05-03 "Frontendy nie omijają
 //! client"). The crate exports three layers:
 //!
-//! - **Wire DTOs** ([`LoaderEntryDto`], [`EfiBootEntryDto`],
+//! - **Wire DTOs** ([`GrubMenuEntryDto`], [`LoaderEntryDto`], [`EfiBootEntryDto`],
 //!   [`SnapshotInfoDto`]) — owned by the client so the JSON-over-D-Bus
 //!   shape is one place, serde-round-trippable, no `core` leakage.
 //! - **[`BootBackend`] trait** — async, object-safe via `async_trait`.
@@ -42,6 +42,40 @@ use zbus::{proxy, Connection};
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared DTO types
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// A GRUB boot-menu item parsed by the daemon from generated `grub.cfg`.
+///
+/// `path` is the stable menu index expression accepted by `GRUB_DEFAULT`, such
+/// as `"1>0"` for the first child of the second top-level submenu.
+///
+/// # Examples
+///
+/// ```
+/// use bootcontrol_client::GrubMenuEntryDto;
+///
+/// let entry = GrubMenuEntryDto {
+///     title: "Linux recovery".to_string(),
+///     id: Some("linux-recovery".to_string()),
+///     path: "1>0".to_string(),
+///     depth: 1,
+///     is_submenu: false,
+/// };
+/// let json = serde_json::to_string(&entry).unwrap();
+/// assert_eq!(serde_json::from_str::<GrubMenuEntryDto>(&json).unwrap(), entry);
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GrubMenuEntryDto {
+    /// Label displayed in the GRUB menu.
+    pub title: String,
+    /// Optional GRUB menuentry identifier.
+    pub id: Option<String>,
+    /// `GRUB_DEFAULT`-compatible index path.
+    pub path: String,
+    /// Nesting depth, where top-level entries and submenus have depth zero.
+    pub depth: usize,
+    /// Whether this row opens a submenu instead of booting an entry.
+    pub is_submenu: bool,
+}
 
 /// A systemd-boot loader entry as returned by the daemon.
 ///
@@ -202,6 +236,9 @@ pub trait Manager {
     /// Rebuild the GRUB config by running grub-mkconfig.
     async fn rebuild_grub_config(&self) -> zbus::Result<()>;
 
+    /// List parsed GRUB menu entries and return the ETag of generated `grub.cfg`.
+    async fn list_grub_entries(&self) -> zbus::Result<(String, String)>;
+
     // ── Secure Boot ───────────────────────────────────────────────────────────
 
     /// Back up EFI NVRAM variables inside `/var/lib/bootcontrol/certs`.
@@ -322,6 +359,9 @@ pub trait BootBackend: Send + Sync {
     /// Rebuild the GRUB config file (runs grub-mkconfig).
     async fn rebuild_grub_config(&self) -> zbus::Result<()>;
 
+    /// List GRUB menu items and the ETag of generated `grub.cfg`.
+    async fn list_grub_entries(&self) -> zbus::Result<(Vec<GrubMenuEntryDto>, String)>;
+
     // ── Secure Boot ───────────────────────────────────────────────────────────
 
     /// Back up EFI NVRAM variables. Returns JSON list of backed-up file paths.
@@ -424,6 +464,15 @@ impl BootBackend for DbusBackend {
     async fn rebuild_grub_config(&self) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.rebuild_grub_config().await
+    }
+
+    async fn list_grub_entries(&self) -> zbus::Result<(Vec<GrubMenuEntryDto>, String)> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        let (json, etag) = proxy.list_grub_entries().await?;
+        let entries = serde_json::from_str(&json).map_err(|error| {
+            zbus::Error::Failure(format!("failed to deserialize GRUB menu: {error}"))
+        })?;
+        Ok((entries, etag))
     }
 
     async fn backup_nvram(&self, target_dir: &str) -> zbus::Result<String> {
@@ -557,6 +606,35 @@ impl BootBackend for MockBackend {
 
     async fn rebuild_grub_config(&self) -> zbus::Result<()> {
         Ok(())
+    }
+
+    async fn list_grub_entries(&self) -> zbus::Result<(Vec<GrubMenuEntryDto>, String)> {
+        Ok((
+            vec![
+                GrubMenuEntryDto {
+                    title: "MockOS".to_string(),
+                    id: Some("mock-linux".to_string()),
+                    path: "0".to_string(),
+                    depth: 0,
+                    is_submenu: false,
+                },
+                GrubMenuEntryDto {
+                    title: "Advanced options for MockOS".to_string(),
+                    id: Some("mock-advanced".to_string()),
+                    path: "1".to_string(),
+                    depth: 0,
+                    is_submenu: true,
+                },
+                GrubMenuEntryDto {
+                    title: "MockOS recovery mode".to_string(),
+                    id: Some("mock-recovery".to_string()),
+                    path: "1>0".to_string(),
+                    depth: 1,
+                    is_submenu: false,
+                },
+            ],
+            "mock-grub-cfg-etag-12345".to_string(),
+        ))
     }
 
     async fn backup_nvram(&self, _target_dir: &str) -> zbus::Result<String> {
