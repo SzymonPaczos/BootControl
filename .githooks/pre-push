@@ -1,69 +1,83 @@
 #!/usr/bin/env bash
-# Pre-push hook: refuse to push if the local CI script does not pass.
-#
-# This repository runs all CI checks locally — there are no GitHub Actions
-# workflows. The same script CI used to run is `scripts/ci-local.sh`; this
-# hook gates `git push` on its success.
-#
-# Bypass (use sparingly, e.g. WIP branches you know don't pass yet):
-#   git push --no-verify
-#
-# Install once per clone:
-#   ./scripts/install-hooks.sh
-#
-# That installer sets `core.hooksPath = .githooks`, which is per-clone
-# configuration and is not auto-applied when cloning. Each contributor
-# runs it once after cloning.
-
+# Validate each pushed tip in an isolated checkout, never the working tree.
+# Input is Git's <local-ref> <local-sha> <remote-ref> <remote-sha> protocol.
 set -euo pipefail
-
-# Skip the hook entirely when the user passes `--no-verify`; git already
-# handles that flag, but documenting it here for visibility.
-
-# Locate the repo root from the hook's vantage point. Hooks run with cwd at
-# the top of the working tree by default, but be explicit so a misbehaving
-# wrapper doesn't surprise us.
 ROOT="$(git rev-parse --show-toplevel)"
-SCRIPT="$ROOT/scripts/ci-local.sh"
+STATUS=0
+TEMP_ROOT=""
+WORKTREE=""
 
-# --- Audit freshness preflight (D-007 local-first, adopted 2026-07-12) ---
-# The weekly audit must not silently lapse: a passive reminder paragraph
-# does not satisfy the convention, an actual date check does. Full
-# ceremony on purpose (toolkit D-004) — bypass with --no-verify.
-AUDIT_LOG="$ROOT/.claude/audit-log.md"
-LAST_AUDIT="$(grep -oEm1 '^## Audyt [0-9]{4}-[0-9]{2}-[0-9]{2}' "$AUDIT_LOG" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)"
-if [ -z "$LAST_AUDIT" ]; then
-    echo "pre-push: no '## Audyt YYYY-MM-DD' entry found in .claude/audit-log.md" >&2
-    echo "Run the weekly audit (skill: weekly-audit, or bash .claude/audit.sh) before pushing." >&2
-    exit 1
-fi
-# BSD date (macOS) first, GNU date (Linux) as fallback.
-LAST_EPOCH="$(date -j -f '%Y-%m-%d' "$LAST_AUDIT" +%s 2>/dev/null || date -d "$LAST_AUDIT" +%s)"
-AGE_DAYS=$(( ( $(date +%s) - LAST_EPOCH ) / 86400 ))
-if [ "$AGE_DAYS" -gt 7 ]; then
-    echo "pre-push: last audit ($LAST_AUDIT) is $AGE_DAYS days old (>7)." >&2
-    echo "Run the weekly audit (skill: weekly-audit, or bash .claude/audit.sh)," >&2
-    echo "or push with --no-verify if the owner explicitly waived this cycle." >&2
-    exit 1
-fi
-echo "pre-push: audit freshness OK (last audit $LAST_AUDIT, ${AGE_DAYS}d ago)"
+cleanup() {
+    if [ -n "$WORKTREE" ]; then
+        git -C "$ROOT" worktree remove --force "$WORKTREE" || return 1
+        WORKTREE=""
+    fi
+    if [ -n "$TEMP_ROOT" ]; then
+        rmdir "$TEMP_ROOT" || return 1
+        TEMP_ROOT=""
+    fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-if [ ! -x "$SCRIPT" ]; then
-    echo "pre-push: $SCRIPT is missing or not executable" >&2
-    echo "Did you delete scripts/ci-local.sh? Restore it before pushing." >&2
-    exit 1
-fi
+check_tip() (
+    cd "$WORKTREE"
+    # Hooks can inherit repository-local variables from Git. Do not let them
+    # redirect commands in this checkout to the user's index or working tree.
+    while IFS= read -r name; do unset "$name"; done < <(git rev-parse --local-env-vars)
+    local audit_date audit_epoch age
+    audit_date="$(sed -nE 's/^## Audyt ([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p' .claude/audit-log.md | sed -n '1p')" || return 1
+    if [ -z "$audit_date" ]; then
+        echo 'pre-push: missing audit date in pushed commit' >&2
+        return 1
+    fi
+    audit_epoch="$(date -j -f '%Y-%m-%d' "$audit_date" +%s 2>/dev/null || date -d "$audit_date" +%s)" || return 1
+    age=$(( ($(date +%s) - audit_epoch) / 86400 ))
+    if [ "$age" -lt 0 ] || [ "$age" -gt 7 ]; then
+        echo "pre-push: audit date $audit_date is outside the last seven days" >&2
+        return 1
+    fi
+    if [ ! -x scripts/ci-local.sh ]; then
+        echo 'pre-push: pushed commit has no executable scripts/ci-local.sh' >&2
+        return 1
+    fi
+    # Reuse compiler artifacts, but run all checks against this checkout.
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+    ./scripts/ci-local.sh
+)
 
-echo "pre-push: running $SCRIPT (use --no-verify to skip)"
-echo
-
-if ! "$SCRIPT"; then
-    echo >&2
-    echo "pre-push: ci-local.sh failed. Refusing to push." >&2
-    echo "Fix the failures, or push with --no-verify if you know what you're doing." >&2
-    exit 1
-fi
-
-echo
-echo "pre-push: ci-local.sh passed — proceeding with push"
-exit 0
+while read -r local_ref local_sha remote_ref remote_sha extra || [ -n "${local_ref:-}" ]; do
+    if [ -n "${extra:-}" ] || [[ ! "${local_sha:-}" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] \
+        || [[ ! "${remote_sha:-}" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] \
+        || [ -z "${local_ref:-}" ] || [ -z "${remote_ref:-}" ]; then
+        echo 'pre-push: malformed ref update' >&2
+        STATUS=1
+        continue
+    fi
+    # Deletions introduce no files and need no checkout or CI invocation.
+    if [[ "$local_sha" =~ ^0+$ ]]; then continue; fi
+    if ! git -C "$ROOT" cat-file -e "$local_sha^{commit}"; then
+        STATUS=1
+        continue
+    fi
+    if [[ "$remote_sha" =~ ^0+$ ]]; then
+        range="$(git -C "$ROOT" rev-list "$local_sha" --not --remotes)" || { STATUS=1; continue; }
+    else
+        range="$(git -C "$ROOT" rev-list "$remote_sha..$local_sha")" || { STATUS=1; continue; }
+    fi
+    export BOOTCONTROL_PUSH_COMMITS="$range"
+    TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/bootcontrol-pre-push.XXXXXXXX")" || exit 1
+    WORKTREE="$TEMP_ROOT/checkout"
+    if ! git -C "$ROOT" worktree add --detach "$WORKTREE" "$local_sha"; then
+        STATUS=1
+        # A failed add may still leave a registered checkout; cleanup handles it.
+        if [ ! -e "$WORKTREE/.git" ]; then WORKTREE=""; fi
+        cleanup || exit 1
+        continue
+    fi
+    echo "pre-push: checking $local_ref ($local_sha) -> $remote_ref"
+    if ! check_tip; then STATUS=1; fi
+    cleanup || exit 1
+done
+exit "$STATUS"

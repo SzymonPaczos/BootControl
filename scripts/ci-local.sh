@@ -27,6 +27,9 @@ step() {
     echo "==> $*"
 }
 
+step "Hook regression tests (disposable repositories)"
+python3 scripts/test-pre-push.py
+
 step "1/5  cargo fmt --all -- --check"
 cargo fmt --all -- --check
 
