@@ -176,6 +176,8 @@ pub struct GrubManager {
     entry_token_paths: Vec<PathBuf>,
     /// Required owner UID for a UKI. Production always uses root (`0`).
     trusted_uki_uid: u32,
+    #[cfg(test)]
+    test_hooks: Option<std::sync::Arc<tests::TestHooks>>,
 }
 
 fn default_managed_uki_dirs() -> Vec<PathBuf> {
@@ -190,6 +192,22 @@ fn default_entry_token_paths() -> Vec<PathBuf> {
 }
 
 impl GrubManager {
+    /// Authorize an operation; tests inject a per-instance decision and recorder.
+    ///
+    /// # Errors
+    /// Returns `PolkitDenied` when Polkit rejects the caller or cannot be reached.
+    async fn authorize(
+        &self,
+        sender: &str,
+        action: &str,
+    ) -> Result<(), bootcontrol_core::error::BootControlError> {
+        #[cfg(test)]
+        if let Some(hooks) = &self.test_hooks {
+            return hooks.authorize(sender, action);
+        }
+        authorize_with_polkit(sender, action).await
+    }
+
     /// Create a new [`GrubManager`] pointing at the given `grub_path`.
     ///
     /// The failsafe snippet path defaults to `/etc/bootcontrol/failsafe.cfg`
@@ -225,6 +243,8 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            #[cfg(test)]
+            test_hooks: None,
         }
     }
 
@@ -270,6 +290,8 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            #[cfg(test)]
+            test_hooks: None,
         }
     }
 
@@ -318,6 +340,8 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            #[cfg(test)]
+            test_hooks: None,
         }
     }
 
@@ -346,6 +370,8 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            #[cfg(test)]
+            test_hooks: None,
         }
     }
 
@@ -1516,7 +1542,7 @@ impl GrubManager {
         info!(id = %id, root = ?self.snapshot_root, "D-Bus: RestoreSnapshot");
 
         let caller_uid = resolve_uid(&header, connection, "RestoreSnapshot").await?;
-        authorize_with_polkit(
+        self.authorize(
             &resolve_bus_name(&header, "RestoreSnapshot")?,
             actions::RESTORE_SNAPSHOT,
         )
@@ -1769,3 +1795,6 @@ async fn resolve_uid(
             DaemonError::PolkitDenied(format!("failed to resolve caller UID: {e}"))
         })
 }
+
+#[cfg(test)]
+mod tests;
