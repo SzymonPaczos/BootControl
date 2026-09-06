@@ -13,6 +13,20 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R8: typowane ustawienia GRUB w GUI
+
+Bootloader odczytuje i edytuje czas oraz styl menu, wykrywanie innych systemów
+i wpisy recovery. Zmiany pozostają lokalne do Apply, Discard przywraca ostatni
+odczyt, a Confirmation Sheet pokazuje diff każdej zmiennej. Dedykowane metody
+D-Bus autoryzują przed I/O, walidują typy, sprawdzają ETag i wykonują jeden
+snapshot, atomowy zapis oraz rebuild z zachowaniem komentarzy. Implementacja:
+`14b5e54`; brief: `task-briefs/typed-grub-settings-r8.md`. PASS: core 263,
+daemon 302, klient 36, GUI 39 testów i doctestów; 3 istniejące testy GUI
+pozostają ignored. Pełny Clippy i format czyste. Przepływ Demo Mode od stagingu
+trzech pól przez dokładny diff do zastosowania sprawdzony na Xvfb. Surowa
+edycja, cmdline, systemd-boot/UKI i initramfs pozostają w backlogu. Task-Ref:
+`next-backlog-loop-2026-09-06/R8`.
+
 ## 2026-09-06 — R7: staged wybór domyślnego wpisu GRUB
 
 Boot Entries pozwala wskazać bootowalny wpis, odrzucić zmianę lub zobaczyć

@@ -13,8 +13,8 @@ Stan po pętli napraw 2026-09-06; dowody zamknięć w historii wykonanej pracy.
 Kolejna wykonana iteracja: [backlog-loop-2026-09-06.md](task-briefs/backlog-loop-2026-09-06.md)
 — zamknięte błędy interfejsów, ścieżki NVRAM, LICENSE i drift Polkit.
 
-Aktywny plan następnej pętli: [next-backlog-loop-2026-09-06.md](task-briefs/next-backlog-loop-2026-09-06.md).
-Plan nie oznacza wykonania pozycji.
+Wykonany plan R1–R8:
+[next-backlog-loop-2026-09-06.md](task-briefs/next-backlog-loop-2026-09-06.md).
 
 ## P0 — krytyczne
 
@@ -56,17 +56,17 @@ Confirmation Sheet. Pozostaje wybór UKI i protokół potwierdzania.
 
 ### GUI v2 — strony Boot Entries i Bootloader (Tor A)
 
-Parser `grub.cfg`, `ListGrubEntries` i adapter klienta są już scalone
-(`cf7ddaf`, `34668c3`, `bc87533`), podobnie warstwa wizualna Stacja (`c5fb3f3`).
-Lista GRUB i Inspector z pełnymi stanami odczytu są podłączone do GUI (`c2f19f9`).
-A1 ma też staged wybór domyślnego wpisu z Apply/Discard, dwoma ETagami i
-Confirmation Sheet (`6a92868`). Bootloader nadal jest placeholderem. Settings ma
-nowy układ, lecz wartości nadal prezentuje
-statycznym tekstem i wymaga kontrolek edycji. Zatwierdzona kolejność: A1 Boot Entries → A2
-Bootloader → A3 szybkie poprawki. Briefy:
+Parser `grub.cfg`, `ListGrubEntries`, adapter klienta, lista, Inspector i staged
+wybór domyślnego wpisu z dwoma ETagami są wykonane (`bc87533`, `c2f19f9`,
+`6a92868`). Bootloader ma typowane kontrolki czasu i stylu menu, wykrywania
+innych systemów oraz wpisów recovery, z lokalnym stagingiem, dokładnym diffem
+i jednym atomowym zapisem (`14b5e54`). W A2 pozostają surowa edycja, kernel
+cmdline, obsługa systemd-boot/UKI oraz wykrywanie initramfs. A3 i edytowalne
+Settings nadal są otwarte. Briefy:
 [`gui-v2-boot-entries.md`](task-briefs/gui-v2-boot-entries.md) i
 [`gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
-**Źródło:** audyt UX i decyzja 2026-07-12. **Status:** A1 wykonane; A2/A3 otwarte.
+**Źródło:** audyt UX i decyzja 2026-07-12. **Status:** A1 wykonane; typowany
+wycinek A2 wykonany; pozostały zakres A2 i A3 otwarty.
 
 ### Raport „Boot environment"
 

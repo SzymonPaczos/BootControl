@@ -1,7 +1,7 @@
 # R8 — typowane ustawienia GRUB na stronie Bootloader
 
 **Task-Ref:** `next-backlog-loop-2026-09-06/R8`
-**Status:** w realizacji
+**Status:** wykonane w `14b5e54`
 **Roadmap:** Phase 3.5 / GUI v2 A2
 
 ## Wynik
