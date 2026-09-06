@@ -183,10 +183,10 @@ enum SnapshotAction {
 /// NVRAM backup subcommands.
 #[derive(Debug, Subcommand)]
 enum NvramAction {
-    /// Archive EFI NVRAM variables to `target_dir`. Empty string ("") uses
-    /// the daemon-side default (`/var/lib/bootcontrol/nvram-backups/`).
+    /// Archive EFI NVRAM variables inside /var/lib/bootcontrol/certs.
+    /// Empty string ("") creates a fresh backup subdirectory.
     Backup {
-        /// Output directory. Pass "" to accept the daemon default.
+        /// Absolute output directory inside /var/lib/bootcontrol/certs, or "" for a new backup.
         target_dir: String,
     },
 }

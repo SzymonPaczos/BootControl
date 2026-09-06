@@ -131,14 +131,6 @@ Lokalny pipeline nie używa `--locked` i nie ma ratchetowanego kroku
 zmian zależności.
 **Źródło:** Red Team 2026-07-12. **Status:** otwarte.
 
-### `BackupNvram` — hardening ścieżki docelowej
-
-Caller-supplied `target_dir` nie ma ochrony `O_NOFOLLOW`/`O_EXCL` ani confinement
-do katalogu zarządzanego. Potrzebne pozostają testy i ochrona przed symlinkami.
-Immutable-distro guard oraz test jego kolejności po Polkit są już wdrożone
-w `3bff747`.
-**Źródło:** Security Review 2026-07-12 i 2026-08-22. **Status:** otwarte.
-
 ### `crates/gui-spike` — decyzja o archiwizacji
 
 Historyczny verification crate nadal jest członkiem workspace mimo zapisanych

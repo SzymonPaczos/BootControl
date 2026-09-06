@@ -4,10 +4,54 @@
 //! sysfs EFI variables interface before any key enrollment operation.
 #![deny(missing_docs)]
 
-use std::path::{Path, PathBuf};
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 use bootcontrol_core::error::BootControlError;
+use nix::fcntl::{openat, OFlag};
+use nix::sys::stat::{mkdirat, Mode};
+
+fn backup_error(error: impl std::fmt::Display) -> BootControlError {
+    BootControlError::NvramBackupFailed {
+        reason: error.to_string(),
+    }
+}
+
+// Walk from the filesystem root using held directory descriptors. No component
+// may redirect resolution through a symlink, including newly created parents.
+fn open_backup_directory(path: &Path) -> Result<File, BootControlError> {
+    if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err(backup_error(
+            "backup directory must be absolute without '..'",
+        ));
+    }
+    let mut directory = File::open("/").map_err(backup_error)?;
+    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+    for component in path.components() {
+        let Component::Normal(name) = component else {
+            continue;
+        };
+        let fd = match openat(Some(directory.as_raw_fd()), name, flags, Mode::empty()) {
+            Ok(fd) => fd,
+            Err(nix::errno::Errno::ENOENT) => {
+                match mkdirat(Some(directory.as_raw_fd()), name, Mode::S_IRWXU) {
+                    Ok(()) | Err(nix::errno::Errno::EEXIST) => {}
+                    Err(error) => return Err(backup_error(error)),
+                }
+                openat(Some(directory.as_raw_fd()), name, flags, Mode::empty())
+                    .map_err(backup_error)?
+            }
+            Err(error) => return Err(backup_error(error)),
+        };
+        // SAFETY: openat returned a new descriptor, transferred exactly once.
+        directory = unsafe { File::from_raw_fd(fd) };
+    }
+    Ok(directory)
+}
 
 /// The default sysfs path for EFI variables on Linux.
 pub const DEFAULT_EFIVARS_DIR: &str = "/sys/firmware/efi/efivars";
@@ -76,7 +120,8 @@ impl NvramBackup {
 ///   In production: `/sys/firmware/efi/efivars`.
 ///   In tests: a `TempDir` with mock variable files.
 /// * `target_dir` - Directory where backup files will be written.
-///   Created if it does not exist.
+///   Must be absolute without parent traversal or symlink components.
+///   Created with private permissions if it does not exist.
 ///
 /// # Errors
 ///
@@ -85,20 +130,23 @@ impl NvramBackup {
 /// - [`BootControlError::NvramBackupFailed`] if no variables matching
 ///   `db-*`, `KEK-*`, or `PK-*` are found in `efivars_dir`.
 /// - [`BootControlError::NvramBackupFailed`] if `target_dir` cannot be
-///   created or any backup file cannot be written.
+///   safely opened/created, contains traversal or symlinks, or any destination
+///   already exists. Existing backups are never overwritten.
+/// - [`BootControlError::NvramBackupFailed`] if a source is a symlink or not a
+///   regular file, or reading, writing or syncing files fails. A failed batch
+///   can leave newly created partial backups; it never reports them as success.
 ///
 /// # Examples
 ///
 /// ```
-/// use std::path::Path;
-/// use bootcontrold::secureboot::nvram::{backup_efi_variables, DEFAULT_EFIVARS_DIR, DEFAULT_BACKUP_DIR};
-///
-/// // In production (requires the sysfs interface to be mounted):
-/// // let result = backup_efi_variables(
-/// //     Path::new(DEFAULT_EFIVARS_DIR),
-/// //     Path::new(DEFAULT_BACKUP_DIR),
-/// // );
-/// // In tests, use a TempDir instead — see the module's unit tests.
+/// use bootcontrold::secureboot::nvram::backup_efi_variables;
+/// let root = tempfile::tempdir().unwrap();
+/// let source = root.path().join("efivars");
+/// std::fs::create_dir(&source).unwrap();
+/// std::fs::write(source.join("db-example"), b"certificate").unwrap();
+/// let backup = backup_efi_variables(&source, &root.path().join("backup")).unwrap();
+/// assert_eq!(std::fs::read(&backup.files[0]).unwrap(), b"certificate");
+/// assert!(backup_efi_variables(&source, &root.path().join("backup")).is_err());
 /// ```
 pub fn backup_efi_variables(
     efivars_dir: &Path,
@@ -141,11 +189,17 @@ pub fn backup_efi_variables(
             continue;
         }
 
-        // Read the raw bytes of the EFI variable.
-        let contents =
-            std::fs::read(entry.path()).map_err(|e| BootControlError::NvramBackupFailed {
-                reason: format!("failed to read variable '{}': {e}", name),
-            })?;
+        // Refuse symlinks and special files before reading any bytes.
+        let mut source = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(entry.path())
+            .map_err(backup_error)?;
+        if !source.metadata().map_err(backup_error)?.is_file() {
+            return Err(backup_error("EFI variable must be a regular file"));
+        }
+        let mut contents = Vec::new();
+        source.read_to_end(&mut contents).map_err(backup_error)?;
 
         matching.push((name.into_owned(), contents));
     }
@@ -158,22 +212,26 @@ pub fn backup_efi_variables(
     }
 
     // Step 4: Create target_dir if it does not exist.
-    std::fs::create_dir_all(target_dir).map_err(|e| BootControlError::NvramBackupFailed {
-        reason: format!(
-            "failed to create backup directory '{}': {e}",
-            target_dir.display()
-        ),
-    })?;
+    let directory = open_backup_directory(target_dir)?;
 
     // Step 5: Write each variable as {name}.efivar in target_dir.
     let mut files: Vec<PathBuf> = Vec::with_capacity(matching.len());
     for (name, contents) in matching {
         let dest = target_dir.join(format!("{name}.efivar"));
-        std::fs::write(&dest, &contents).map_err(|e| BootControlError::NvramBackupFailed {
-            reason: format!("failed to write backup file '{}': {e}", dest.display()),
-        })?;
+        let fd = openat(
+            Some(directory.as_raw_fd()),
+            format!("{name}.efivar").as_str(),
+            OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+            Mode::S_IRUSR | Mode::S_IWUSR,
+        )
+        .map_err(backup_error)?;
+        // SAFETY: openat returned a fresh descriptor owned only by this File.
+        let mut file = unsafe { File::from_raw_fd(fd) };
+        file.write_all(&contents).map_err(backup_error)?;
+        file.sync_all().map_err(backup_error)?;
         files.push(dest);
     }
+    directory.sync_all().map_err(backup_error)?;
 
     // Step 7: Return NvramBackup.
     Ok(NvramBackup {

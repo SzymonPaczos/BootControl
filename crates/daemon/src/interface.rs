@@ -250,6 +250,14 @@ impl GrubManager {
         PathBuf::from(DEFAULT_EFIVARS_DIR)
     }
 
+    fn nvram_backup_root(&self) -> PathBuf {
+        #[cfg(test)]
+        if let Some(hooks) = &self.test_hooks {
+            return hooks.efivars.with_file_name("backups");
+        }
+        PathBuf::from(DEFAULT_BACKUP_DIR)
+    }
+
     /// Create a new [`GrubManager`] pointing at the given `grub_path`.
     ///
     /// The failsafe snippet path defaults to `/etc/bootcontrol/failsafe.cfg`
@@ -948,15 +956,17 @@ impl GrubManager {
     ///
     /// ## Arguments
     ///
-    /// * `target_dir` — Target directory for backup files. Pass an empty
-    ///   string to use the default (`/var/lib/bootcontrol/certs`).
+    /// * `target_dir` — Absolute directory within `/var/lib/bootcontrol/certs`.
+    ///   Pass an empty string to create a fresh timestamped backup subdirectory.
+    ///   Parent traversal, symlinks and overwriting existing files are refused.
     ///
     /// ## Errors
     ///
     /// - `org.bootcontrol.Error.PolkitDenied` — the caller is not authorized.
     /// - `org.bootcontrol.Error.NvramBackupFailed` — the sysfs efivars
     ///   directory is not mounted, no Secure Boot variables were found, or the
-    ///   target directory could not be written.
+    ///   target is outside the managed root, contains traversal/symlinks, already
+    ///   contains a backup file, or cannot be written and synced.
     async fn backup_nvram(
         &self,
         target_dir: String,
@@ -1005,11 +1015,25 @@ impl GrubManager {
         self.require_writable_host().map_err(to_daemon_error)?;
 
         // ── Step 3: Resolve target directory ────────────────────────────────
+        let root = self.nvram_backup_root();
         let resolved_target = if target_dir.is_empty() {
-            std::path::PathBuf::from(DEFAULT_BACKUP_DIR)
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| DaemonError::NvramBackupFailed(error.to_string()))?;
+            root.join(format!("backup-{}", timestamp.as_nanos()))
         } else {
             std::path::PathBuf::from(&target_dir)
         };
+        if !resolved_target.starts_with(&root)
+            || resolved_target
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(DaemonError::NvramBackupFailed(format!(
+                "backup destination must be inside {} without '..'",
+                root.display()
+            )));
+        }
 
         // ── Step 4: Perform the backup ──────────────────────────────────────
         let backup = backup_efi_variables(&self.nvram_source(), &resolved_target).map_err(|e| {
@@ -1020,15 +1044,8 @@ impl GrubManager {
         info!(file_count = backup.files.len(), "NVRAM backup completed");
 
         // ── Step 5: Serialize file list as a JSON array ─────────────────────
-        let json = format!(
-            "[{}]",
-            backup
-                .files
-                .iter()
-                .map(|p| format!("\"{}\"", p.display()))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
+        let json = serde_json::to_string(&backup.files)
+            .map_err(|error| DaemonError::NvramBackupFailed(error.to_string()))?;
 
         Ok(json)
     }

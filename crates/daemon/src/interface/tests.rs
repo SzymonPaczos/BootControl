@@ -543,3 +543,64 @@ async fn nvram_backup_bad_destination_preserves_source_and_target() {
     assert_eq!(std::fs::read_to_string(&source).unwrap(), "certificate");
     f.assert_authorized_once(actions::ENROLL_MOK);
 }
+
+#[tokio::test]
+async fn nvram_destination_is_confined_to_managed_directory() {
+    let f = Fixture::start(true).await;
+    std::fs::write(f.auth.efivars.join("db-fixture"), "certificate").unwrap();
+    let outside = f.root.path().join("outside");
+    let watched = Watch::new(&[&f.auth.efivars]);
+    let result: zbus::Result<String> = f
+        .proxy()
+        .await
+        .call("BackupNvram", &(outside.display().to_string(),))
+        .await;
+    assert_error(result, "NvramBackupFailed");
+    assert!(!outside.exists());
+    watched.assert_no_io();
+}
+
+#[tokio::test]
+async fn nvram_default_backups_are_distinct_and_json_paths_round_trip() {
+    let f = Fixture::start(true).await;
+    std::fs::write(f.auth.efivars.join("db-fixture"), "first").unwrap();
+    let first: String = f.proxy().await.call("BackupNvram", &("",)).await.unwrap();
+    let first: Vec<String> = serde_json::from_str(&first).unwrap();
+    let managed = f.auth.efivars.with_file_name("backups");
+    assert!(Path::new(&first[0]).starts_with(&managed));
+    std::fs::write(f.auth.efivars.join("db-fixture"), "second").unwrap();
+    let second: String = f.proxy().await.call("BackupNvram", &("",)).await.unwrap();
+    let second: Vec<String> = serde_json::from_str(&second).unwrap();
+    assert_ne!(first, second);
+    assert_eq!(std::fs::read_to_string(&first[0]).unwrap(), "first");
+    assert_eq!(std::fs::read_to_string(&second[0]).unwrap(), "second");
+    let quoted = managed.join("quoted-\"path");
+    let json: String = f
+        .proxy()
+        .await
+        .call("BackupNvram", &(quoted.display().to_string(),))
+        .await
+        .unwrap();
+    let paths: Vec<String> = serde_json::from_str(&json).unwrap();
+    assert_eq!(std::fs::read_to_string(&paths[0]).unwrap(), "second");
+}
+
+#[tokio::test]
+async fn nvram_traversal_and_symlink_targets_cannot_escape_managed_root() {
+    let f = Fixture::start(true).await;
+    std::fs::write(f.auth.efivars.join("db-fixture"), "certificate").unwrap();
+    let managed = f.auth.efivars.with_file_name("backups");
+    let outside = f.root.path().join("outside");
+    std::fs::create_dir(&managed).unwrap();
+    std::fs::create_dir(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, managed.join("alias")).unwrap();
+    for target in [managed.join("../outside"), managed.join("alias/nested")] {
+        let result: zbus::Result<String> = f
+            .proxy()
+            .await
+            .call("BackupNvram", &(target.display().to_string(),))
+            .await;
+        assert_error(result, "NvramBackupFailed");
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    }
+}

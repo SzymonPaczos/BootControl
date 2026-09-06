@@ -204,7 +204,8 @@ pub trait Manager {
 
     // ── Secure Boot ───────────────────────────────────────────────────────────
 
-    /// Back up EFI NVRAM variables to `target_dir` (empty = default path).
+    /// Back up EFI NVRAM variables inside `/var/lib/bootcontrol/certs`.
+    /// Empty `target_dir` creates a fresh subdirectory; existing files are never overwritten.
     /// Returns a JSON array of absolute paths of backed-up files.
     async fn backup_nvram(&self, target_dir: &str) -> zbus::Result<String>;
 

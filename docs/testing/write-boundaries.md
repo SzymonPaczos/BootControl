@@ -17,7 +17,7 @@ verify the ordering of host inspection without relying on the test host OS.
 |--------|---------------|----------------------------|
 | SetGrubValue | rewrite-grub | Stale ETag, foreign flock, snapshot creation failure; successful round-trip in existing E2E |
 | RebuildGrubConfig | rewrite-grub | Denial and immutable-host rejection before invoking the external command |
-| BackupNvram | enroll-mok | Invalid destination preserves source variables and existing target |
+| BackupNvram | enroll-mok | Invalid/outside/traversal/symlink destinations refused; default backups are distinct; returned JSON handles quoted paths. Tempfile integration tests additionally cover source symlinks, destination hardlinks, existing files and private permissions |
 | SignAndEnrollUki | enroll-mok | Denial and immutable-host rejection before signer/key preflight |
 | SetLoaderDefault | write-bootloader | Stale ETag and foreign flock preserve target bytes |
 | RenameLoaderEntry | write-bootloader | Stale ETag and foreign flock preserve target bytes |

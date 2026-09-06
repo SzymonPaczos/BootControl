@@ -13,6 +13,22 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — BackupNvram: zamknięcie ścieżek i ochrona poprzednich kopii
+
+D-Bus akceptuje cele wyłącznie w `/var/lib/bootcontrol/certs`, bez `..`.
+Pusty argument tworzy nowy podkatalog czasowy; powtórzenie zachowuje starą kopię.
+Katalogi otwierane są komponentami przez deskryptory z `O_NOFOLLOW`, pliki
+powstają z `O_EXCL`, trybem 0600 i fsync; źródłowe symlinki są odrzucane.
+Ścieżki zwracane jako JSON są poprawnie escapowane. Zmiana celowo odrzuca
+wcześniej przyjmowane katalogi poza zarządzanym rootem i nadpisywanie.
+Dowody: 4 testy integracyjne tempfile (wszystkie czerwone przed poprawką),
+3 nowe scenariusze D-Bus (confinement, kolejne backupy/JSON, traversal/symlinki)
+oraz cały `cargo test -p bootcontrold` zielony. Testy nie dotykają efivars hosta.
+Logi: `/tmp/backlog-nvram-red.log`, `/tmp/backlog-nvram-boundary-red.log`,
+`/tmp/backlog-daemon-green.log`. Przerwany batch może pozostawić częściową
+nową kopię; nie jest ona zgłaszana jako sukces. ETag/restore efivars pozostają
+osobnym zagadnieniem w backlogu.
+
 ## 2026-09-06 — GUI: prawidłowa komenda odbudowy GRUB
 
 Confirmation Sheet pokazuje `bootcontrol rebuild`, zgodnie z parserem CLI.
