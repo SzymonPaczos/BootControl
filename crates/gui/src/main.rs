@@ -4,6 +4,7 @@ mod theme;
 
 use bootcontrol_gui::boot_entries::{BootEntriesModel, BootEntriesStatus};
 use bootcontrol_gui::confirmation::{ConfirmationMode, ConfirmationPreview, ConfirmationSession};
+use bootcontrol_gui::grub_settings::{GrubSettingsModel, GrubSettingsStatus};
 use bootcontrol_gui::view_model::ViewModel;
 use slint::Model;
 use tokio::sync::mpsc;
@@ -17,12 +18,20 @@ const BUNDLED_FONTS: &[&str] = &["Inter-VariableFont.ttf", "JetBrainsMono-Regula
 enum UiMessage {
     FetchEntries,
     FetchGrubMenu,
+    FetchGrubSettings,
     SelectGrubMenuEntry(usize),
     MoveGrubMenuSelection(isize),
     StageGrubDefault,
     DiscardGrubDefault,
     PrepareGrubDefaultConfirmation,
     ApplyGrubDefault,
+    StageGrubTimeout(String),
+    StageGrubTimeoutStyle(String),
+    StageGrubDetectOtherOs(bool),
+    StageGrubRecoveryEntries(bool),
+    DiscardGrubSettings,
+    PrepareGrubSettingsConfirmation,
+    ApplyGrubSettings,
     SaveEntry(String, String),
     PrepareRebuildConfirmation,
     CancelConfirmation,
@@ -138,6 +147,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tx = tx.clone();
         move || {
             let _ = queue_ui_message(&tx, UiMessage::FetchGrubMenu);
+        }
+    });
+
+    ui.on_fetch_grub_settings({
+        let tx = tx.clone();
+        move || {
+            let _ = queue_ui_message(&tx, UiMessage::FetchGrubSettings);
+        }
+    });
+
+    ui.on_stage_grub_timeout({
+        let tx = tx.clone();
+        move |value| {
+            let _ = queue_ui_message(&tx, UiMessage::StageGrubTimeout(value.to_string()));
+        }
+    });
+
+    ui.on_stage_grub_timeout_style({
+        let tx = tx.clone();
+        move |style| {
+            let _ = queue_ui_message(&tx, UiMessage::StageGrubTimeoutStyle(style.to_string()));
+        }
+    });
+
+    ui.on_stage_grub_detect_other_os({
+        let tx = tx.clone();
+        move |enabled| {
+            let _ = queue_ui_message(&tx, UiMessage::StageGrubDetectOtherOs(enabled));
+        }
+    });
+
+    ui.on_stage_grub_recovery_entries({
+        let tx = tx.clone();
+        move |enabled| {
+            let _ = queue_ui_message(&tx, UiMessage::StageGrubRecoveryEntries(enabled));
+        }
+    });
+
+    ui.on_discard_grub_settings({
+        let tx = tx.clone();
+        move || {
+            let _ = queue_ui_message(&tx, UiMessage::DiscardGrubSettings);
+        }
+    });
+
+    ui.on_apply_grub_settings({
+        let tx = tx.clone();
+        move || {
+            let _ = queue_ui_message(&tx, UiMessage::PrepareGrubSettingsConfirmation);
         }
     });
 
@@ -261,6 +319,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "Set default entry" => {
                     let _ = queue_ui_message(&tx, UiMessage::ApplyGrubDefault);
+                }
+                "Apply GRUB settings" => {
+                    let _ = queue_ui_message(&tx, UiMessage::ApplyGrubSettings);
                 }
                 other => {
                     eprintln!("[gui] confirmation_confirmed: unhandled verb {:?}", other);
@@ -495,6 +556,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // both pages have live data on first paint.
     let _ = tx_clone.send(UiMessage::FetchEntries).await;
     let _ = tx_clone.send(UiMessage::FetchGrubMenu).await;
+    let _ = tx_clone.send(UiMessage::FetchGrubSettings).await;
     let _ = tx_clone.send(UiMessage::FetchSnapshots).await;
 
     // Spawn async backend task
@@ -507,6 +569,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let mut confirmation_session = ConfirmationSession::default();
         let mut boot_entries = BootEntriesModel::default();
+        let mut grub_settings = GrubSettingsModel::default();
         while let Some(msg) = rx.recv().await {
             match msg {
                 UiMessage::FetchEntries => {
@@ -587,6 +650,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     render_boot_entries(&ui_handle_async, &boot_entries);
+                }
+                UiMessage::FetchGrubSettings => {
+                    grub_settings.begin_load();
+                    render_grub_settings(&ui_handle_async, &grub_settings);
+                    if !view_model.active_backend.contains("grub") {
+                        grub_settings.fail_load(format!(
+                            "Typed GRUB settings are unavailable for backend '{}'.",
+                            view_model.active_backend
+                        ));
+                    } else {
+                        match view_model.read_grub_settings().await {
+                            Ok((settings, etag)) => grub_settings.finish_load(settings, etag),
+                            Err(error) => grub_settings
+                                .fail_load(bootcontrol_client::dbus_error_message(&error)),
+                        }
+                    }
+                    render_grub_settings(&ui_handle_async, &grub_settings);
                 }
                 UiMessage::SelectGrubMenuEntry(index) => {
                     boot_entries.select(index);
@@ -669,6 +749,81 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     let _ = tx_clone.send(UiMessage::FetchEntries).await;
                     let _ = tx_clone.send(UiMessage::FetchGrubMenu).await;
+                }
+                UiMessage::StageGrubTimeout(value) => {
+                    if let Err(error) = grub_settings.stage_timeout(&value) {
+                        show_toast(&ui_handle_async, error, "error");
+                    }
+                    render_grub_settings(&ui_handle_async, &grub_settings);
+                }
+                UiMessage::StageGrubTimeoutStyle(style) => {
+                    if let Err(error) = grub_settings.stage_timeout_style(&style) {
+                        show_toast(&ui_handle_async, error, "error");
+                    }
+                    render_grub_settings(&ui_handle_async, &grub_settings);
+                }
+                UiMessage::StageGrubDetectOtherOs(enabled) => {
+                    grub_settings.stage_detect_other_os(enabled);
+                    render_grub_settings(&ui_handle_async, &grub_settings);
+                }
+                UiMessage::StageGrubRecoveryEntries(enabled) => {
+                    grub_settings.stage_recovery_entries(enabled);
+                    render_grub_settings(&ui_handle_async, &grub_settings);
+                }
+                UiMessage::DiscardGrubSettings => {
+                    grub_settings.discard();
+                    render_grub_settings(&ui_handle_async, &grub_settings);
+                }
+                UiMessage::PrepareGrubSettingsConfirmation => {
+                    if let Some(request) = grub_settings.pending_request() {
+                        let preview =
+                            confirmation_session.prepare_grub_settings(confirmation_mode, request);
+                        show_confirmation_preview(&ui_handle_async, preview);
+                    } else {
+                        show_toast(
+                            &ui_handle_async,
+                            "No typed GRUB setting changes are staged.".to_string(),
+                            "error",
+                        );
+                    }
+                }
+                UiMessage::ApplyGrubSettings => {
+                    let Some(request) = confirmation_session.confirm_grub_settings() else {
+                        show_toast(
+                            &ui_handle_async,
+                            "Applying GRUB settings requires a current confirmation preview."
+                                .to_string(),
+                            "error",
+                        );
+                        continue;
+                    };
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Applying typed GRUB settings...".to_string(),
+                    );
+                    match view_model
+                        .set_grub_settings(&request.settings, &request.etag)
+                        .await
+                    {
+                        Ok(()) => show_toast(
+                            &ui_handle_async,
+                            "Typed GRUB settings applied successfully.".to_string(),
+                            "success",
+                        ),
+                        Err(error) => show_toast(
+                            &ui_handle_async,
+                            format!(
+                                "GRUB settings were not changed: {}",
+                                bootcontrol_client::dbus_error_message(&error)
+                            ),
+                            "error",
+                        ),
+                    }
+                    set_loading(&ui_handle_async, false, String::new());
+                    let _ = tx_clone.send(UiMessage::FetchEntries).await;
+                    let _ = tx_clone.send(UiMessage::FetchGrubMenu).await;
+                    let _ = tx_clone.send(UiMessage::FetchGrubSettings).await;
                 }
                 UiMessage::PrepareRebuildConfirmation => {
                     let preview = confirmation_session.prepare_rebuild(
@@ -1059,6 +1214,39 @@ fn render_boot_entries(ui: &slint::Weak<AppWindow>, model: &BootEntriesModel) {
         ui.set_grub_menu_selected_index(selected);
         ui.set_grub_default_path(default_path.into());
         ui.set_grub_menu_pending_count(pending_count);
+    });
+}
+
+fn render_grub_settings(ui: &slint::Weak<AppWindow>, model: &GrubSettingsModel) {
+    let status = match model.status() {
+        GrubSettingsStatus::Idle => "idle",
+        GrubSettingsStatus::Loading => "loading",
+        GrubSettingsStatus::Ready => "ready",
+        GrubSettingsStatus::Error => "error",
+    };
+    let (timeout, timeout_style, detect_other_os, recovery_entries) =
+        if let Some(settings) = model.settings() {
+            (
+                i32::try_from(settings.timeout_seconds).unwrap_or(i32::MAX),
+                settings.timeout_style.clone(),
+                settings.detect_other_os,
+                settings.generate_recovery_entries,
+            )
+        } else {
+            (5, "menu".to_string(), true, true)
+        };
+    let etag = model.etag().to_string();
+    let error = model.error().to_string();
+    let pending_count = model.pending_count();
+    let _ = ui.upgrade_in_event_loop(move |ui| {
+        ui.set_grub_settings_status(status.into());
+        ui.set_grub_settings_error(error.into());
+        ui.set_grub_settings_etag(etag.into());
+        ui.set_grub_settings_timeout(timeout);
+        ui.set_grub_settings_timeout_style(timeout_style.into());
+        ui.set_grub_settings_detect_other_os(detect_other_os);
+        ui.set_grub_settings_recovery_entries(recovery_entries);
+        ui.set_grub_settings_pending_count(pending_count);
     });
 }
 

@@ -29,6 +29,7 @@ pub mod boot_manager;
 pub mod error;
 pub mod grub;
 pub mod grub_cfg;
+pub mod grub_settings;
 pub mod hash;
 pub mod immutable_distro;
 pub mod initramfs;

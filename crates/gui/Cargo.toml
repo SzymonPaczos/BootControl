@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 slint = "1.8"
 bootcontrol-client = { workspace = true }
+bootcontrol-core = { workspace = true }
 zbus = { workspace = true }
 tokio = { workspace = true }
 arboard = "3"

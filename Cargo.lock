@@ -765,6 +765,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "bootcontrol-client",
+ "bootcontrol-core",
  "nix 0.29.0",
  "rfd",
  "serde",

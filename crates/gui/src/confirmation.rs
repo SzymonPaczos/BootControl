@@ -1,6 +1,7 @@
 //! Confirmation state for destructive GUI operations.
 
 use crate::boot_entries::GrubDefaultRequest;
+use crate::grub_settings::GrubSettingsRequest;
 
 /// Source of the data displayed in a confirmation preview.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -59,6 +60,7 @@ pub struct ConfirmationPreview {
 pub struct ConfirmationSession {
     rebuild_armed: bool,
     grub_default: Option<GrubDefaultRequest>,
+    grub_settings: Option<GrubSettingsRequest>,
 }
 
 impl ConfirmationSession {
@@ -92,6 +94,7 @@ impl ConfirmationSession {
         };
         self.rebuild_armed = preview.can_confirm;
         self.grub_default = None;
+        self.grub_settings = None;
         preview
     }
 
@@ -122,6 +125,25 @@ impl ConfirmationSession {
         let preview = grub_default_preview(mode, &request);
         self.rebuild_armed = false;
         self.grub_default = preview.can_confirm.then_some(request);
+        self.grub_settings = None;
+        preview
+    }
+
+    /// Prepare the exact per-key diff for a typed GRUB settings request.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Whether data is live or explicitly simulated.
+    /// * `request` - Desired typed values, source ETag, and changed keys.
+    pub fn prepare_grub_settings(
+        &mut self,
+        mode: ConfirmationMode,
+        request: GrubSettingsRequest,
+    ) -> ConfirmationPreview {
+        let preview = grub_settings_preview(mode, &request);
+        self.rebuild_armed = false;
+        self.grub_default = None;
+        self.grub_settings = preview.can_confirm.then_some(request);
         preview
     }
 
@@ -157,6 +179,15 @@ impl ConfirmationSession {
         self.grub_default.take()
     }
 
+    /// Consume the exact typed settings request once.
+    ///
+    /// # Arguments
+    ///
+    /// This function takes no arguments.
+    pub fn confirm_grub_settings(&mut self) -> Option<GrubSettingsRequest> {
+        self.grub_settings.take()
+    }
+
     /// Cancel and disarm the currently prepared action.
     ///
     /// # Arguments
@@ -176,6 +207,75 @@ impl ConfirmationSession {
     pub fn cancel(&mut self) {
         self.rebuild_armed = false;
         self.grub_default = None;
+        self.grub_settings = None;
+    }
+}
+
+fn grub_settings_preview(
+    mode: ConfirmationMode,
+    request: &GrubSettingsRequest,
+) -> ConfirmationPreview {
+    let etag_ready = !request.etag.is_empty();
+    let changes_ready = !request.changes.is_empty();
+    let simulated = mode == ConfirmationMode::Demo;
+    let mut diff = vec![ConfirmationDiffLine {
+        side: "context".to_string(),
+        text: String::new(),
+        file_path: if simulated {
+            "DEMO /etc/default/grub".to_string()
+        } else {
+            "/etc/default/grub".to_string()
+        },
+    }];
+    for change in &request.changes {
+        diff.push(ConfirmationDiffLine {
+            side: "remove".to_string(),
+            text: format!("{}={}", change.key, change.previous),
+            file_path: String::new(),
+        });
+        diff.push(ConfirmationDiffLine {
+            side: "add".to_string(),
+            text: format!("{}={}", change.key, change.desired),
+            file_path: String::new(),
+        });
+    }
+    let suffix = if simulated { " (simulated)" } else { "" };
+
+    ConfirmationPreview {
+        verb_label: "Apply GRUB settings".to_string(),
+        target: if simulated {
+            format!(
+                "Demo Mode simulation: apply {} typed GRUB setting changes.",
+                request.changes.len()
+            )
+        } else {
+            format!(
+                "Apply {} typed changes to /etc/default/grub at ETag {}.",
+                request.changes.len(),
+                request.etag
+            )
+        },
+        required_text: String::new(),
+        command_cli: String::new(),
+        diff,
+        preflight: vec![
+            ConfirmationCheck {
+                name: "Source configuration version".to_string(),
+                passed: etag_ready,
+                detail: if etag_ready {
+                    format!("{}{}", request.etag, suffix)
+                } else {
+                    "unavailable; refresh typed settings".to_string()
+                },
+            },
+            ConfirmationCheck {
+                name: "Validated staged changes".to_string(),
+                passed: changes_ready,
+                detail: format!("{} changed keys{}", request.changes.len(), suffix),
+            },
+        ],
+        can_confirm: etag_ready && changes_ready,
+        snapshot_id: String::new(),
     }
 }
 

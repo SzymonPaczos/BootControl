@@ -1,4 +1,4 @@
-use bootcontrol_client::{BootBackend, LoaderEntryDto, SnapshotInfoDto};
+use bootcontrol_client::{BootBackend, GrubSettingsDto, LoaderEntryDto, SnapshotInfoDto};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -183,6 +183,38 @@ impl ViewModel {
         self.backend
             .set_grub_default(selected_path, menu_etag, config_etag)
             .await
+    }
+
+    /// Read supported typed GRUB settings and their source ETag.
+    ///
+    /// # Arguments
+    ///
+    /// This function takes no arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original D-Bus read or typed-parser error.
+    pub async fn read_grub_settings(&self) -> Result<(GrubSettingsDto, String), zbus::Error> {
+        self.backend.read_grub_settings().await
+    }
+
+    /// Atomically apply all supported typed GRUB settings.
+    ///
+    /// # Arguments
+    ///
+    /// * `settings` - Desired validated values.
+    /// * `etag` - Source ETag captured when editing began.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original authorization, validation, ETag, snapshot, write,
+    /// or rebuild D-Bus error.
+    pub async fn set_grub_settings(
+        &self,
+        settings: &GrubSettingsDto,
+        etag: &str,
+    ) -> Result<(), zbus::Error> {
+        self.backend.set_grub_settings(settings, etag).await
     }
 
     /// Back up EFI NVRAM variables. Returns JSON list of backed-up file paths.

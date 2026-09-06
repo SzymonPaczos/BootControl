@@ -1,6 +1,8 @@
 # Następna pętla backlogu — 2026-09-06
 
-**Status:** w realizacji. R1–R7 wykonane (`ee32148`, `e646425`, `4bef11f`, `fd334c0`, `bc87533`, `c2f19f9`, `6a92868`); bieżące zadanie: R8.
+**Status:** wykonane. R1–R8 zamknięte (`ee32148`, `e646425`, `4bef11f`,
+`fd334c0`, `bc87533`, `c2f19f9`, `6a92868`, `14b5e54`). Następny krok należy
+wybrać ponownie z aktualnego backlogu po synchronizacji z GitHubem.
 **Punkt startowy:** `main` = `origin/main` = `fd1f5f6`.
 **Polecenie właściciela:** realizować kolejne zadania backlogu w pętli;
 zweryfikowane wyniki przenosić do `history/completed-work.md`.
@@ -47,25 +49,21 @@ przedstaw dokładną przyczynę i kontynuuj niezależną pracę lokalną.
 | R5 ✅ | Boot Entries A1 — adapter klienta: DTO i ListGrubEntries w BootBackend/DbusBackend/MockBackend | Przechodzi odczyt rzeczywistego D-Bus: tytuł, ID, ścieżka submenu, depth, is_submenu i ETag menu. Niepoprawny JSON i błąd odczytu są błędami; Demo Mode ma zgodne dane | Wykonane w `bc87533` |
 | R6 ✅ | Boot Entries A1 — lista i Inspector w GUI | Widok pokazuje wpisy menu GRUB, poprawnie rozróżnia submenu; ma loading/empty/error/success, wybór i obsługę klawiatury. Sprawdzony obraz GUI i działanie na danych D-Bus oraz demo | Wykonane w `c2f19f9` |
 | R7 ✅ | Boot Entries A1 — staged wybór domyślnego wpisu GRUB i Apply/Cancel | Przed Apply nie ma zapisu; Cancel zachowuje pliki; podgląd i zatwierdzenie dotyczą wybranego wpisu; zmienione menu/config odrzucają zapis. Błędy Polkit/ETag są widoczne, sukces odświeża stan | Wykonane w `6a92868` |
-| R8 | Bootloader A2 — typowane ustawienia GRUB w miejscu placeholdera | Osobny mały krok dla kontraktu danych, potem kontrolki dla obsługiwanych pól: odczyt, walidacja, staged diff, Apply/Cancel i odświeżenie. Testy wartości niepoprawnych, komentarzy, odmowy Polkit i konfliktu ETag | Po A1; typed getters wymagają inwentaryzacji i testu kontraktu przed kodem |
+| R8 ✅ | Bootloader A2 — typowane ustawienia GRUB w miejscu placeholdera | Osobny mały krok dla kontraktu danych, potem kontrolki dla obsługiwanych pól: odczyt, walidacja, staged diff, Apply/Cancel i odświeżenie. Testy wartości niepoprawnych, komentarzy, odmowy Polkit i konfliktu ETag | Wykonane w `14b5e54`; surowa edycja, cmdline i inne backendy pozostają otwarte |
 
-R5/R6 mogą postępować, gdy R3/R4 wymagają dodatkowego rozstrzygnięcia; R7 nie
-omija swoich zależności. R8 pozostaje osobnym zakresem od A1. Po R8 ponownie
-wybierz priorytety z backlogu zamiast dopisywać funkcje do bieżącego PR.
+R1–R8 zostały wykonane jako osobne, testowane kroki. Po R8 priorytety są
+wybierane ponownie z backlogu zamiast dopisywania funkcji do zamkniętego PR.
 
-## Ustalenia potwierdzone przy planowaniu
+## Ustalenia po wykonaniu
 
-- `ViewModel::load()` w `crates/gui/src/view_model.rs` nadal zastępuje błąd
-  wykrywania backendu nazwą GRUB i błąd ETag pustą wartością. To osobna usterka
-  od wcześniej zamkniętego braku cichego MockBackend przy starcie.
-- `on_open_confirmation` w `crates/gui/src/main.rs` nadal wywołuje
-  `stub_snapshot_id`, `build_stub_diff`, `build_stub_preflight_passing` i ustawia
-  `confirmation_preflight_all_pass` na true bez rozróżnienia real/demo.
-- `ListGrubEntries` istnieje w daemonie; nie ma go w kliencie. Zwraca ETag
-  **grub.cfg**. `SetGrubValue` wymaga ETag **/etc/default/grub**: nie wolno ich
-  zamieniać ani uznawać indeksu starego menu za bezpieczny cel zapisu.
-- `BootloaderPage` nadal jest placeholderem; istniejący brief A1 nie stanowi
-  dowodu wdrożenia GUI ani typed getters.
+- Błędy odświeżania unieważniają stan zapisu; brak już cichego wyboru GRUB ani
+  pustego ETagu po awarii.
+- Confirmation Sheet używa aktualnego stanu, a dane symulowane są ograniczone
+  do jawnego Demo Mode.
+- Lista menu oraz ustawienie domyślnego wpisu zachowują osobne ETagi `grub.cfg`
+  i `/etc/default/grub`.
+- `BootloaderPage` udostępnia cztery typowane ustawienia GRUB z lokalnym
+  stagingiem i jednym atomowym zapisem po potwierdzeniu.
 - Późniejsza aktywna decyzja [GRUB-first](../rules/decisions.md) ogranicza
   starszy brief A1 przewidujący pełne systemd-boot. Nowe reorder/hide/delete
   systemd-boot/UKI, panel MOK i Windows pozostają po becie. Dla GRUB nie

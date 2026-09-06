@@ -9,6 +9,7 @@ import { Tokens } from "../tokens.slint";
 export component CheckBox inherits Rectangle {
     in-out property <bool> checked: false;
     in property <string> label;
+    callback toggled(bool);
 
     height: 28px;
 
@@ -56,6 +57,9 @@ export component CheckBox inherits Rectangle {
     }
 
     TouchArea {
-        clicked => { root.checked = !root.checked; }
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
     }
 }

@@ -1,39 +1,166 @@
-// crates/gui/ui/pages/bootloader.slint
-//
-// Placeholder. v2 spec §3.3 reshapes this into the home for typed GRUB
-// settings (Boot behaviour / Detection / Kernel command line / Display
-// cards) plus initramfs driver selection. PR 6 ships an empty shell; the
-// real controls land once daemon-side typed-getter D-Bus methods exist.
+// Typed GRUB settings with local staging (A2/R8).
 
+import { ScrollView } from "std-widgets.slint";
 import { Tokens } from "../tokens.slint";
 import { Card } from "../components/card.slint";
+import { CheckBox } from "../components/checkbox.slint";
+import { GhostButton } from "../components/ghost_button.slint";
+import { StyledInput } from "../components/styled_input.slint";
+import { ActionFooter } from "../components/action_footer.slint";
 
 export component BootloaderPage inherits Rectangle {
     in property <string> active-backend: "GRUB";
+    in property <string> status: "idle";
+    in property <string> error-message: "";
+    in property <string> config-etag: "";
+    in property <int> timeout-seconds: 5;
+    in property <string> timeout-style: "menu";
+    in property <bool> detect-other-os: true;
+    in property <bool> recovery-entries: true;
+    in property <int> pending-count: 0;
+    callback refresh();
+    callback timeout-edited(string);
+    callback timeout-style-selected(string);
+    callback detect-other-os-toggled(bool);
+    callback recovery-entries-toggled(bool);
+    callback discard();
+    callback apply();
 
     vertical-stretch: 1;
     background: Tokens.surface-container;
     border-radius: Tokens.radius-card;
+    border-width: 1px;
+    border-color: Tokens.hairline;
+    clip: true;
 
     VerticalLayout {
-        padding: Tokens.space-xl;
-        spacing: Tokens.space-lg;
-
-        Card {
-            title: "Coming in PR 7";
-            subtitle: "Typed bootloader settings — boot behaviour, detection, kernel command line, display, initramfs driver — replace the flat key=value table currently on Boot Entries.";
-
+        if root.status == "loading" : VerticalLayout {
+            alignment: center;
             Text {
-                text: "Active backend: " + root.active-backend;
-                color: Tokens.on-surface;
-                font-size: Tokens.font-body-medium;
+                text: "Loading typed GRUB settings…";
+                color: Tokens.on-surface-muted;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.status == "error" : VerticalLayout {
+            alignment: center;
+            spacing: Tokens.space-md;
+            Text {
+                text: "GRUB settings could not be loaded";
+                color: Tokens.error;
+                font-size: Tokens.font-title-large;
+                font-weight: Tokens.weight-strong;
+                horizontal-alignment: center;
             }
             Text {
-                text: "For now, edit settings on the Boot Entries page.";
+                width: 540px;
+                text: root.error-message;
                 color: Tokens.on-surface-muted;
-                font-size: Tokens.font-label-large;
+                horizontal-alignment: center;
                 wrap: word-wrap;
             }
+            HorizontalLayout {
+                alignment: center;
+                GhostButton { text: "Retry"; width: 120px; clicked => { root.refresh(); } }
+            }
+        }
+
+        if root.status == "idle" : VerticalLayout {
+            alignment: center;
+            Text { text: "Refresh to load typed GRUB settings."; color: Tokens.on-surface-muted; }
+        }
+
+        if root.status == "ready" : ScrollView {
+            VerticalLayout {
+                padding: Tokens.space-lg;
+                spacing: Tokens.space-md;
+                alignment: start;
+
+                HorizontalLayout {
+                    Text {
+                        text: "/etc/default/grub";
+                        color: Tokens.on-surface;
+                        font-size: Tokens.font-title-small;
+                        font-weight: Tokens.weight-strong;
+                        horizontal-stretch: 1;
+                    }
+                    Text {
+                        text: "ETag " + root.config-etag;
+                        color: Tokens.on-surface-faint;
+                        font-size: Tokens.font-meta;
+                        font-family: Tokens.font-family-mono;
+                    }
+                }
+
+                Card {
+                    title: "Boot behaviour";
+                    subtitle: "Changes remain local until Apply.";
+                    HorizontalLayout {
+                        spacing: Tokens.space-md;
+                        Text {
+                            width: 180px;
+                            text: "GRUB timeout (seconds)";
+                            color: Tokens.on-surface;
+                            vertical-alignment: center;
+                        }
+                        StyledInput {
+                            width: 180px;
+                            mono: true;
+                            text: "" + root.timeout-seconds;
+                            edited(value) => { root.timeout-edited(value); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: Tokens.space-sm;
+                        Text {
+                            width: 180px;
+                            text: "Menu style";
+                            color: Tokens.on-surface;
+                            vertical-alignment: center;
+                        }
+                        GhostButton {
+                            text: "Menu";
+                            width: 110px;
+                            enabled: root.timeout-style != "menu";
+                            clicked => { root.timeout-style-selected("menu"); }
+                        }
+                        GhostButton {
+                            text: "Countdown";
+                            width: 120px;
+                            enabled: root.timeout-style != "countdown";
+                            clicked => { root.timeout-style-selected("countdown"); }
+                        }
+                        GhostButton {
+                            text: "Hidden";
+                            width: 110px;
+                            enabled: root.timeout-style != "hidden";
+                            clicked => { root.timeout-style-selected("hidden"); }
+                        }
+                    }
+                }
+
+                Card {
+                    title: "Detection";
+                    subtitle: "Positive controls map to GRUB_DISABLE_* values in the file.";
+                    CheckBox {
+                        checked: root.detect-other-os;
+                        label: "Detect other operating systems (os-prober)";
+                        toggled(value) => { root.detect-other-os-toggled(value); }
+                    }
+                    CheckBox {
+                        checked: root.recovery-entries;
+                        label: "Generate recovery entries";
+                        toggled(value) => { root.recovery-entries-toggled(value); }
+                    }
+                }
+            }
+        }
+
+        ActionFooter {
+            pending-count: root.pending-count;
+            discard => { root.discard(); }
+            apply => { root.apply(); }
         }
     }
 }

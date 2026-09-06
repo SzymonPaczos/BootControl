@@ -194,6 +194,21 @@ fn assert_error<T: std::fmt::Debug>(result: zbus::Result<T>, variant: &str) {
     }
 }
 
+#[tokio::test]
+async fn read_grub_settings_returns_typed_defaults_and_source_etag() {
+    let f = Fixture::start(true).await;
+
+    let result: (u32, String, bool, bool, String) =
+        f.proxy().await.call("ReadGrubSettings", &()).await.unwrap();
+
+    assert_eq!(result.0, 5);
+    assert_eq!(result.1, "menu");
+    assert!(result.2);
+    assert!(result.3);
+    assert_eq!(result.4, f.etag());
+    assert!(f.auth.calls.lock().unwrap().is_empty());
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn grub_default_dbus_write_authorizes_snapshots_and_preserves_comments() {
     let f = Fixture::start(true).await;
@@ -395,6 +410,7 @@ async fn restore_valid_request_restores_captured_bytes() {
 enum Mutation {
     Grub,
     GrubDefault,
+    GrubSettings,
     Rebuild,
     Backup,
     Sign,
@@ -411,9 +427,12 @@ enum Mutation {
 impl Mutation {
     fn action(self) -> &'static str {
         match self {
-            Self::Grub | Self::GrubDefault | Self::Rebuild | Self::AddParam | Self::RemoveParam => {
-                actions::REWRITE_GRUB
-            }
+            Self::Grub
+            | Self::GrubDefault
+            | Self::GrubSettings
+            | Self::Rebuild
+            | Self::AddParam
+            | Self::RemoveParam => actions::REWRITE_GRUB,
             Self::Backup | Self::Sign => actions::ENROLL_MOK,
             Self::Restore => actions::RESTORE_SNAPSHOT,
             _ => actions::WRITE_BOOTLOADER,
@@ -431,6 +450,11 @@ impl Mutation {
             Self::GrubDefault => {
                 proxy
                     .call("SetGrubDefault", &("0", "menu-etag", etag))
+                    .await
+            }
+            Self::GrubSettings => {
+                proxy
+                    .call("SetGrubSettings", &(8u32, "menu", true, true, etag))
                     .await
             }
             Self::Rebuild => proxy.call("RebuildGrubConfig", &()).await,
@@ -502,6 +526,10 @@ write_boundary!(
     grub_default_authorization_precedes_host_and_file_io,
     GrubDefault
 );
+write_boundary!(
+    grub_settings_authorization_precedes_host_and_file_io,
+    GrubSettings
+);
 write_boundary!(rebuild_authorization_precedes_host_and_file_io, Rebuild);
 write_boundary!(nvram_backup_authorization_precedes_host_and_file_io, Backup);
 write_boundary!(mok_signing_authorization_precedes_host_and_file_io, Sign);
@@ -536,6 +564,7 @@ write_boundary!(
 async fn config_write_methods_reject_stale_etags_without_changing_targets() {
     for method in [
         Mutation::Grub,
+        Mutation::GrubSettings,
         Mutation::LoaderDefault,
         Mutation::Rename,
         Mutation::AddParam,

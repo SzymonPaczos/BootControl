@@ -1,5 +1,6 @@
 use bootcontrol_gui::boot_entries::GrubDefaultRequest;
 use bootcontrol_gui::confirmation::{ConfirmationMode, ConfirmationSession};
+use bootcontrol_gui::grub_settings::{GrubSettingChange, GrubSettingsRequest};
 
 fn default_request() -> GrubDefaultRequest {
     GrubDefaultRequest {
@@ -129,4 +130,45 @@ fn missing_default_version_blocks_apply_and_cancel_discards_request() {
     session.prepare_grub_default(ConfirmationMode::Live, default_request());
     session.cancel();
     assert_eq!(session.confirm_grub_default(), None);
+}
+
+#[test]
+fn typed_settings_preview_lists_each_changed_key_and_is_one_shot() {
+    let mut session = ConfirmationSession::default();
+    let request = GrubSettingsRequest {
+        settings: bootcontrol_client::GrubSettingsDto {
+            timeout_seconds: 12,
+            timeout_style: "hidden".into(),
+            detect_other_os: true,
+            generate_recovery_entries: true,
+        },
+        etag: "config-etag".into(),
+        changes: vec![
+            GrubSettingChange {
+                key: "GRUB_TIMEOUT".into(),
+                previous: "5".into(),
+                desired: "12".into(),
+            },
+            GrubSettingChange {
+                key: "GRUB_TIMEOUT_STYLE".into(),
+                previous: "menu".into(),
+                desired: "hidden".into(),
+            },
+        ],
+    };
+
+    let preview = session.prepare_grub_settings(ConfirmationMode::Live, request.clone());
+
+    assert!(preview.can_confirm);
+    assert_eq!(preview.verb_label, "Apply GRUB settings");
+    assert!(preview
+        .diff
+        .iter()
+        .any(|line| line.text == "GRUB_TIMEOUT=12"));
+    assert!(preview
+        .diff
+        .iter()
+        .any(|line| line.text == "GRUB_TIMEOUT_STYLE=hidden"));
+    assert_eq!(session.confirm_grub_settings(), Some(request));
+    assert_eq!(session.confirm_grub_settings(), None);
 }
