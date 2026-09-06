@@ -227,6 +227,14 @@ pub trait Manager {
     /// Set a GRUB value.
     async fn set_grub_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()>;
 
+    /// Select a GRUB menu path using both generated-menu and source-config ETags.
+    async fn set_grub_default(
+        &self,
+        selected_path: &str,
+        menu_etag: &str,
+        config_etag: &str,
+    ) -> zbus::Result<()>;
+
     /// Get the current ETag of `/etc/default/grub`.
     async fn get_etag(&self) -> zbus::Result<String>;
 
@@ -353,6 +361,14 @@ pub trait BootBackend: Send + Sync {
     /// Set a single GRUB configuration value.
     async fn set_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()>;
 
+    /// Select a GRUB menu path after checking both source versions.
+    async fn set_grub_default(
+        &self,
+        selected_path: &str,
+        menu_etag: &str,
+        config_etag: &str,
+    ) -> zbus::Result<()>;
+
     /// Return the name of the active backend (e.g., `"grub"`, `"systemd-boot"`).
     async fn get_active_backend(&self) -> zbus::Result<String>;
 
@@ -454,6 +470,18 @@ impl BootBackend for DbusBackend {
     async fn set_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.set_grub_value(key, value, etag).await
+    }
+
+    async fn set_grub_default(
+        &self,
+        selected_path: &str,
+        menu_etag: &str,
+        config_etag: &str,
+    ) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy
+            .set_grub_default(selected_path, menu_etag, config_etag)
+            .await
     }
 
     async fn get_active_backend(&self) -> zbus::Result<String> {
@@ -597,6 +625,15 @@ impl BootBackend for MockBackend {
     }
 
     async fn set_value(&self, _key: &str, _value: &str, _etag: &str) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn set_grub_default(
+        &self,
+        _selected_path: &str,
+        _menu_etag: &str,
+        _config_etag: &str,
+    ) -> zbus::Result<()> {
         Ok(())
     }
 

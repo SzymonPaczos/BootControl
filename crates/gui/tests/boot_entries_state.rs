@@ -91,3 +91,41 @@ fn reload_replaces_stale_menu_and_resets_selection() {
     assert_eq!(model.selected().unwrap().title, "New Linux");
     assert_eq!(model.etag(), "new-etag");
 }
+
+#[test]
+fn default_change_is_staged_with_both_versions_until_discarded() {
+    let mut model = BootEntriesModel::default();
+    model.finish_load(entries(), "menu-etag".into());
+    model.set_config_state("0".into(), "config-etag".into());
+    model.select(2);
+
+    assert!(model.stage_selected_as_default());
+    assert_eq!(model.pending_count(), 1);
+    assert_eq!(model.effective_default(), "1>0");
+    let request = model.pending_default_request().expect("staged request");
+    assert_eq!(request.previous_path, "0");
+    assert_eq!(request.selected_path, "1>0");
+    assert_eq!(request.menu_etag, "menu-etag");
+    assert_eq!(request.config_etag, "config-etag");
+
+    model.discard_default_change();
+    assert_eq!(model.pending_count(), 0);
+    assert_eq!(model.effective_default(), "0");
+}
+
+#[test]
+fn submenu_current_default_and_missing_versions_cannot_be_staged() {
+    let mut model = BootEntriesModel::default();
+    model.finish_load(entries(), "menu-etag".into());
+    model.set_config_state("0".into(), "config-etag".into());
+
+    model.select(1);
+    assert!(!model.stage_selected_as_default());
+    model.select(0);
+    assert!(!model.stage_selected_as_default());
+
+    model.set_config_state("2".into(), String::new());
+    model.select(2);
+    assert!(!model.stage_selected_as_default());
+    assert_eq!(model.pending_count(), 0);
+}

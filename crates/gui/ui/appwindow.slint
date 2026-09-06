@@ -118,6 +118,8 @@ export component AppWindow inherits Window {
     in property <string> grub_menu_error: "";
     in property <string> grub_menu_etag: "";
     in property <int> grub_menu_selected_index: -1;
+    in property <string> grub_default_path: "";
+    in property <int> grub_menu_pending_count: 0;
     in property <string> toast_message: "";
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
@@ -177,6 +179,9 @@ export component AppWindow inherits Window {
     callback fetch_grub_menu();
     callback select_grub_menu_entry(int);
     callback move_grub_menu_selection(int);
+    callback stage_grub_default();
+    callback discard_grub_default();
+    callback apply_grub_default();
     callback save_entry(string, string);
     callback dismiss_toast();
     callback rebuild_grub();
@@ -314,9 +319,14 @@ export component AppWindow inherits Window {
                     error-message: root.grub_menu_error;
                     menu-etag: root.grub_menu_etag;
                     selected-index: root.grub_menu_selected_index;
+                    default-path: root.grub_default_path;
+                    pending-count: root.grub_menu_pending_count;
                     refresh => { root.fetch_grub_menu(); }
                     select-entry(index) => { root.select_grub_menu_entry(index); }
                     move-selection(delta) => { root.move_grub_menu_selection(delta); }
+                    stage-default => { root.stage_grub_default(); }
+                    discard => { root.discard_grub_default(); }
+                    apply => { root.apply_grub_default(); }
                 }
 
                 if root.active_tab == 2 : BootloaderPage {

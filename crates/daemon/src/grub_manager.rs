@@ -238,9 +238,128 @@ pub fn set_grub_value(
     })
 }
 
+/// Select a generated GRUB menu entry as the next persistent default.
+///
+/// The configuration ETag is checked under the `/etc/default/grub` lock.
+/// Before any write, the function also checks the current generated menu ETag
+/// and verifies that `selected_path` still names a bootable `menuentry` rather
+/// than a submenu. The generated `grub.cfg` is read for validation only and is
+/// never edited directly.
+///
+/// # Arguments
+///
+/// * `config_path` - Path to `/etc/default/grub`.
+/// * `menu_path` - Path to generated `grub.cfg`.
+/// * `selected_path` - `GRUB_DEFAULT`-compatible path returned by the menu list.
+/// * `menu_etag` - ETag returned with the menu list.
+/// * `config_etag` - ETag returned with the default configuration.
+/// * `failsafe_cfg` - Path to the BootControl failsafe snippet.
+///
+/// # Errors
+///
+/// Returns [`BootControlError::StateMismatch`] when either supplied ETag is
+/// stale, [`BootControlError::MalformedValue`] when the path is missing or
+/// identifies a submenu, and the same I/O, parser, locking, failsafe, or
+/// rebuild errors as [`set_grub_value`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use bootcontrold::grub_manager::{list_menu_entries, read_grub_config, set_grub_default};
+/// use std::path::Path;
+///
+/// let config = Path::new("/etc/default/grub");
+/// let menu = Path::new("/boot/grub/grub.cfg");
+/// let (_, config_etag) = read_grub_config(config).unwrap();
+/// let (_, menu_etag) = list_menu_entries(menu).unwrap();
+/// set_grub_default(
+///     config,
+///     menu,
+///     "1>0",
+///     &menu_etag,
+///     &config_etag,
+///     Path::new("/etc/bootcontrol/failsafe.cfg"),
+/// )
+/// .unwrap();
+/// ```
+pub fn set_grub_default(
+    config_path: &Path,
+    menu_path: &Path,
+    selected_path: &str,
+    menu_etag: &str,
+    config_etag: &str,
+    failsafe_cfg: &Path,
+) -> Result<(), BootControlError> {
+    set_grub_default_with_prewrite(
+        config_path,
+        menu_path,
+        selected_path,
+        menu_etag,
+        config_etag,
+        failsafe_cfg,
+        |_| Ok(()),
+    )
+}
+
 pub(crate) struct LockedGrubState<'a> {
     pub(crate) bytes: &'a [u8],
     pub(crate) mode: String,
+}
+
+pub(crate) fn set_grub_default_with_prewrite(
+    config_path: &Path,
+    menu_path: &Path,
+    selected_path: &str,
+    menu_etag: &str,
+    config_etag: &str,
+    failsafe_cfg: &Path,
+    prewrite: impl FnOnce(&LockedGrubState<'_>) -> Result<(), BootControlError>,
+) -> Result<(), BootControlError> {
+    set_grub_value_with_prewrite(
+        config_path,
+        "GRUB_DEFAULT",
+        selected_path,
+        config_etag,
+        failsafe_cfg,
+        menu_path,
+        |locked| {
+            validate_menu_selection(menu_path, selected_path, menu_etag)?;
+            prewrite(locked)
+        },
+    )
+}
+
+fn validate_menu_selection(
+    menu_path: &Path,
+    selected_path: &str,
+    menu_etag: &str,
+) -> Result<(), BootControlError> {
+    let content = fs::read_to_string(menu_path).map_err(|error| {
+        error!(?menu_path, io_error = %error, "failed to read generated GRUB menu");
+        BootControlError::EspScanFailed {
+            reason: error.to_string(),
+        }
+    })?;
+    let actual = compute_etag_str(&content);
+    if actual != menu_etag {
+        return Err(BootControlError::StateMismatch {
+            expected: menu_etag.to_string(),
+            actual,
+        });
+    }
+
+    let entries = parse_menu_entries(&content)?;
+    match entries.iter().find(|entry| entry.path == selected_path) {
+        Some(entry) if !entry.is_submenu => Ok(()),
+        Some(_) => Err(BootControlError::MalformedValue {
+            key: "GRUB_DEFAULT".to_string(),
+            reason: format!("menu path {selected_path} identifies a submenu"),
+        }),
+        None => Err(BootControlError::MalformedValue {
+            key: "GRUB_DEFAULT".to_string(),
+            reason: format!("menu path {selected_path} does not exist"),
+        }),
+    }
 }
 
 pub(crate) fn set_grub_value_with_prewrite(

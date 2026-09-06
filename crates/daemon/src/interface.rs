@@ -805,6 +805,165 @@ impl GrubManager {
         result
     }
 
+    /// Set `GRUB_DEFAULT` to a path returned by `ListGrubEntries`.
+    ///
+    /// Both source versions are mandatory: `menu_etag` protects the meaning
+    /// of the selected generated-menu path, while `config_etag` protects the
+    /// file that is actually rewritten. Authorization precedes all disk I/O.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// SetGrubDefault(s, s, s) -> ()
+    /// ```
+    ///
+    /// ## Arguments
+    ///
+    /// - `selected_path` — `GRUB_DEFAULT`-compatible path from the current menu.
+    /// - `menu_etag` — ETag returned by `ListGrubEntries`.
+    /// - `config_etag` — ETag returned by `ReadGrubConfig`.
+    ///
+    /// ## Errors
+    ///
+    /// Returns the same authorization, host, snapshot, locking, I/O and rebuild
+    /// errors as `SetGrubValue`. It returns `StateMismatch` when either ETag is
+    /// stale and `MalformedValue` when the path is absent or names a submenu.
+    async fn set_grub_default(
+        &self,
+        selected_path: String,
+        menu_etag: String,
+        config_etag: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
+        info!(selected_path = %selected_path, "D-Bus: SetGrubDefault");
+
+        let caller_uid: u32 = {
+            let sender = header
+                .sender()
+                .ok_or_else(|| {
+                    warn!("SetGrubDefault message has no sender field");
+                    DaemonError::PolkitDenied("missing sender in D-Bus message".to_string())
+                })?
+                .clone();
+            let dbus_proxy = zbus::fdo::DBusProxy::new(connection)
+                .await
+                .map_err(|error| {
+                    warn!(%error, "failed to create D-Bus proxy for SetGrubDefault");
+                    DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {error}"))
+                })?;
+            dbus_proxy
+                .get_connection_unix_user(sender.into())
+                .await
+                .map_err(|error| {
+                    warn!(%error, "GetConnectionUnixUser failed for SetGrubDefault");
+                    DaemonError::PolkitDenied(format!("failed to resolve caller UID: {error}"))
+                })?
+        };
+
+        self.authorize(
+            &resolve_bus_name(&header, "SetGrubDefault")?,
+            actions::REWRITE_GRUB,
+        )
+        .await
+        .map_err(to_daemon_error)?;
+        self.require_writable_host().map_err(to_daemon_error)?;
+        sanitize::check_payload("GRUB_DEFAULT", &selected_path).map_err(to_daemon_error)?;
+
+        let job_id = new_job_id();
+        let target_paths = vec![self.grub_path.display().to_string()];
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_default",
+            phase: Phase::Started,
+            target_paths: target_paths.clone(),
+            etag_before: Some(config_etag.clone()),
+            etag_after: None,
+            snapshot_id: None,
+            exit_code: None,
+            caller_uid,
+            polkit_action: "org.bootcontrol.rewrite-grub",
+            job_id: job_id.clone(),
+            stderr_tail: String::new(),
+        });
+
+        let files = [self.grub_path.clone()];
+        let mut snapshot_id = None;
+        let result = grub_manager::set_grub_default_with_prewrite(
+            &self.grub_path,
+            &self.grub_cfg_path,
+            &selected_path,
+            &menu_etag,
+            &config_etag,
+            &self.failsafe_cfg_path,
+            |locked| {
+                let captured = [snapshot::CapturedFile {
+                    path: self.grub_path.clone(),
+                    bytes: locked.bytes.to_vec(),
+                    mode: locked.mode.clone(),
+                }];
+                let snap_info = snapshot::create_with_captured_files(
+                    snapshot::SnapshotRequest {
+                        root: &self.snapshot_root,
+                        op: "set_grub_default",
+                        polkit_action: "org.bootcontrol.rewrite-grub",
+                        caller_uid,
+                        etag_before: &config_etag,
+                        files: &files,
+                        audit_job_id: &job_id,
+                    },
+                    &captured,
+                )
+                .map_err(|error| {
+                    bootcontrol_core::error::BootControlError::EspScanFailed {
+                        reason: format!("snapshot failed: {error}"),
+                    }
+                })?;
+                snapshot_id = Some(snap_info.id.clone());
+                audit::emit(&AuditEvent {
+                    message_id: message_ids::SET_GRUB_VALUE,
+                    operation: "set_grub_default",
+                    phase: Phase::SnapshotTaken,
+                    target_paths: target_paths.clone(),
+                    etag_before: Some(config_etag.clone()),
+                    etag_after: None,
+                    snapshot_id: Some(snap_info.id),
+                    exit_code: None,
+                    caller_uid,
+                    polkit_action: "org.bootcontrol.rewrite-grub",
+                    job_id: job_id.clone(),
+                    stderr_tail: String::new(),
+                });
+                Ok(())
+            },
+        )
+        .map_err(to_daemon_error);
+
+        let exit_code = if result.is_ok() { 0 } else { 1 };
+        let stderr_tail = result
+            .as_ref()
+            .err()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_default",
+            phase: Phase::Completed,
+            target_paths,
+            etag_before: Some(config_etag),
+            etag_after: None,
+            snapshot_id,
+            exit_code: Some(exit_code),
+            caller_uid,
+            polkit_action: "org.bootcontrol.rewrite-grub",
+            job_id,
+            stderr_tail,
+        });
+
+        result
+    }
+
     /// Return the SHA-256 ETag of the current on-disk GRUB configuration.
     ///
     /// Used by clients to refresh their ETag after an external change without

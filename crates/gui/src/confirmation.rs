@@ -1,5 +1,7 @@
 //! Confirmation state for destructive GUI operations.
 
+use crate::boot_entries::GrubDefaultRequest;
+
 /// Source of the data displayed in a confirmation preview.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfirmationMode {
@@ -56,6 +58,7 @@ pub struct ConfirmationPreview {
 #[derive(Debug, Default)]
 pub struct ConfirmationSession {
     rebuild_armed: bool,
+    grub_default: Option<GrubDefaultRequest>,
 }
 
 impl ConfirmationSession {
@@ -88,6 +91,37 @@ impl ConfirmationSession {
             ConfirmationMode::Demo => demo_rebuild_preview(),
         };
         self.rebuild_armed = preview.can_confirm;
+        self.grub_default = None;
+        preview
+    }
+
+    /// Prepare a concrete `GRUB_DEFAULT` diff and arm its versioned request.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Whether the preview is live or explicitly simulated.
+    /// * `request` - Staged paths and both optimistic-lock versions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bootcontrol_gui::boot_entries::GrubDefaultRequest;
+    /// use bootcontrol_gui::confirmation::{ConfirmationMode, ConfirmationSession};
+    /// let mut session = ConfirmationSession::default();
+    /// let preview = session.prepare_grub_default(ConfirmationMode::Live, GrubDefaultRequest {
+    ///     previous_path: "0".into(), selected_path: "1>0".into(),
+    ///     menu_etag: "menu-etag".into(), config_etag: "config-etag".into(),
+    /// });
+    /// assert!(preview.can_confirm);
+    /// ```
+    pub fn prepare_grub_default(
+        &mut self,
+        mode: ConfirmationMode,
+        request: GrubDefaultRequest,
+    ) -> ConfirmationPreview {
+        let preview = grub_default_preview(mode, &request);
+        self.rebuild_armed = false;
+        self.grub_default = preview.can_confirm.then_some(request);
         preview
     }
 
@@ -114,6 +148,15 @@ impl ConfirmationSession {
         std::mem::take(&mut self.rebuild_armed)
     }
 
+    /// Consume the exact versioned default-selection request once.
+    ///
+    /// # Arguments
+    ///
+    /// This function takes no arguments.
+    pub fn confirm_grub_default(&mut self) -> Option<GrubDefaultRequest> {
+        self.grub_default.take()
+    }
+
     /// Cancel and disarm the currently prepared action.
     ///
     /// # Arguments
@@ -132,6 +175,93 @@ impl ConfirmationSession {
     /// ```
     pub fn cancel(&mut self) {
         self.rebuild_armed = false;
+        self.grub_default = None;
+    }
+}
+
+fn grub_default_preview(
+    mode: ConfirmationMode,
+    request: &GrubDefaultRequest,
+) -> ConfirmationPreview {
+    let menu_ready = !request.menu_etag.is_empty();
+    let config_ready = !request.config_etag.is_empty();
+    let change_ready = !request.previous_path.is_empty()
+        && !request.selected_path.is_empty()
+        && request.previous_path != request.selected_path;
+    let simulated = mode == ConfirmationMode::Demo;
+    let file_path = if simulated {
+        "DEMO /etc/default/grub"
+    } else {
+        "/etc/default/grub"
+    };
+    let detail_suffix = if simulated { " (simulated)" } else { "" };
+
+    ConfirmationPreview {
+        verb_label: "Set default entry".to_string(),
+        target: if simulated {
+            format!(
+                "Demo Mode simulation: set GRUB_DEFAULT from {} to {}.",
+                request.previous_path, request.selected_path
+            )
+        } else {
+            format!(
+                "Change GRUB_DEFAULT in /etc/default/grub from {} to {}; bootcontrold will verify both source versions before writing.",
+                request.previous_path, request.selected_path
+            )
+        },
+        required_text: String::new(),
+        command_cli: String::new(),
+        diff: vec![
+            ConfirmationDiffLine {
+                side: "context".to_string(),
+                text: String::new(),
+                file_path: file_path.to_string(),
+            },
+            ConfirmationDiffLine {
+                side: "remove".to_string(),
+                text: format!("GRUB_DEFAULT={}", request.previous_path),
+                file_path: String::new(),
+            },
+            ConfirmationDiffLine {
+                side: "add".to_string(),
+                text: format!("GRUB_DEFAULT={}", request.selected_path),
+                file_path: String::new(),
+            },
+        ],
+        preflight: vec![
+            ConfirmationCheck {
+                name: "Generated menu version".to_string(),
+                passed: menu_ready,
+                detail: if menu_ready {
+                    format!("{}{}", request.menu_etag, detail_suffix)
+                } else {
+                    "unavailable; refresh the GRUB menu".to_string()
+                },
+            },
+            ConfirmationCheck {
+                name: "Source configuration version".to_string(),
+                passed: config_ready,
+                detail: if config_ready {
+                    format!("{}{}", request.config_etag, detail_suffix)
+                } else {
+                    "unavailable; refresh the source configuration".to_string()
+                },
+            },
+            ConfirmationCheck {
+                name: "Staged selection".to_string(),
+                passed: change_ready,
+                detail: if change_ready {
+                    format!(
+                        "{} → {}{}",
+                        request.previous_path, request.selected_path, detail_suffix
+                    )
+                } else {
+                    "no distinct bootable entry is staged".to_string()
+                },
+            },
+        ],
+        can_confirm: menu_ready && config_ready && change_ready,
+        snapshot_id: String::new(),
     }
 }
 

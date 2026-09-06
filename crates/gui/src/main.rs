@@ -19,6 +19,10 @@ enum UiMessage {
     FetchGrubMenu,
     SelectGrubMenuEntry(usize),
     MoveGrubMenuSelection(isize),
+    StageGrubDefault,
+    DiscardGrubDefault,
+    PrepareGrubDefaultConfirmation,
+    ApplyGrubDefault,
     SaveEntry(String, String),
     PrepareRebuildConfirmation,
     CancelConfirmation,
@@ -27,6 +31,10 @@ enum UiMessage {
     EnrollMok,
     FetchSnapshots,
     RestoreSnapshot(String),
+}
+
+fn queue_ui_message(tx: &mpsc::Sender<UiMessage>, message: UiMessage) -> bool {
+    tx.try_send(message).is_ok()
 }
 
 /// Suppress the AccessKit-driven `zbus::Connection::Builder::build` panic
@@ -121,15 +129,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_fetch_entries({
         let tx = tx.clone();
         move || {
-            let _ = tx.blocking_send(UiMessage::FetchEntries);
-            let _ = tx.blocking_send(UiMessage::FetchGrubMenu);
+            let _ = queue_ui_message(&tx, UiMessage::FetchEntries);
+            let _ = queue_ui_message(&tx, UiMessage::FetchGrubMenu);
         }
     });
 
     ui.on_fetch_grub_menu({
         let tx = tx.clone();
         move || {
-            let _ = tx.blocking_send(UiMessage::FetchGrubMenu);
+            let _ = queue_ui_message(&tx, UiMessage::FetchGrubMenu);
         }
     });
 
@@ -137,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tx = tx.clone();
         move |index| {
             if let Ok(index) = usize::try_from(index) {
-                let _ = tx.blocking_send(UiMessage::SelectGrubMenuEntry(index));
+                let _ = queue_ui_message(&tx, UiMessage::SelectGrubMenuEntry(index));
             }
         }
     });
@@ -145,35 +153,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_move_grub_menu_selection({
         let tx = tx.clone();
         move |delta| {
-            let _ = tx.blocking_send(UiMessage::MoveGrubMenuSelection(delta as isize));
+            let _ = queue_ui_message(&tx, UiMessage::MoveGrubMenuSelection(delta as isize));
+        }
+    });
+
+    ui.on_stage_grub_default({
+        let tx = tx.clone();
+        move || {
+            let _ = queue_ui_message(&tx, UiMessage::StageGrubDefault);
+        }
+    });
+
+    ui.on_discard_grub_default({
+        let tx = tx.clone();
+        move || {
+            let _ = queue_ui_message(&tx, UiMessage::DiscardGrubDefault);
+        }
+    });
+
+    ui.on_apply_grub_default({
+        let tx = tx.clone();
+        move || {
+            let _ = queue_ui_message(&tx, UiMessage::PrepareGrubDefaultConfirmation);
         }
     });
 
     ui.on_save_entry({
         let tx = tx.clone();
         move |key, value| {
-            let _ = tx.blocking_send(UiMessage::SaveEntry(key.to_string(), value.to_string()));
+            let _ = queue_ui_message(
+                &tx,
+                UiMessage::SaveEntry(key.to_string(), value.to_string()),
+            );
         }
     });
 
     ui.on_rebuild_grub({
         let tx = tx.clone();
         move || {
-            let _ = tx.blocking_send(UiMessage::RebuildGrub);
+            let _ = queue_ui_message(&tx, UiMessage::RebuildGrub);
         }
     });
 
     ui.on_backup_nvram({
         let tx = tx.clone();
         move || {
-            let _ = tx.blocking_send(UiMessage::BackupNvram);
+            let _ = queue_ui_message(&tx, UiMessage::BackupNvram);
         }
     });
 
     ui.on_enroll_mok({
         let tx = tx.clone();
         move || {
-            let _ = tx.blocking_send(UiMessage::EnrollMok);
+            let _ = queue_ui_message(&tx, UiMessage::EnrollMok);
         }
     });
 
@@ -191,7 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tx = tx.clone();
         move |verb: slint::SharedString| {
             if verb.as_str() == "rewrite-grub" {
-                let _ = tx.blocking_send(UiMessage::PrepareRebuildConfirmation);
+                let _ = queue_ui_message(&tx, UiMessage::PrepareRebuildConfirmation);
             } else {
                 eprintln!("[gui] open_confirmation: unhandled verb {:?}", verb);
             }
@@ -201,7 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_confirmation_cancelled({
         let tx = tx.clone();
         move || {
-            let _ = tx.blocking_send(UiMessage::CancelConfirmation);
+            let _ = queue_ui_message(&tx, UiMessage::CancelConfirmation);
         }
     });
 
@@ -222,10 +254,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_default();
             match verb.as_str() {
                 "Rewrite GRUB" => {
-                    let _ = tx.blocking_send(UiMessage::RebuildGrub);
+                    let _ = queue_ui_message(&tx, UiMessage::RebuildGrub);
                 }
                 "Restore Snapshot" => {
-                    let _ = tx.blocking_send(UiMessage::RestoreSnapshot(snapshot_id));
+                    let _ = queue_ui_message(&tx, UiMessage::RestoreSnapshot(snapshot_id));
+                }
+                "Set default entry" => {
+                    let _ = queue_ui_message(&tx, UiMessage::ApplyGrubDefault);
                 }
                 other => {
                     eprintln!("[gui] confirmation_confirmed: unhandled verb {:?}", other);
@@ -476,12 +511,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match msg {
                 UiMessage::FetchEntries => {
                     confirmation_session.cancel();
+                    boot_entries.set_config_state(String::new(), String::new());
+                    render_boot_entries(&ui_handle_async, &boot_entries);
                     let _ = ui_handle_async.upgrade_in_event_loop(|ui| {
                         ui.set_show_confirmation(false);
                         ui.set_confirmation_typed_text("".into());
                     });
                     match view_model.load().await {
                         Ok(_) => {
+                            let default_path = view_model
+                                .entries
+                                .get("GRUB_DEFAULT")
+                                .cloned()
+                                .unwrap_or_default();
+                            boot_entries.set_config_state(default_path, view_model.etag.clone());
+                            render_boot_entries(&ui_handle_async, &boot_entries);
                             let mut entries: Vec<GrubEntry> = view_model
                                 .entries
                                 .iter()
@@ -551,6 +595,80 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 UiMessage::MoveGrubMenuSelection(delta) => {
                     boot_entries.move_selection(delta);
                     render_boot_entries(&ui_handle_async, &boot_entries);
+                }
+                UiMessage::StageGrubDefault => {
+                    if !boot_entries.stage_selected_as_default() {
+                        show_toast(
+                            &ui_handle_async,
+                            "Select a non-default boot entry; submenus cannot be defaults."
+                                .to_string(),
+                            "error",
+                        );
+                    }
+                    render_boot_entries(&ui_handle_async, &boot_entries);
+                }
+                UiMessage::DiscardGrubDefault => {
+                    boot_entries.discard_default_change();
+                    render_boot_entries(&ui_handle_async, &boot_entries);
+                }
+                UiMessage::PrepareGrubDefaultConfirmation => {
+                    if let Some(request) = boot_entries.pending_default_request() {
+                        let preview =
+                            confirmation_session.prepare_grub_default(confirmation_mode, request);
+                        show_confirmation_preview(&ui_handle_async, preview);
+                    } else {
+                        show_toast(
+                            &ui_handle_async,
+                            "No current default-entry change is staged.".to_string(),
+                            "error",
+                        );
+                    }
+                }
+                UiMessage::ApplyGrubDefault => {
+                    let Some(request) = confirmation_session.confirm_grub_default() else {
+                        show_toast(
+                            &ui_handle_async,
+                            "Setting the default requires a current confirmation preview."
+                                .to_string(),
+                            "error",
+                        );
+                        continue;
+                    };
+                    set_loading(
+                        &ui_handle_async,
+                        true,
+                        "Setting the default GRUB entry...".to_string(),
+                    );
+                    match view_model
+                        .set_grub_default(
+                            &request.selected_path,
+                            &request.menu_etag,
+                            &request.config_etag,
+                        )
+                        .await
+                    {
+                        Ok(()) => {
+                            set_loading(&ui_handle_async, false, String::new());
+                            show_toast(
+                                &ui_handle_async,
+                                "Default GRUB entry updated successfully.".to_string(),
+                                "success",
+                            );
+                        }
+                        Err(error) => {
+                            set_loading(&ui_handle_async, false, String::new());
+                            show_toast(
+                                &ui_handle_async,
+                                format!(
+                                    "Default entry was not changed: {}",
+                                    bootcontrol_client::dbus_error_message(&error)
+                                ),
+                                "error",
+                            );
+                        }
+                    }
+                    let _ = tx_clone.send(UiMessage::FetchEntries).await;
+                    let _ = tx_clone.send(UiMessage::FetchGrubMenu).await;
                 }
                 UiMessage::PrepareRebuildConfirmation => {
                     let preview = confirmation_session.prepare_rebuild(
@@ -931,12 +1049,16 @@ fn render_boot_entries(ui: &slint::Weak<AppWindow>, model: &BootEntriesModel) {
     let etag = model.etag().to_string();
     let error = model.error().to_string();
     let selected = model.selected_index();
+    let default_path = model.effective_default().to_string();
+    let pending_count = model.pending_count();
     let _ = ui.upgrade_in_event_loop(move |ui| {
         ui.set_grub_menu_entries(slint::ModelRc::new(slint::VecModel::from(entries)));
         ui.set_grub_menu_status(status.into());
         ui.set_grub_menu_error(error.into());
         ui.set_grub_menu_etag(etag.into());
         ui.set_grub_menu_selected_index(selected);
+        ui.set_grub_default_path(default_path.into());
+        ui.set_grub_menu_pending_count(pending_count);
     });
 }
 
@@ -1097,5 +1219,13 @@ mod startup_tests {
         assert!(!ui.get_backend_error().is_empty());
         ui.set_demo_mode(true);
         assert!(ui.get_demo_mode());
+    }
+
+    #[tokio::test]
+    async fn ui_callbacks_can_enqueue_from_inside_the_runtime_thread() {
+        let (tx, mut rx) = mpsc::channel(1);
+
+        assert!(queue_ui_message(&tx, UiMessage::StageGrubDefault));
+        assert!(matches!(rx.recv().await, Some(UiMessage::StageGrubDefault)));
     }
 }

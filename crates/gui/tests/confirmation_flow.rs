@@ -1,4 +1,14 @@
+use bootcontrol_gui::boot_entries::GrubDefaultRequest;
 use bootcontrol_gui::confirmation::{ConfirmationMode, ConfirmationSession};
+
+fn default_request() -> GrubDefaultRequest {
+    GrubDefaultRequest {
+        previous_path: "0".into(),
+        selected_path: "1>0".into(),
+        menu_etag: "menu-etag".into(),
+        config_etag: "config-etag".into(),
+    }
+}
 
 #[test]
 fn live_rebuild_uses_loaded_backend_and_etag_without_invented_artifacts() {
@@ -81,4 +91,42 @@ fn cancel_and_confirm_each_consume_the_pending_action() {
     }
 
     assert_eq!(backend_calls, 1);
+}
+
+#[test]
+fn default_preview_contains_real_diff_and_consumes_exact_request_once() {
+    let mut session = ConfirmationSession::default();
+    let request = default_request();
+
+    let preview = session.prepare_grub_default(ConfirmationMode::Live, request.clone());
+
+    assert!(preview.can_confirm);
+    assert_eq!(preview.verb_label, "Set default entry");
+    assert!(preview
+        .diff
+        .iter()
+        .any(|line| { line.side == "remove" && line.text == "GRUB_DEFAULT=0" }));
+    assert!(preview
+        .diff
+        .iter()
+        .any(|line| { line.side == "add" && line.text == "GRUB_DEFAULT=1>0" }));
+    assert!(preview.preflight.iter().all(|check| check.passed));
+    assert_eq!(session.confirm_grub_default(), Some(request));
+    assert_eq!(session.confirm_grub_default(), None);
+}
+
+#[test]
+fn missing_default_version_blocks_apply_and_cancel_discards_request() {
+    let mut session = ConfirmationSession::default();
+    let mut invalid = default_request();
+    invalid.menu_etag.clear();
+
+    let preview = session.prepare_grub_default(ConfirmationMode::Live, invalid);
+
+    assert!(!preview.can_confirm);
+    assert_eq!(session.confirm_grub_default(), None);
+
+    session.prepare_grub_default(ConfirmationMode::Live, default_request());
+    session.cancel();
+    assert_eq!(session.confirm_grub_default(), None);
 }

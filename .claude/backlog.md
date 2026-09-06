@@ -59,13 +59,14 @@ Confirmation Sheet. Pozostaje wybór UKI i protokół potwierdzania.
 Parser `grub.cfg`, `ListGrubEntries` i adapter klienta są już scalone
 (`cf7ddaf`, `34668c3`, `bc87533`), podobnie warstwa wizualna Stacja (`c5fb3f3`).
 Lista GRUB i Inspector z pełnymi stanami odczytu są podłączone do GUI (`c2f19f9`).
-W A1 pozostaje staged wybór domyślnego wpisu z Apply/Cancel; Bootloader nadal jest
-placeholderem. Settings ma nowy układ, lecz wartości nadal prezentuje
+A1 ma też staged wybór domyślnego wpisu z Apply/Discard, dwoma ETagami i
+Confirmation Sheet (`6a92868`). Bootloader nadal jest placeholderem. Settings ma
+nowy układ, lecz wartości nadal prezentuje
 statycznym tekstem i wymaga kontrolek edycji. Zatwierdzona kolejność: A1 Boot Entries → A2
 Bootloader → A3 szybkie poprawki. Briefy:
 [`gui-v2-boot-entries.md`](task-briefs/gui-v2-boot-entries.md) i
 [`gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
-**Źródło:** audyt UX i decyzja 2026-07-12. **Status:** zatwierdzone.
+**Źródło:** audyt UX i decyzja 2026-07-12. **Status:** A1 wykonane; A2/A3 otwarte.
 
 ### Raport „Boot environment"
 

@@ -13,6 +13,21 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R7: staged wybór domyślnego wpisu GRUB
+
+Boot Entries pozwala wskazać bootowalny wpis, odrzucić zmianę lub zobaczyć
+konkretny diff `GRUB_DEFAULT` przed Apply. Dedykowane `SetGrubDefault` sprawdza
+pod lockiem osobne ETagi `grub.cfg` i `/etc/default/grub`, ponownie waliduje
+ścieżkę menu, tworzy snapshot zablokowanych bajtów i dopiero wtedy zapisuje
+oraz przebudowuje GRUB. Submenu, brak ścieżki, oba konflikty ETag, odmowa
+Polkit i błąd snapshotu kończą się bez zapisu. Naprawiono też panic wszystkich
+interaktywnych callbacków Slint przez nieblokującą kolejkę. Implementacja:
+`6a92868`; brief: `task-briefs/grub-default-staged-selection-r7.md`.
+Daemon: 296 testów i doctestów PASS; klient: 34; GUI: 35, z 3 istniejącymi
+smoke testami ignored; pełny Clippy czysty. Przepływ Demo Mode od wyboru przez
+Confirmation Sheet do odświeżenia sprawdzony na Xvfb. Task-Ref:
+`next-backlog-loop-2026-09-06/R7`.
+
 ## 2026-09-06 — R6: GUI pokazuje wpisy GRUB i Inspector
 
 Boot Entries odczytuje przez D-Bus rzeczywiste menu GRUB i ETag, rozróżnia
