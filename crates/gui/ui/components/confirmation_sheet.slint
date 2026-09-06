@@ -195,7 +195,7 @@ export component ConfirmationSheet inherits Rectangle {
                 Text {
                     text: root.preflight-all-pass
                         ? "All preflight checks passed."
-                        : "Preflight running…";
+                        : "Required live data is unavailable.";
                     color: root.preflight-all-pass ? Tokens.success : Tokens.on-surface-muted;
                     font-size: Tokens.font-meta;
                     vertical-alignment: center;

@@ -178,6 +178,7 @@ export component AppWindow inherits Window {
     // ── Confirmation Sheet callbacks ─────────────────────────────────────────
     callback open_confirmation(string);
     callback confirmation_confirmed();
+    callback confirmation_cancelled();
     callback copy_command(string);
 
     // ── Onboarding + new page callbacks (PR 6) ───────────────────────────────
@@ -364,6 +365,7 @@ export component AppWindow inherits Window {
         cancel => {
             root.show_confirmation = false;
             root.confirmation_typed_text = "";
+            root.confirmation_cancelled();
         }
         confirm => {
             root.show_confirmation = false;

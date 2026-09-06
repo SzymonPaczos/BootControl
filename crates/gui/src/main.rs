@@ -2,6 +2,7 @@ slint::include_modules!();
 
 mod theme;
 
+use bootcontrol_gui::confirmation::{ConfirmationMode, ConfirmationPreview, ConfirmationSession};
 use bootcontrol_gui::view_model::ViewModel;
 use slint::Model;
 use tokio::sync::mpsc;
@@ -15,6 +16,8 @@ const BUNDLED_FONTS: &[&str] = &["Inter-VariableFont.ttf", "JetBrainsMono-Regula
 enum UiMessage {
     FetchEntries,
     SaveEntry(String, String),
+    PrepareRebuildConfirmation,
+    CancelConfirmation,
     RebuildGrub,
     BackupNvram,
     EnrollMok,
@@ -155,39 +158,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // ── Confirmation Sheet wiring (PR 4) ──────────────────────────────────────
-    //
-    // open_confirmation(verb): populate stub diff / preflight / cli / snapshot
-    // and surface the Sheet. Real diff/preflight come from the daemon in PR 5.
+    // ── Confirmation Sheet wiring ─────────────────────────────────────────────
     ui.on_open_confirmation({
-        let ui_handle = ui.as_weak();
+        let tx = tx.clone();
         move |verb: slint::SharedString| {
-            let v = verb.to_string();
-            let _ = ui_handle.upgrade_in_event_loop(move |ui| {
-                match v.as_str() {
-                    "rewrite-grub" => {
-                        ui.set_confirmation_verb("Rewrite GRUB".into());
-                        ui.set_confirmation_target(
-                            "Will run grub-mkconfig against /boot/grub/grub.cfg using current /etc/default/grub.".into(),
-                        );
-                        ui.set_confirmation_required_text("rewrite GRUB".into());
-                        ui.set_confirmation_command_cli("bootcontrol rebuild".into());
-                        ui.set_confirmation_snapshot_id(stub_snapshot_id("rewrite-grub").into());
+            if verb.as_str() == "rewrite-grub" {
+                let _ = tx.blocking_send(UiMessage::PrepareRebuildConfirmation);
+            } else {
+                eprintln!("[gui] open_confirmation: unhandled verb {:?}", verb);
+            }
+        }
+    });
 
-                        let diff = build_stub_diff();
-                        ui.set_confirmation_diff(slint::ModelRc::new(slint::VecModel::from(diff)));
-
-                        let pre = build_stub_preflight_passing();
-                        ui.set_confirmation_preflight_all_pass(true);
-                        ui.set_confirmation_preflight(slint::ModelRc::new(slint::VecModel::from(pre)));
-
-                        ui.set_show_confirmation(true);
-                    }
-                    other => {
-                        eprintln!("[gui] open_confirmation: unhandled verb {:?}", other);
-                    }
-                }
-            });
+    ui.on_confirmation_cancelled({
+        let tx = tx.clone();
+        move || {
+            let _ = tx.blocking_send(UiMessage::CancelConfirmation);
         }
     });
 
@@ -450,34 +436,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn async backend task
     let ui_handle_async = ui.as_weak();
     tokio::spawn(async move {
+        let confirmation_mode = if is_demo {
+            ConfirmationMode::Demo
+        } else {
+            ConfirmationMode::Live
+        };
+        let mut confirmation_session = ConfirmationSession::default();
         while let Some(msg) = rx.recv().await {
             match msg {
-                UiMessage::FetchEntries => match view_model.load().await {
-                    Ok(_) => {
-                        let mut entries: Vec<GrubEntry> = view_model
-                            .entries
-                            .iter()
-                            .map(|(k, v)| GrubEntry {
-                                key: k.as_str().into(),
-                                value: v.as_str().into(),
-                                original_value: v.as_str().into(),
-                                is_modified: false,
-                            })
-                            .collect();
-                        entries.sort_by(|a, b| a.key.cmp(&b.key));
+                UiMessage::FetchEntries => {
+                    confirmation_session.cancel();
+                    let _ = ui_handle_async.upgrade_in_event_loop(|ui| {
+                        ui.set_show_confirmation(false);
+                        ui.set_confirmation_typed_text("".into());
+                    });
+                    match view_model.load().await {
+                        Ok(_) => {
+                            let mut entries: Vec<GrubEntry> = view_model
+                                .entries
+                                .iter()
+                                .map(|(k, v)| GrubEntry {
+                                    key: k.as_str().into(),
+                                    value: v.as_str().into(),
+                                    original_value: v.as_str().into(),
+                                    is_modified: false,
+                                })
+                                .collect();
+                            entries.sort_by(|a, b| a.key.cmp(&b.key));
 
-                        let backend_name = view_model.active_backend.clone();
-                        let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
-                            let model = std::rc::Rc::new(slint::VecModel::from(entries));
-                            ui.set_entries(model.into());
-                            ui.set_active_backend(backend_name.into());
-                        });
+                            let backend_name = view_model.active_backend.clone();
+                            let _ = ui_handle_async.upgrade_in_event_loop(move |ui| {
+                                let model = std::rc::Rc::new(slint::VecModel::from(entries));
+                                ui.set_entries(model.into());
+                                ui.set_active_backend(backend_name.into());
+                            });
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to read GRUB config: {:?}", e);
+                            show_toast(&ui_handle_async, err_msg, "error");
+                        }
                     }
-                    Err(e) => {
-                        let err_msg = format!("Failed to read GRUB config: {:?}", e);
-                        show_toast(&ui_handle_async, err_msg, "error");
-                    }
-                },
+                }
                 UiMessage::SaveEntry(key, value) => {
                     set_loading(&ui_handle_async, true, format!("Saving '{}'...", key));
                     match view_model.commit_edit(&key, &value).await {
@@ -504,7 +503,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
+                UiMessage::PrepareRebuildConfirmation => {
+                    let preview = confirmation_session.prepare_rebuild(
+                        confirmation_mode,
+                        &view_model.active_backend,
+                        &view_model.etag,
+                    );
+                    show_confirmation_preview(&ui_handle_async, preview);
+                }
+                UiMessage::CancelConfirmation => confirmation_session.cancel(),
                 UiMessage::RebuildGrub => {
+                    if !confirmation_session.confirm_rebuild() {
+                        show_toast(
+                            &ui_handle_async,
+                            "Rebuild requires a current, successful confirmation preview."
+                                .to_string(),
+                            "error",
+                        );
+                        continue;
+                    }
                     set_loading(
                         &ui_handle_async,
                         true,
@@ -801,16 +818,8 @@ const ONBOARDING_MARKDOWN: &str = include_str!("../assets/onboarding/bootloader.
 
 const RECOVERY_FALLBACK: &str = "Recovery instructions are not available yet — they are written by the daemon on the first snapshot.\n\nIf your computer fails to boot, restore from a Linux live USB:\n\n1. Mount your root filesystem.\n2. cd /var/lib/bootcontrol/snapshots/<latest-id>/\n3. Read manifest.json for the captured file paths.\n4. Copy each file back to its original location.\n5. Reinstall the bootloader (grub-install, bootctl install, or efibootmgr).";
 
-// ── Confirmation Sheet stubs (PR 4 — replaced by daemon data in PR 5) ──────
-
-fn stub_snapshot_id(op: &str) -> String {
-    // PR 4 stub. Daemon will return the real snapshot id in PR 5.
-    let now = chrono_like_now();
-    format!("{}-{}", now, op)
-}
-
 fn chrono_like_now() -> String {
-    // Avoid pulling chrono just for a stub timestamp. Use OS epoch.
+    // Avoid pulling chrono just for an export filename. Use OS epoch.
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -818,62 +827,37 @@ fn chrono_like_now() -> String {
     format!("ts-{}", secs)
 }
 
-fn build_stub_diff() -> Vec<DiffLine> {
-    // PR 4 stub diff for the rewrite-grub flow. PR 5 daemon returns real
-    // unified-diff hunks computed from the staged change.
-    vec![
-        DiffLine {
-            side: "".into(),
-            text: "".into(),
-            file_path: "/etc/default/grub".into(),
-        },
-        DiffLine {
-            side: "context".into(),
-            text: "GRUB_DEFAULT=0".into(),
-            file_path: "".into(),
-        },
-        DiffLine {
-            side: "remove".into(),
-            text: "GRUB_TIMEOUT=10".into(),
-            file_path: "".into(),
-        },
-        DiffLine {
-            side: "add".into(),
-            text: "GRUB_TIMEOUT=5".into(),
-            file_path: "".into(),
-        },
-        DiffLine {
-            side: "context".into(),
-            text: "GRUB_CMDLINE_LINUX=\"quiet splash\"".into(),
-            file_path: "".into(),
-        },
-    ]
-}
-
-fn build_stub_preflight_passing() -> Vec<PreflightCheck> {
-    // PR 4 stub. PR 5 daemon runs real checks and streams state transitions.
-    vec![
-        PreflightCheck {
-            name: "ESP mounted".into(),
-            state: "pass".into(),
-            detail: "/boot/efi (rw, vfat)".into(),
-        },
-        PreflightCheck {
-            name: "Free space on /boot".into(),
-            state: "pass".into(),
-            detail: "287 MB free".into(),
-        },
-        PreflightCheck {
-            name: "GRUB binary present".into(),
-            state: "pass".into(),
-            detail: "/usr/sbin/grub-mkconfig".into(),
-        },
-        PreflightCheck {
-            name: "Daemon reachable".into(),
-            state: "pass".into(),
-            detail: "org.bootcontrol.Manager on system bus".into(),
-        },
-    ]
+fn show_confirmation_preview(ui: &slint::Weak<AppWindow>, preview: ConfirmationPreview) {
+    let diff = preview
+        .diff
+        .into_iter()
+        .map(|line| DiffLine {
+            side: line.side.into(),
+            text: line.text.into(),
+            file_path: line.file_path.into(),
+        })
+        .collect::<Vec<_>>();
+    let preflight = preview
+        .preflight
+        .into_iter()
+        .map(|check| PreflightCheck {
+            name: check.name.into(),
+            state: if check.passed { "pass" } else { "fail" }.into(),
+            detail: check.detail.into(),
+        })
+        .collect::<Vec<_>>();
+    let _ = ui.upgrade_in_event_loop(move |ui| {
+        ui.set_confirmation_verb(preview.verb_label.into());
+        ui.set_confirmation_target(preview.target.into());
+        ui.set_confirmation_required_text(preview.required_text.into());
+        ui.set_confirmation_command_cli(preview.command_cli.into());
+        ui.set_confirmation_snapshot_id(preview.snapshot_id.into());
+        ui.set_confirmation_typed_text("".into());
+        ui.set_confirmation_diff(slint::ModelRc::new(slint::VecModel::from(diff)));
+        ui.set_confirmation_preflight(slint::ModelRc::new(slint::VecModel::from(preflight)));
+        ui.set_confirmation_preflight_all_pass(preview.can_confirm);
+        ui.set_show_confirmation(true);
+    });
 }
 
 fn show_toast(ui: &slint::Weak<AppWindow>, message: String, toast_type: &str) {
