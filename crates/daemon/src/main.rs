@@ -173,14 +173,15 @@ fn parse_idle_timeout(value: Option<&str>) -> Duration {
     Duration::from_secs(seconds)
 }
 
-/// Wait until the D-Bus connection has been inactive for `idle_timeout`.
+/// Forward connection traffic into the shared lifecycle tracker.
 #[cfg(target_os = "linux")]
-async fn wait_for_idle(conn: &zbus::Connection, idle_timeout: Duration) {
+async fn monitor_connection_activity(
+    conn: zbus::Connection,
+    activity: bootcontrold::lifecycle::ActivityTracker,
+) {
     loop {
-        let activity = conn.monitor_activity();
-        if tokio::time::timeout(idle_timeout, activity).await.is_err() {
-            return;
-        }
+        conn.monitor_activity().await;
+        activity.record_activity();
     }
 }
 
@@ -252,6 +253,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     }
+    let activity = manager.activity_tracker();
 
     let conn = dbus_connection_builder()?
         // ── 3. Register the interface object ────────────────────────────────
@@ -263,8 +265,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("bootcontrold ready — listening on D-Bus");
 
-    // ── 5. Exit after a full period without connection activity ─────────────
-    wait_for_idle(&conn, idle_timeout).await;
+    // ── 5. Exit after a full period without traffic or active calls ──────────
+    let activity_monitor =
+        tokio::spawn(monitor_connection_activity(conn.clone(), activity.clone()));
+    activity.wait_for_idle(idle_timeout).await;
+    activity_monitor.abort();
     info!("bootcontrold idle timeout reached — exiting");
 
     Ok(())

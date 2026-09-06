@@ -7,7 +7,9 @@ use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use zbus::proxy;
 
-use crate::helpers::{spawn_daemon_with_idle_timeout, MINIMAL_GRUB};
+use crate::helpers::{
+    spawn_daemon_with_idle_timeout, spawn_daemon_with_idle_timeout_and_grub_stub, MINIMAL_GRUB,
+};
 
 #[proxy(
     interface = "org.bootcontrol.Manager",
@@ -16,6 +18,7 @@ use crate::helpers::{spawn_daemon_with_idle_timeout, MINIMAL_GRUB};
 )]
 trait BootControlManager {
     async fn get_etag(&self) -> zbus::Result<String>;
+    async fn rebuild_grub_config(&self) -> zbus::Result<()>;
 }
 
 /// A daemon started with a one-second idle timeout must exit by itself after
@@ -73,5 +76,44 @@ async fn dbus_activity_resets_idle_timeout() -> anyhow::Result<()> {
     })
     .await??;
 
+    Ok(())
+}
+
+/// A method that runs past the configured timeout must finish, after which a
+/// fresh full idle period begins.
+#[ignore]
+#[tokio::test]
+async fn active_rebuild_outlives_timeout_and_then_restarts_idle_period() -> anyhow::Result<()> {
+    let _test_guard = crate::helpers::DAEMON_TEST_LOCK.lock().await;
+    let mut handle = spawn_daemon_with_idle_timeout_and_grub_stub(
+        MINIMAL_GRUB,
+        1,
+        "#!/bin/sh\nsleep 2\nexit 0\n",
+    )
+    .await?;
+    let proxy = BootControlManagerProxy::new(&handle.conn).await?;
+
+    timeout(Duration::from_secs(4), proxy.rebuild_grub_config()).await??;
+    assert!(
+        handle.try_wait()?.is_none(),
+        "daemon exited while the rebuild method was active"
+    );
+
+    sleep(Duration::from_millis(500)).await;
+    assert!(
+        handle.try_wait()?.is_none(),
+        "daemon did not grant a full idle period after the method finished"
+    );
+
+    let status = timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(status) = handle.try_wait()? {
+                return Ok::<_, std::io::Error>(status);
+            }
+            sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await??;
+    assert!(status.success());
     Ok(())
 }

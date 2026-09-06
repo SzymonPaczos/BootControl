@@ -176,6 +176,8 @@ pub struct GrubManager {
     entry_token_paths: Vec<PathBuf>,
     /// Required owner UID for a UKI. Production always uses root (`0`).
     trusted_uki_uid: u32,
+    /// Shared lifecycle state used to prevent idle exit during D-Bus calls.
+    activity: crate::lifecycle::ActivityTracker,
     #[cfg(test)]
     test_hooks: Option<std::sync::Arc<tests::TestHooks>>,
 }
@@ -293,6 +295,7 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            activity: crate::lifecycle::ActivityTracker::default(),
             #[cfg(test)]
             test_hooks: None,
         }
@@ -340,6 +343,7 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            activity: crate::lifecycle::ActivityTracker::default(),
             #[cfg(test)]
             test_hooks: None,
         }
@@ -390,6 +394,7 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            activity: crate::lifecycle::ActivityTracker::default(),
             #[cfg(test)]
             test_hooks: None,
         }
@@ -420,6 +425,7 @@ impl GrubManager {
             managed_uki_dirs: default_managed_uki_dirs(),
             entry_token_paths: default_entry_token_paths(),
             trusted_uki_uid: 0,
+            activity: crate::lifecycle::ActivityTracker::default(),
             #[cfg(test)]
             test_hooks: None,
         }
@@ -526,6 +532,26 @@ impl GrubManager {
         &self.snapshot_root
     }
 
+    /// Return the lifecycle tracker shared with the daemon entry point.
+    ///
+    /// # Arguments
+    ///
+    /// This function takes no arguments.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::PathBuf;
+    /// use bootcontrol_core::backends::grub::GrubBackend;
+    /// use bootcontrold::interface::GrubManager;
+    ///
+    /// let manager = GrubManager::new(PathBuf::from("/tmp/grub"), Box::new(GrubBackend));
+    /// assert_eq!(manager.activity_tracker().active_operations(), 0);
+    /// ```
+    pub fn activity_tracker(&self) -> crate::lifecycle::ActivityTracker {
+        self.activity.clone()
+    }
+
     /// The set of paths this daemon is allowed to write — every file it owns
     /// and every directory it writes into.
     ///
@@ -578,6 +604,7 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.ComplexBashDetected` — file contains Bash
     ///   constructs that BootControl cannot safely parse.
     async fn read_grub_config(&self) -> Result<(HashMap<String, String>, String), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(path = ?self.grub_path, "D-Bus: ReadGrubConfig");
         grub_manager::read_grub_config(&self.grub_path).map_err(to_daemon_error)
     }
@@ -625,6 +652,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(key = %key, "D-Bus: SetGrubValue");
 
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
@@ -790,6 +818,7 @@ impl GrubManager {
     ///
     /// - `org.bootcontrol.Error.EspScanFailed` — file could not be read.
     async fn get_etag(&self) -> Result<String, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(path = ?self.grub_path, "D-Bus: GetEtag");
         grub_manager::fetch_etag(&self.grub_path).map_err(to_daemon_error)
     }
@@ -810,6 +839,7 @@ impl GrubManager {
     ///
     /// A short ASCII string: `"grub"`, `"systemd-boot"`, or `"unknown"`.
     async fn get_active_backend(&self) -> String {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: GetActiveBackend");
         self.backend.name().to_string()
     }
@@ -847,6 +877,7 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.MalformedValue` — menu structure could not
     ///   be parsed (unterminated block or quote).
     async fn list_grub_entries(&self) -> Result<(String, String), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(path = ?self.grub_cfg_path, "D-Bus: ListGrubEntries");
         let (entries, etag) =
             grub_manager::list_menu_entries(&self.grub_cfg_path).map_err(to_daemon_error)?;
@@ -895,6 +926,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: RebuildGrubConfig");
 
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
@@ -973,6 +1005,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<String, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(target_dir = %target_dir, "D-Bus: BackupNvram");
 
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
@@ -1086,6 +1119,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(uki_path = %uki_path, "D-Bus: SignAndEnrollUki");
 
         // ── Step 1: Resolve the caller's real UID via D-Bus ─────────────────
@@ -1197,6 +1231,7 @@ impl GrubManager {
     ///
     /// - `org.bootcontrol.Error.EspScanFailed` — entries directory unreadable.
     async fn list_loader_entries(&self) -> Result<String, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(dir = ?self.loader_entries_dir, "D-Bus: ListLoaderEntries");
         let records = systemd_boot_manager::read_all_entries(
             &self.loader_entries_dir,
@@ -1227,6 +1262,7 @@ impl GrubManager {
     ///   path separators instead of a loader-entry filename stem.
     /// - `org.bootcontrol.Error.EspScanFailed` — entry not found or unreadable.
     async fn read_loader_entry(&self, id: String) -> Result<(String, String), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(id = %id, "D-Bus: ReadLoaderEntry");
         let (entry, etag) = systemd_boot_manager::read_entry(&self.loader_entries_dir, &id)
             .map_err(to_daemon_error)?;
@@ -1277,6 +1313,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(id = %id, "D-Bus: SetLoaderDefault");
         let _caller_uid = resolve_uid(&header, connection, "SetLoaderDefault").await?;
         self.authorize(
@@ -1315,6 +1352,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(id = %id, new_title = %new_title, "D-Bus: RenameLoaderEntry");
         let _caller_uid = resolve_uid(&header, connection, "RenameLoaderEntry").await?;
         self.authorize(
@@ -1337,6 +1375,7 @@ impl GrubManager {
     /// GetLoaderConfEtag() -> s
     /// ```
     async fn get_loader_conf_etag(&self) -> Result<String, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: GetLoaderConfEtag");
         systemd_boot_manager::fetch_loader_conf_etag(&self.loader_conf_path)
             .map_err(to_daemon_error)
@@ -1361,6 +1400,7 @@ impl GrubManager {
     ///
     /// - `org.bootcontrol.Error.EspScanFailed` — file not found or unreadable.
     async fn read_kernel_cmdline(&self) -> Result<(Vec<String>, String), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(path = ?self.kernel_cmdline_path, "D-Bus: ReadKernelCmdline");
         // Phase 6 PR2: on rpm-ostree hosts the on-disk cmdline is owned by
         // ostree and overwritten on every upgrade. Read through
@@ -1401,6 +1441,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(param = %param, "D-Bus: AddKernelParam");
         // Phase 6 PR2: dispatch on host class.
         //
@@ -1463,6 +1504,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(param = %param, "D-Bus: RemoveKernelParam");
         // Phase 6 PR2: dispatch on host class (see AddKernelParam).
         let _caller_uid = resolve_uid(&header, connection, "RemoveKernelParam").await?;
@@ -1516,6 +1558,7 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.SnapshotFailed` — the snapshot directory is
     ///   present but unreadable (I/O error).
     async fn list_snapshots(&self) -> Result<String, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(root = ?self.snapshot_root, "D-Bus: ListSnapshots");
         let snaps = snapshot::list(&self.snapshot_root).map_err(snapshot_to_daemon_error)?;
         let dtos: Vec<SnapshotInfoDto> = snaps
@@ -1576,6 +1619,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(id = %id, root = ?self.snapshot_root, "D-Bus: RestoreSnapshot");
 
         let caller_uid = resolve_uid(&header, connection, "RestoreSnapshot").await?;
@@ -1655,6 +1699,7 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.MalformedValue` — at least one `Boot####`
     ///   payload was shorter than the load-option header.
     async fn list_efi_boot_entries(&self) -> Result<String, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: ListEfiBootEntries");
         let reader = self.efivars_reader();
         let entries =
@@ -1681,6 +1726,7 @@ impl GrubManager {
     /// - `org.bootcontrol.Error.MalformedValue` — payload not a multiple
     ///   of 2 bytes.
     async fn get_boot_order(&self) -> Result<Vec<u16>, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: GetBootOrder");
         let reader = self.efivars_reader();
         use bootcontrol_core::uefi_vars::UefiVarReader;
@@ -1704,6 +1750,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(new_order = ?new_order, "D-Bus: SetBootOrder");
         let _caller_uid = resolve_uid(&header, connection, "SetBootOrder").await?;
         self.authorize(
@@ -1724,6 +1771,7 @@ impl GrubManager {
     ///
     /// Idempotent and read-only — no Polkit.
     async fn get_boot_next(&self) -> Result<i32, DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: GetBootNext");
         let reader = self.efivars_reader();
         use bootcontrol_core::uefi_vars::UefiVarReader;
@@ -1753,6 +1801,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!(index = index, "D-Bus: SetBootNext");
         let _caller_uid = resolve_uid(&header, connection, "SetBootNext").await?;
         self.authorize(
@@ -1775,6 +1824,7 @@ impl GrubManager {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
         info!("D-Bus: ClearBootNext");
         let _caller_uid = resolve_uid(&header, connection, "ClearBootNext").await?;
         self.authorize(

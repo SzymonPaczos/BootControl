@@ -115,7 +115,7 @@ impl DaemonHandle {
 /// Returns an error if the build fails, the daemon cannot be spawned, or the
 /// daemon does not register its bus name within [`STARTUP_TIMEOUT`].
 pub async fn spawn_daemon(initial_content: &str) -> anyhow::Result<DaemonHandle> {
-    spawn_daemon_inner(initial_content, None).await
+    spawn_daemon_inner(initial_content, None, None).await
 }
 
 /// Spawn `bootcontrold` with an explicit idle timeout for lifecycle tests.
@@ -132,12 +132,33 @@ pub async fn spawn_daemon_with_idle_timeout(
     initial_content: &str,
     idle_timeout_secs: u64,
 ) -> anyhow::Result<DaemonHandle> {
-    spawn_daemon_inner(initial_content, Some(idle_timeout_secs)).await
+    spawn_daemon_inner(initial_content, Some(idle_timeout_secs), None).await
+}
+
+/// Spawn `bootcontrold` with an idle timeout and a controlled GRUB command.
+///
+/// # Arguments
+///
+/// * `initial_content` — Content written to the temporary GRUB file.
+/// * `idle_timeout_secs` — Number of inactive seconds before daemon exit.
+/// * `grub_stub` — Complete POSIX shell program used as `grub-mkconfig`.
+///
+/// # Errors
+///
+/// Returns an error under the same conditions as [`spawn_daemon`], or when the
+/// controlled executable cannot be written and synced.
+pub async fn spawn_daemon_with_idle_timeout_and_grub_stub(
+    initial_content: &str,
+    idle_timeout_secs: u64,
+    grub_stub: &str,
+) -> anyhow::Result<DaemonHandle> {
+    spawn_daemon_inner(initial_content, Some(idle_timeout_secs), Some(grub_stub)).await
 }
 
 async fn spawn_daemon_inner(
     initial_content: &str,
     idle_timeout_secs: Option<u64>,
+    grub_stub: Option<&str>,
 ) -> anyhow::Result<DaemonHandle> {
     // ── Step 1: Write the initial GRUB config to a temp file ─────────────────
     let grub_file = write_temp_grub(initial_content)?;
@@ -165,7 +186,7 @@ async fn spawn_daemon_inner(
         use std::os::unix::fs::PermissionsExt;
         let mut f =
             std::fs::File::create(&stub_path).context("failed to create grub-mkconfig stub")?;
-        f.write_all(b"#!/bin/sh\nexit 0\n")
+        f.write_all(grub_stub.unwrap_or("#!/bin/sh\nexit 0\n").as_bytes())
             .context("failed to write grub-mkconfig stub")?;
         f.sync_all().context("failed to sync grub-mkconfig stub")?;
         drop(f);

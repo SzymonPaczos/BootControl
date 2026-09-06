@@ -45,6 +45,7 @@ pub mod grub_rebuild;
 pub mod immutable_distro;
 pub mod initramfs;
 pub mod interface;
+pub mod lifecycle;
 pub mod luks_keymap;
 pub mod policy_check;
 pub mod polkit;

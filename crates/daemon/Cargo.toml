@@ -34,6 +34,9 @@ tempfile = "3"
 name = "bootcontrold"
 path = "src/lib.rs"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+
 [[bin]]
 name = "bootcontrold"
 path = "src/main.rs"
