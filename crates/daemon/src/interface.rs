@@ -726,51 +726,57 @@ impl GrubManager {
             stderr_tail: String::new(),
         });
 
-        // Capture the snapshot using the caller-supplied ETag as etag_before.
-        // Race window: another process could mutate /etc/default/grub between
-        // here and grub_manager's flock acquire — but the ETag check INSIDE
-        // grub_manager::set_grub_value will reject the write with
-        // StateMismatch in that case, leaving an orphan snapshot that
-        // snapshot::reap eventually clears. Tightening this to atomic
-        // snapshot+lock requires a refactor of grub_manager into a
-        // post-flock callback, deferred to a follow-up.
-        let snap_info = snapshot::create(snapshot::SnapshotRequest {
-            root: &self.snapshot_root,
-            op: "set_grub_value",
-            polkit_action: "org.bootcontrol.rewrite-grub",
-            caller_uid,
-            etag_before: &etag,
-            files: std::slice::from_ref(&self.grub_path),
-            audit_job_id: &job_id,
-        })
-        .map_err(|e| {
-            warn!(error = %e, "snapshot creation failed — aborting write");
-            DaemonError::EspScanFailed(format!("snapshot failed: {}", e))
-        })?;
-
-        audit::emit(&AuditEvent {
-            message_id: message_ids::SET_GRUB_VALUE,
-            operation: "set_grub_value",
-            phase: Phase::SnapshotTaken,
-            target_paths: target_paths.clone(),
-            etag_before: Some(etag.clone()),
-            etag_after: None,
-            snapshot_id: Some(snap_info.id.clone()),
-            exit_code: None,
-            caller_uid,
-            polkit_action: "org.bootcontrol.rewrite-grub",
-            job_id: job_id.clone(),
-            stderr_tail: String::new(),
-        });
-
-        // ── Steps 5–9: flock → ETag verify → atomic write → failsafe refresh → grub-mkconfig ──
-        let result = grub_manager::set_grub_value(
+        // ── Steps 5–9: flock → ETag → snapshot locked bytes → atomic write ──
+        let files = [self.grub_path.clone()];
+        let mut snapshot_id = None;
+        let result = grub_manager::set_grub_value_with_prewrite(
             &self.grub_path,
             &key,
             &value,
             &etag,
             &self.failsafe_cfg_path,
             &self.grub_cfg_path,
+            |locked| {
+                let captured = [snapshot::CapturedFile {
+                    path: self.grub_path.clone(),
+                    bytes: locked.bytes.to_vec(),
+                    mode: locked.mode.clone(),
+                }];
+                let snap_info = snapshot::create_with_captured_files(
+                    snapshot::SnapshotRequest {
+                        root: &self.snapshot_root,
+                        op: "set_grub_value",
+                        polkit_action: "org.bootcontrol.rewrite-grub",
+                        caller_uid,
+                        etag_before: &etag,
+                        files: &files,
+                        audit_job_id: &job_id,
+                    },
+                    &captured,
+                )
+                .map_err(|error| {
+                    warn!(%error, "snapshot creation failed — aborting write");
+                    bootcontrol_core::error::BootControlError::EspScanFailed {
+                        reason: format!("snapshot failed: {error}"),
+                    }
+                })?;
+                snapshot_id = Some(snap_info.id.clone());
+                audit::emit(&AuditEvent {
+                    message_id: message_ids::SET_GRUB_VALUE,
+                    operation: "set_grub_value",
+                    phase: Phase::SnapshotTaken,
+                    target_paths: target_paths.clone(),
+                    etag_before: Some(etag.clone()),
+                    etag_after: None,
+                    snapshot_id: Some(snap_info.id),
+                    exit_code: None,
+                    caller_uid,
+                    polkit_action: "org.bootcontrol.rewrite-grub",
+                    job_id: job_id.clone(),
+                    stderr_tail: String::new(),
+                });
+                Ok(())
+            },
         )
         .map_err(to_daemon_error);
 
@@ -788,7 +794,7 @@ impl GrubManager {
             target_paths,
             etag_before: Some(etag),
             etag_after: None, // post-write ETag re-read deferred to follow-up
-            snapshot_id: Some(snap_info.id),
+            snapshot_id,
             exit_code: Some(exit_code),
             caller_uid,
             polkit_action: "org.bootcontrol.rewrite-grub",

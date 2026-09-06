@@ -223,6 +223,13 @@ pub struct SnapshotRequest<'a> {
     pub audit_job_id: &'a str,
 }
 
+/// Bytes and metadata already read while the caller holds the target lock.
+pub(crate) struct CapturedFile {
+    pub(crate) path: PathBuf,
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) mode: String,
+}
+
 /// Capture a snapshot. Returns a [`SnapshotInfo`] for the new snapshot.
 ///
 /// # Errors
@@ -259,6 +266,42 @@ fn create_at(
     req: SnapshotRequest<'_>,
     timestamp: DateTime<Utc>,
 ) -> Result<SnapshotInfo, SnapshotError> {
+    let captured = req
+        .files
+        .iter()
+        .map(|path| {
+            Ok(CapturedFile {
+                path: path.clone(),
+                bytes: fs::read(path)?,
+                mode: file_mode_octal(path)?,
+            })
+        })
+        .collect::<Result<Vec<_>, SnapshotError>>()?;
+    create_captured_at(req, &captured, timestamp)
+}
+
+pub(crate) fn create_with_captured_files(
+    req: SnapshotRequest<'_>,
+    captured: &[CapturedFile],
+) -> Result<SnapshotInfo, SnapshotError> {
+    create_captured_at(req, captured, Utc::now())
+}
+
+fn create_captured_at(
+    req: SnapshotRequest<'_>,
+    captured: &[CapturedFile],
+    timestamp: DateTime<Utc>,
+) -> Result<SnapshotInfo, SnapshotError> {
+    if captured.len() != req.files.len()
+        || captured
+            .iter()
+            .zip(req.files)
+            .any(|(file, requested)| file.path != *requested)
+    {
+        return Err(SnapshotError::Corrupt(
+            "captured files do not match the snapshot request".to_string(),
+        ));
+    }
     let ts = timestamp.to_rfc3339_opts(SecondsFormat::Secs, true);
     // Filesystem-safe id (replace ':' which is invalid on FAT/exFAT).
     // The audit job is unique per invocation. Hashing it keeps arbitrary job
@@ -272,18 +315,16 @@ fn create_at(
     fs::create_dir(&snap_dir)?;
 
     let mut manifest_files = Vec::with_capacity(req.files.len());
-    for src in req.files {
-        let bytes = fs::read(src)?;
-        let sha = compute_etag(&bytes);
-        let mode = file_mode_octal(src)?;
+    for file in captured {
+        let sha = compute_etag(&file.bytes);
         // Copy the captured bytes into the snapshot dir under a flat name
         // derived from the path (slashes → underscores). Restore reverses.
-        let dest = snap_dir.join(flatten_path(src));
-        fs::write(&dest, &bytes)?;
+        let dest = snap_dir.join(flatten_path(&file.path));
+        fs::write(&dest, &file.bytes)?;
         manifest_files.push(ManifestFile {
-            path: src.to_string_lossy().into_owned(),
+            path: file.path.to_string_lossy().into_owned(),
             sha256: sha,
-            mode,
+            mode: file.mode.clone(),
         });
     }
 

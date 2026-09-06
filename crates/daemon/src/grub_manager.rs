@@ -42,6 +42,7 @@ use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions},
     io::{BufReader, Read, Write},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -232,6 +233,25 @@ pub fn set_grub_value(
     failsafe_cfg: &Path,
     grub_cfg_path: &Path,
 ) -> Result<(), BootControlError> {
+    set_grub_value_with_prewrite(path, key, value, etag, failsafe_cfg, grub_cfg_path, |_| {
+        Ok(())
+    })
+}
+
+pub(crate) struct LockedGrubState<'a> {
+    pub(crate) bytes: &'a [u8],
+    pub(crate) mode: String,
+}
+
+pub(crate) fn set_grub_value_with_prewrite(
+    path: &Path,
+    key: &str,
+    value: &str,
+    etag: &str,
+    failsafe_cfg: &Path,
+    grub_cfg_path: &Path,
+    prewrite: impl FnOnce(&LockedGrubState<'_>) -> Result<(), BootControlError>,
+) -> Result<(), BootControlError> {
     // ── Step 1: Open file handle ────────────────────────────────────────────
     // We open the file BEFORE acquiring the lock so we have a fd to flock on.
     // No file content is read yet — the lock must come first to prevent TOCTOU.
@@ -297,6 +317,16 @@ pub fn set_grub_value(
 
     // ── Step 5: Parse current config (comment-preserving) ───────────────────
     let mut config = parse_grub_config(&content)?;
+    let mode = locked
+        .metadata()
+        .map(|metadata| format!("{:04o}", metadata.permissions().mode() & 0o7777))
+        .map_err(|error| BootControlError::EspScanFailed {
+            reason: format!("failed to read locked GRUB file metadata: {error}"),
+        })?;
+    prewrite(&LockedGrubState {
+        bytes: content_bytes,
+        mode,
+    })?;
 
     // ── Step 6: Reconstruct lines — update LAST occurrence of the key ────────
     //
@@ -753,6 +783,77 @@ submenu 'Advanced options for Ubuntu' $menuentry_id_option 'gnulinux-advanced-2f
         assert!(
             written.contains("# This is a comment — preserved verbatim"),
             "Comment was not preserved in:\n{written}"
+        );
+    }
+
+    #[test]
+    fn snapshot_captures_locked_bytes_and_restores_them_exactly() {
+        let f = write_temp(SIMPLE_GRUB);
+        let snapshot_dir = tempfile::tempdir().expect("snapshot tempdir");
+        let failsafe_dir = tempfile::tempdir().expect("failsafe tempdir");
+        let grub_cfg_dir = tempfile::tempdir().expect("grub cfg tempdir");
+        let etag = compute_etag_str(SIMPLE_GRUB);
+        let files = [f.path().to_path_buf()];
+        let mut snapshot_info = None;
+        let (_fake_bin_dir, _guard) = setup_fake_grub_mkconfig();
+
+        let result = set_grub_value_with_prewrite(
+            f.path(),
+            "GRUB_TIMEOUT",
+            "99",
+            &etag,
+            &failsafe_dir.path().join("failsafe.cfg"),
+            &grub_cfg_dir.path().join("grub.cfg"),
+            |locked| {
+                let competing = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(f.path())
+                    .expect("open competing descriptor");
+                let conflict = Flock::lock(competing, FlockArg::LockExclusiveNonblock);
+                assert!(matches!(conflict, Err((_, nix::errno::Errno::EWOULDBLOCK))));
+
+                let captured = [crate::snapshot::CapturedFile {
+                    path: f.path().to_path_buf(),
+                    bytes: locked.bytes.to_vec(),
+                    mode: locked.mode.clone(),
+                }];
+                snapshot_info = Some(
+                    crate::snapshot::create_with_captured_files(
+                        crate::snapshot::SnapshotRequest {
+                            root: snapshot_dir.path(),
+                            op: "set_grub_value",
+                            polkit_action: "org.bootcontrol.rewrite-grub",
+                            caller_uid: 1000,
+                            etag_before: &etag,
+                            files: &files,
+                            audit_job_id: "r4-locked-snapshot",
+                        },
+                        &captured,
+                    )
+                    .map_err(|error| BootControlError::EspScanFailed {
+                        reason: error.to_string(),
+                    })?,
+                );
+                Ok(())
+            },
+        );
+        std::env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        result.expect("transactional write");
+
+        let changed = fs::read_to_string(f.path()).expect("changed config");
+        assert!(changed.contains("GRUB_TIMEOUT=99"));
+        let current_etag = compute_etag_str(&changed);
+        crate::snapshot::restore(
+            snapshot_dir.path(),
+            &snapshot_info.expect("snapshot info").id,
+            &files,
+            &current_etag,
+        )
+        .expect("restore exact snapshot");
+        assert_eq!(
+            fs::read_to_string(f.path()).expect("restored config"),
+            SIMPLE_GRUB
         );
     }
 
