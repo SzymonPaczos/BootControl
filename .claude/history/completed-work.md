@@ -13,6 +13,16 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R5: klient obsługuje `ListGrubEntries`
+
+`BootBackend`, `DbusBackend` i `MockBackend` udostępniają wspólne
+`GrubMenuEntryDto` oraz ETag generowanego `grub.cfg`. Adapter zachowuje tytuł,
+ID, ścieżkę submenu, depth i `is_submenu`; błędny JSON i błąd metody D-Bus są
+propagowane. Implementacja: `bc87533`. Trzy nowe testy na prywatnym D-Bus i
+Demo Mode przechodzą; cały `cargo test -p bootcontrol-client` daje 33 testy i
+doctesty PASS, Clippy czysty. Renderowanie listy i Inspector pozostają w R6.
+Task-Ref: `next-backlog-loop-2026-09-06/R5`.
+
 ## 2026-09-06 — R4: snapshot GRUB powstaje pod lockiem zapisu
 
 `SetGrubValue` bierze `flock`, czyta i sprawdza ETag, a następnie przekazuje

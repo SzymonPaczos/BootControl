@@ -56,9 +56,9 @@ Confirmation Sheet. Pozostaje wybór UKI i protokół potwierdzania.
 
 ### GUI v2 — strony Boot Entries i Bootloader (Tor A)
 
-Parser `grub.cfg` i `ListGrubEntries` są już scalone (`cf7ddaf`, `34668c3`),
-podobnie warstwa wizualna Stacja (`c5fb3f3`). Pozostaje podłączenie listy do
-klienta i GUI, Inspector oraz staged changes; Bootloader nadal jest
+Parser `grub.cfg`, `ListGrubEntries` i adapter klienta są już scalone
+(`cf7ddaf`, `34668c3`, `bc87533`), podobnie warstwa wizualna Stacja (`c5fb3f3`).
+Pozostaje podłączenie listy do GUI, Inspector oraz staged changes; Bootloader nadal jest
 placeholderem. Settings ma nowy układ, lecz wartości nadal prezentuje
 statycznym tekstem i wymaga kontrolek edycji. Zatwierdzona kolejność: A1 Boot Entries → A2
 Bootloader → A3 szybkie poprawki. Briefy:
