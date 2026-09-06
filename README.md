@@ -127,7 +127,9 @@ cargo build --workspace
 
 ### Demo Mode (macOS / no Linux daemon)
 
-All three frontends support a **Demo Mode** that uses a `MockBackend` instead of D-Bus:
+All three frontends support a clearly labelled **Demo Mode** that uses a
+`MockBackend` instead of D-Bus. On Linux, bus or daemon failures are reported
+as errors; they never silently select demo data or simulate successful writes:
 
 ```bash
 BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-tui

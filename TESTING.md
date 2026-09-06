@@ -265,3 +265,21 @@ sudo rm /usr/share/polkit-1/actions/org.bootcontrol.policy
 - **`tempfile` for all filesystem tests** — never write to `/etc/default/grub` from tests
 - **`#[ignore]` for all E2E tests** — `cargo test --workspace` must stay fast
 - **Linux-only E2E gate** — `#![cfg(target_os = "linux")]` in `tests/e2e/src/main.rs`
+
+
+## Repair-loop regression gates
+
+The local CI also runs `python3 scripts/test-pre-push.py`: disposable Git
+repositories verify pushed-SHA isolation, multiple/new/deleted refs, cleanup,
+runner failures, audit ancestry, review fields and symlink rejection. Python 3
+is required. The generic toolkit suite needs BootControl's mandatory audit and
+CI fixtures; its six assertions are unchanged by this adapter:
+
+```sh
+python3 scripts/test-toolkit-push-gates.py /path/to/claude-toolkit
+```
+
+[D-Bus write-boundary coverage](docs/testing/write-boundaries.md) documents
+which contracts the daemon tests prove and which remain open. Tests start
+private buses and modify tempfile paths only. CLI startup tests also need
+`dbus-run-session`; the GUI startup test uses an offscreen renderer.

@@ -1,6 +1,6 @@
 # Pętla napraw po integracji — 2026-09-06
 
-**Status:** zaplanowana; implementacja następnej pętli nie została rozpoczęta.
+**Status:** wykonana 2026-09-06 — wszystkie pięć punktów planu.
 **Źródło:** polecenie właściciela: scalić wszystko, sprawdzić przeniesienie
 wykonanej pracy z backlogu i zaplanować pętlę.
 **Cel:** wiarygodne bramki i brak pozornego sukcesu frontendu, następnie
@@ -22,9 +22,8 @@ Naprawy bezpieczeństwa są scalone; pozostające P0 nie zostały przez to zamkn
    Zamknięcie: toolkit `templates/test-gates.sh` 6/6 oraz testy tych granic.
    To oddzielna zmiana control-plane, bez zmian produktu.
 2. **P0: jawny błąd D-Bus.** Zalecany kontrakt: na Linuksie błąd połączenia
-   jest błędem; MockBackend wyłącznie przy jawnym Demo Mode. Backlog
-   zachowuje decyzję właściciela o wariancie. Przed implementacją uzgodnić
-   ten kontrakt, jeśli nie został zatwierdzony w późniejszej rozmowie.
+   jest błędem; MockBackend wyłącznie przy jawnym Demo Mode. Wykonano
+   zalecany wariant w ramach polecenia właściciela „wykonaj pętlę”.
    Testy: brak daemona → CLI niezerowy exit i brak komunikatu sukcesu;
    GUI/TUI widoczny błąd; jawne demo nadal działa i jest oznaczone.
 3. **P0: wzorzec testowania inwariantu D-Bus — RestoreSnapshot.** Testy
@@ -65,3 +64,26 @@ Każdy wykonany punkt ma commit i rzeczywisty wynik bramek; backlog zawiera
 wyłącznie pozostały zakres. Żadne P0 nie jest zamknięte samą zmianą tekstu.
 Jeśli potrzebna jest decyzja o kontrakcie, kontynuować niezależne zadania,
 a zadanie zależne pozostawić jawnie otwarte.
+
+
+## Wynik wykonania
+
+| Punkt | Commit | Dowód |
+|-------|--------|-------|
+| 1 — izolowane sprawdzanie pushowanych SHA | `6c842c1` | 7/8 testów czerwonych przed poprawką; 8/8 zielonych po; toolkit 6/6 z fixture'ami wymagań BootControl |
+| 2 — jawny błąd backendu | `b3670f5` | 3/3 CLI czerwone przed poprawką, 4/4 zielone po; test uruchomienia TUI, render Demo Mode, headless GUI i doctesty klienta |
+| 3 — RestoreSnapshot | `e338551` | 5 testów przez prywatny D-Bus; pominięcie autoryzacji i ETagu wykrywane przez asercje runtime |
+| 4 — wszystkie metody mutujące | `3bff747` | 12 metod × odmowa Polkit i odmowa immutable; dodatkowe testy plików/EFI/NVRAM; łącznie 22 testy D-Bus |
+| 5 — pochodzenie audytu | `b28bf7a` | 6 nowych testów czerwonych przed poprawką; 16/16 wszystkich testów hooka po poprawce, toolkit nadal 6/6 |
+
+Pełny `scripts/ci-local.sh` na `b28bf7a`: PASS. Workspace: 657 testów i
+doctestów, 0 błędów; 9 ignored (6 E2E wykonanych osobno, 3 GUI smoke nadal
+ignored). Clippy wszystkich targetów/feature'ów i cross-check Windows: PASS.
+Session-bus E2E: runner 6/6; MOK ma jawny warunkowy skip przy braku OVMF,
+więc wynik nie jest dowodem enrollment/recovery. Nie wykonano rebootu.
+
+Zakres i ograniczenia testów: [macierz D-Bus](../../docs/testing/write-boundaries.md).
+Bramka sprawdza obecność i pochodzenie wyniku audytu, nie prawdziwość review;
+`FAIL` z zapisanymi findingami i uzasadnione `NOT_DUE` nie są zamieniane w PASS.
+Wyniki dawnych audytów pozostają historyczne. Następna kolejka zaczyna się
+od GUI A1/A2 oraz otwartych kontraktów i bramek release, według backlogu.

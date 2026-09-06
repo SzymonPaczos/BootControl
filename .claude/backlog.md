@@ -8,36 +8,13 @@ funkcji w [`status.md`](status.md).
 
 Priorytety: **P0** krytyczne · **P1** ważne · **P2** porządkowe.
 
-Plan następnej pętli: [`task-briefs/repair-loop-2026-09-06.md`](task-briefs/repair-loop-2026-09-06.md).
-Stan po scaleniu gałęzi lokalnych i origin 2026-09-06.
+Wykonana pętla: [`task-briefs/repair-loop-2026-09-06.md`](task-briefs/repair-loop-2026-09-06.md).
+Stan po pętli napraw 2026-09-06; dowody zamknięć w historii wykonanej pracy.
 
 ## P0 — krytyczne
 
-### `pre-push` sprawdza working tree zamiast pushowanego commita
-
-`.githooks/pre-push` nie czyta refów ze stdin i uruchamia bramki na bieżącym
-working tree. Można więc wypchnąć wadliwy commit, zostawiając lokalnie
-niezacommitowaną poprawkę. Naprawa ma odtwarzać pushowany commit w tymczasowym
-worktree i obsługiwać zakres `remote_sha..local_sha` oraz nową gałąź.
-**Dowód zamknięcia:** `templates/test-gates.sh` z toolkitu przechodzi 6/6.
-**Źródło:** adopcja toolkitu 2026-08-22. **Status:** otwarte.
-
-### Brak testów inwariantu metod D-Bus w `interface.rs`
-
-`crates/daemon/src/interface.rs` nie ma testów jednostkowych, a E2E wywołuje
-bezpośrednio tylko niewielką część metod. Nie ma systematycznego dowodu
-kolejności Polkit → walidacja/ETag → blokada → snapshot → zapis dla wszystkich
-uprzywilejowanych write-pathów. Historyczne procenty llvm-cov usunięto z tego
-wpisu, bo nie były ponownie mierzone.
-**Źródło:** pomiar pokrycia 2026-08-23. **Status:** otwarte.
-
-### `MockBackend` udaje sukces po utracie połączenia z daemonem
-
-Na Linuksie `resolve_backend()` po błędzie D-Bus przechodzi bez wyraźnego
-sygnału na `MockBackend`; frontend może wtedy pokazać sukces mimo braku zapisu.
-Potrzebna decyzja: propagować błąd czy wprowadzić jawny, widoczny tryb
-degradacji.
-**Źródło:** audyt 2026-08-22. **Status:** czeka na decyzję właściciela.
+_(brak otwartych pozycji po pętli 2026-09-06; ograniczenia pokrycia opisuje
+[macierz testów D-Bus](../docs/testing/write-boundaries.md))_
 
 ## P1 — ważne
 
@@ -66,10 +43,10 @@ wymuszać oddzielny commit/review.
 
 ### GUI Secure Boot ma niedokończone wejścia i confirmation flow
 
-GUI przekazuje puste ścieżki do `sign_and_enroll_uki` i `backup_nvram`, a oba
-przyciski omijają Confirmation Sheet. Trzeba zapewnić poprawny wybór/domniemanie
-ścieżek albo wyłączyć niedziałające akcje oraz poprowadzić je przez wspólny
-protokół działań destrukcyjnych.
+MOK enrollment nadal przekazuje pustą ścieżkę zamiast wybranego UKI.
+`backup_nvram("")` poprawnie wybiera domyślny katalog daemona; ten fragment
+dawnego zgłoszenia nie był usterką. Obie akcje wymagają wspólnego
+Confirmation Sheet. Pozostaje wybór UKI i protokół potwierdzania.
 **Źródło:** recenzja i audyt UX 2026-07-12. **Status:** otwarte.
 
 ### GUI v2 — strony Boot Entries i Bootloader (Tor A)
@@ -84,11 +61,12 @@ Bootloader → A3 szybkie poprawki. Briefy:
 [`gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
 **Źródło:** audyt UX i decyzja 2026-07-12. **Status:** zatwierdzone.
 
-### CLI/TUI — trzy potwierdzone błędy interfejsów
+### CLI/TUI/GUI — pozostałe błędy interfejsów
 
 CLI `get-config` dla systemd-boot/UKI wypisuje błąd bez niezerowego exit code;
 TUI ignoruje błąd `remove_kernel_param`; GUI reklamuje nieistniejące
-`bootcontrol grub rebuild`, a TUI hardkoduje nagłówek `/etc/default/grub`.
+`bootcontrol grub rebuild`. Nagłówek TUI pokazuje już backend i Demo Mode
+(`b3670f5`); ten fragment jest zamknięty.
 **Źródło:** przegląd CLI/TUI 2026-07-12; ponownie zweryfikowane 2026-09-05.
 **Status:** otwarte.
 
@@ -114,14 +92,6 @@ negatywny „mutacja bajtu → exit 1".
 **Źródło:** audyt 2026-08-22; ponownie zweryfikowane na toolkicie 2026.09.05.
 **Status:** otwarte w masterze toolkitu.
 
-### Preflight audytu sprawdza datę zamiast pochodzenia dowodu
-
-`pre-push` akceptuje sam świeży nagłówek daty i czyta go z working tree.
-Powinien wymagać z pushowanego commita `AUDITED_REVISION` osiągalnego z HEAD
-oraz niepustych pól Security Review/Red Team. To jedno zadanie zastępuje dawny
-duplikat „Audit-evidence gate".
-**Źródło:** Red Team 2026-07-12 i audyt 2026-08-22. **Status:** otwarte.
-
 ### Drift dokumentacji aktywnych akcji Polkit
 
 Do uzgodnienia pozostają `AGENTS.md` i `docs/UX_BRIEF.md`;
@@ -136,7 +106,10 @@ Ratchet liczby akcji w `audit.sh` nadal wymaga weryfikacji.
 
 Nie wszystkie write-pathy mają jednolity kontrakt ETag/snapshot; w szczególności
 operacje efivars wymagają formalnego rozstrzygnięcia względem decyzji o
-stateless daemonie.
+stateless daemonie. Snapshot GRUB jest tworzony przed blokadą celu; pełna
+transakcja snapshot+flock nadal wymaga domknięcia. Nowe testy D-Bus dowodzą
+autoryzacji i istniejących odmów, nie wdrożenia tych brakujących kontraktów.
+Dokładny zakres: [macierz testów](../docs/testing/write-boundaries.md).
 **Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
 
 ### OVMF harness ma realnie potwierdzać boot i enrollment
@@ -170,8 +143,9 @@ zmian zależności.
 ### `BackupNvram` — hardening ścieżki docelowej
 
 Caller-supplied `target_dir` nie ma ochrony `O_NOFOLLOW`/`O_EXCL` ani confinement
-do katalogu zarządzanego. Osobno metoda nie egzekwuje immutable-distro guard.
-Potrzebne testy symlinków i polityki hosta immutable.
+do katalogu zarządzanego. Potrzebne pozostają testy i ochrona przed symlinkami.
+Immutable-distro guard oraz test jego kolejności po Polkit są już wdrożone
+w `3bff747`.
 **Źródło:** Security Review 2026-07-12 i 2026-08-22. **Status:** otwarte.
 
 ### `crates/gui-spike` — decyzja o archiwizacji

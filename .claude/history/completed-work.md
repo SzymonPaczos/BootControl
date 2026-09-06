@@ -13,6 +13,32 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — Wykonana pętla P0 i pochodzenia audytu
+
+- `6c842c1`: pre-push sprawdza wysyłane SHA w oddzielnych worktree; obsługuje
+  wiele/nowe/usuwane refy, błędy runnera i sprzątanie. Test negatywny wykrywa
+  wadliwy commit mimo poprawki wyłącznie w working tree.
+- `b3670f5`: Linux propaguje błąd magistrali lub nieobecnego daemona;
+  jawne Demo Mode jest oznaczone w CLI/TUI/GUI. TUI kończy się przed raw mode,
+  GUI pokazuje błąd bez instalowania callbacków operacji i bez mock danych.
+- `e338551`: pięć testów RestoreSnapshot przez prywatny D-Bus. Inotify
+  obserwuje brak nieautoryzowanych odczytów/zapisów. Dwie mutacje (pominięcie
+  autoryzacji / ETagu) zostały wykryte przez asercje runtime i cofnięte.
+- `3bff747`: wszystkie 12 mutatorów autoryzuje przed host preflight;
+  dziewięć wcześniejszych naruszeń kolejności i brak guardu BackupNvram
+  potwierdziły czerwone testy. 22 testy granicy D-Bus obejmują też stale ETag,
+  flock, snapshot failure, manifesty i tymczasowe efivars/NVRAM.
+- `b28bf7a`: aktualny audyt musi wskazywać osiągalne AUDITED_REVISION oraz
+  wyniki SECURITY_REVIEW/RED_TEAM z wysyłanego commita. 16 testów hooka i
+  6 testów toolkitu przechodzi (adapter dodaje jedynie wymagane fixture'y).
+
+Pełne CI na `b28bf7a`: PASS; 657 testów/doctestów workspace, Clippy, Windows,
+session-bus E2E. 3 GUI smoke nadal ignored; harness MOK warunkowo pomija
+wykonanie bez OVMF. Zamknięto trzy P0 i pozycję P1 o pochodzeniu audytu.
+Nie zamknięto pełnego ETag/snapshot kontraktu wszystkich backendów ani G2/G3.
+Szczegóły: [brief pętli](../task-briefs/repair-loop-2026-09-06.md) i
+[macierz testów](../../docs/testing/write-boundaries.md).
+
 ## 2026-09-06 — Integracja wszystkich gałęzi i uzgodnienie backlogu
 
 Weryfikacja `8e8b757`: fmt, Clippy all-targets/all-features, 626 testów i
