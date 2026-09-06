@@ -63,8 +63,8 @@ Bootloader → A3 szybkie poprawki. Briefy:
 
 ### CLI/TUI/GUI — pozostałe błędy interfejsów
 
-TUI ignoruje błąd `remove_kernel_param`; GUI reklamuje nieistniejące
-`bootcontrol grub rebuild`. CLI `get-config` propaguje już błędy odczytu
+GUI reklamuje nieistniejące `bootcontrol grub rebuild`. TUI zgłasza już
+częściowe błędy edycji UKI, odświeża stan i rozróżnia dodawanie od edycji. CLI `get-config` propaguje już błędy odczytu
 systemd-boot/UKI oraz ponownego wykrywania backendu (pętla 2026-09-06). Nagłówek TUI pokazuje już backend i Demo Mode
 (`b3670f5`); ten fragment jest zamknięty.
 **Źródło:** przegląd CLI/TUI 2026-07-12; ponownie zweryfikowane 2026-09-05.

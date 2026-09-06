@@ -54,6 +54,8 @@ pub struct App {
     pub mode: Mode,
     /// Buffer backing the inline editor in [`Mode::Editing`].
     pub edit_buf: String,
+    /// Key captured when editing an existing entry; `None` when adding one.
+    pub edit_original_key: Option<String>,
     /// One-line status message shown in the footer.
     pub status_msg: String,
     /// Error message shown in the error popup, if any.
@@ -95,6 +97,7 @@ impl App {
             etag,
             mode: Mode::default(),
             edit_buf: String::new(),
+            edit_original_key: None,
             status_msg: String::from("Ready."),
             error_msg: None,
             should_quit: false,
@@ -115,6 +118,7 @@ impl App {
             etag,
             mode: Mode::default(),
             edit_buf: String::new(),
+            edit_original_key: None,
             status_msg: String::from("Ready."),
             error_msg: None,
             should_quit: false,
@@ -244,7 +248,12 @@ impl App {
     /// ```
     pub fn open_edit_popup(&mut self) {
         if let Some(entry) = self.entries.get(self.selected) {
-            self.edit_buf = entry.value.clone();
+            self.edit_original_key = Some(entry.key.clone());
+            self.edit_buf = if self.backend_name.contains("uki") {
+                entry.key.clone()
+            } else {
+                entry.value.clone()
+            };
             self.mode = Mode::Editing;
         }
     }
@@ -298,6 +307,7 @@ impl App {
     /// ```
     pub fn cancel_edit(&mut self) {
         self.edit_buf.clear();
+        self.edit_original_key = None;
         self.mode = Mode::Browse;
     }
 

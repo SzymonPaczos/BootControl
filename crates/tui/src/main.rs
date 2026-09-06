@@ -22,6 +22,9 @@ pub mod events;
 pub mod popup;
 pub mod ui;
 
+#[cfg(all(test, target_os = "linux"))]
+mod uki_edit_tests;
+
 use std::io;
 use std::sync::Arc;
 
@@ -154,6 +157,7 @@ async fn handle_browse_key(key: KeyEvent, app: &mut App, backend: &dyn BootBacke
         KeyCode::Char('a') | KeyCode::Char('A') if is_uki => {
             // UKI: 'a' opens empty editor to add a new parameter
             app.edit_buf.clear();
+            app.edit_original_key = None;
             app.mode = Mode::Editing;
             app.status_msg = "Type new kernel parameter, Enter to add.".into();
         }
@@ -407,9 +411,8 @@ async fn commit_uki_edit(app: &mut App, backend: &dyn BootBackend) {
         return;
     }
 
-    // If there's a selected entry, it's an edit (remove old, add new).
-    // If the edit_buf was pre-populated, remove the old param first.
-    let old_param = app.current_entry().map(|e| e.key.clone());
+    // An explicit edit captures its original key; adding never removes a row.
+    let old_param = app.edit_original_key.clone();
     let etag = app.etag.clone();
 
     // Add the new parameter.
@@ -419,8 +422,20 @@ async fn commit_uki_edit(app: &mut App, backend: &dyn BootBackend) {
             if let Some(old) = old_param {
                 if old != new_param {
                     // Reload ETag after add, then remove old.
-                    if let Ok((_, new_etag)) = backend.read_kernel_cmdline().await {
-                        let _ = backend.remove_kernel_param(&old, &new_etag).await;
+                    let removal = match backend.read_kernel_cmdline().await {
+                        Ok((_, new_etag)) => backend.remove_kernel_param(&old, &new_etag).await,
+                        Err(error) => Err(error),
+                    };
+                    if let Err(error) = removal {
+                        app.cancel_edit();
+                        app.status_msg =
+                            "Parameter edit incomplete; reload before retrying.".into();
+                        reload_config(app, backend).await;
+                        app.show_error(format!(
+                            "Added {new_param}, but could not remove {old}: {}. Reload and review the parameters before retrying.",
+                            dbus_error_message(&error)
+                        ));
+                        return;
                     }
                 }
             }

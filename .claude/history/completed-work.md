@@ -13,6 +13,18 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — TUI: dodawanie i częściowo wykonane zmiany UKI
+
+Dodawanie parametru nie usuwa zaznaczonego wpisu. Edycja wypełnia bufor
+wybranym parametrem; błąd odczytu ETag lub usuwania starego wpisu pokazuje
+częściowy wynik bez komunikatu sukcesu. Przy dostępnym odczycie lista i ETag
+odzwierciedlają rzeczywisty stan. Operacja nadal składa się z dwóch wywołań
+D-Bus; nie deklarujemy transakcyjnej zamiany.
+Dowód: 5 testów rzeczywistych klawiszy i prywatnego D-Bus w
+`crates/tui/src/uki_edit_tests.rs`; przed zmianą 4/5 czerwone, po zmianie
+cały `cargo test -p bootcontrol-tui` zielony.
+Logi: `/tmp/backlog-tui-red.log`, `/tmp/backlog-tui-green.log`.
+
 ## 2026-09-06 — CLI: niezerowy status przy błędzie odczytu konfiguracji
 
 `get-config` propaguje błędy systemd-boot/UKI i wykrywania backendu zamiast
