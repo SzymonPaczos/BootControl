@@ -50,6 +50,7 @@ use bootcontrol_core::{
     error::BootControlError,
     grub::parse_grub_config,
     grub_cfg::{parse_menu_entries, GrubMenuEntry},
+    grub_settings::{parse_grub_settings, validate_grub_settings, GrubSettings},
     hash::{compute_etag_str, verify_etag},
 };
 use nix::fcntl::{Flock, FlockArg};
@@ -92,6 +93,35 @@ pub fn read_grub_config(
     let etag = compute_etag_str(&content);
 
     Ok((config.map, etag))
+}
+
+/// Read and type-check the supported Bootloader settings with their ETag.
+///
+/// # Arguments
+///
+/// * `path` - Path to `/etc/default/grub`.
+///
+/// # Errors
+///
+/// Returns [`BootControlError::EspScanFailed`] for read errors,
+/// [`BootControlError::ComplexBashDetected`] for executable shell constructs,
+/// or [`BootControlError::MalformedValue`] for unsupported typed values.
+///
+/// # Examples
+///
+/// ```no_run
+/// use bootcontrold::grub_manager::read_grub_settings;
+/// use std::path::Path;
+/// let (settings, etag) = read_grub_settings(Path::new("/etc/default/grub")).unwrap();
+/// assert!(settings.timeout_seconds <= 1_000_000);
+/// assert_eq!(etag.len(), 64);
+/// ```
+pub fn read_grub_settings(path: &Path) -> Result<(GrubSettings, String), BootControlError> {
+    let content = fs::read_to_string(path).map_err(|error| BootControlError::EspScanFailed {
+        reason: error.to_string(),
+    })?;
+    let settings = parse_grub_settings(&content)?;
+    Ok((settings, compute_etag_str(&content)))
 }
 
 /// Return only the ETag of the current on-disk GRUB config.
@@ -238,6 +268,57 @@ pub fn set_grub_value(
     })
 }
 
+/// Atomically write all supported typed GRUB settings and rebuild once.
+///
+/// # Arguments
+///
+/// * `path` - Path to `/etc/default/grub`.
+/// * `settings` - Fully typed desired values.
+/// * `etag` - ETag returned by [`read_grub_settings`].
+/// * `failsafe_cfg` - Path to the BootControl failsafe snippet.
+/// * `grub_cfg_path` - Destination passed to `grub-mkconfig`.
+///
+/// # Errors
+///
+/// Returns [`BootControlError::MalformedValue`] for invalid typed values and
+/// the same I/O, parser, locking, ETag, failsafe, and rebuild errors as
+/// [`set_grub_value`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use bootcontrol_core::grub_settings::{GrubSettings, GrubTimeoutStyle};
+/// use bootcontrold::grub_manager::set_grub_settings;
+/// use std::path::Path;
+/// let settings = GrubSettings {
+///     timeout_seconds: 5,
+///     timeout_style: GrubTimeoutStyle::Menu,
+///     detect_other_os: true,
+///     generate_recovery_entries: true,
+/// };
+/// set_grub_settings(
+///     Path::new("/etc/default/grub"), &settings, "current-etag",
+///     Path::new("/etc/bootcontrol/failsafe.cfg"),
+///     Path::new("/boot/grub/grub.cfg"),
+/// ).unwrap();
+/// ```
+pub fn set_grub_settings(
+    path: &Path,
+    settings: &GrubSettings,
+    etag: &str,
+    failsafe_cfg: &Path,
+    grub_cfg_path: &Path,
+) -> Result<(), BootControlError> {
+    set_grub_settings_with_prewrite(
+        path,
+        settings,
+        etag,
+        failsafe_cfg,
+        grub_cfg_path,
+        |_| Ok(()),
+    )
+}
+
 /// Select a generated GRUB menu entry as the next persistent default.
 ///
 /// The configuration ETag is checked under the `/etc/default/grub` lock.
@@ -306,6 +387,27 @@ pub(crate) struct LockedGrubState<'a> {
     pub(crate) mode: String,
 }
 
+pub(crate) fn set_grub_settings_with_prewrite(
+    path: &Path,
+    settings: &GrubSettings,
+    etag: &str,
+    failsafe_cfg: &Path,
+    grub_cfg_path: &Path,
+    prewrite: impl FnOnce(&LockedGrubState<'_>) -> Result<(), BootControlError>,
+) -> Result<(), BootControlError> {
+    validate_grub_settings(settings)?;
+    let timeout = settings.timeout_seconds.to_string();
+    let disable_os_prober = (!settings.detect_other_os).to_string();
+    let disable_recovery = (!settings.generate_recovery_entries).to_string();
+    let changes = [
+        ("GRUB_TIMEOUT", timeout.as_str()),
+        ("GRUB_TIMEOUT_STYLE", settings.timeout_style.as_str()),
+        ("GRUB_DISABLE_OS_PROBER", disable_os_prober.as_str()),
+        ("GRUB_DISABLE_RECOVERY", disable_recovery.as_str()),
+    ];
+    set_grub_values_with_prewrite(path, &changes, etag, failsafe_cfg, grub_cfg_path, prewrite)
+}
+
 pub(crate) fn set_grub_default_with_prewrite(
     config_path: &Path,
     menu_path: &Path,
@@ -366,6 +468,24 @@ pub(crate) fn set_grub_value_with_prewrite(
     path: &Path,
     key: &str,
     value: &str,
+    etag: &str,
+    failsafe_cfg: &Path,
+    grub_cfg_path: &Path,
+    prewrite: impl FnOnce(&LockedGrubState<'_>) -> Result<(), BootControlError>,
+) -> Result<(), BootControlError> {
+    set_grub_values_with_prewrite(
+        path,
+        &[(key, value)],
+        etag,
+        failsafe_cfg,
+        grub_cfg_path,
+        prewrite,
+    )
+}
+
+fn set_grub_values_with_prewrite(
+    path: &Path,
+    changes: &[(&str, &str)],
     etag: &str,
     failsafe_cfg: &Path,
     grub_cfg_path: &Path,
@@ -447,23 +567,25 @@ pub(crate) fn set_grub_value_with_prewrite(
         mode,
     })?;
 
-    // ── Step 6: Reconstruct lines — update LAST occurrence of the key ────────
+    // ── Step 6: Reconstruct lines — update LAST occurrence of each key ──────
     //
     // The GRUB parser uses "last assignment wins" semantics (like `source`).
     // We must update the **last** matching line to stay consistent with what
     // the shell would actually see after sourcing the file. Updating only the
     // first occurrence while a later duplicate exists would leave a stale value
     // as the effective one.
-    let new_line = build_assignment_line(key, value);
-    match config
-        .lines
-        .iter()
-        .rposition(|l| is_assignment_for_key(l, key))
-    {
-        Some(idx) => config.lines[idx] = new_line,
-        None => config.lines.push(new_line),
+    for &(key, value) in changes {
+        let new_line = build_assignment_line(key, value);
+        match config
+            .lines
+            .iter()
+            .rposition(|line| is_assignment_for_key(line, key))
+        {
+            Some(index) => config.lines[index] = new_line,
+            None => config.lines.push(new_line),
+        }
+        config.map.insert(key.to_string(), value.to_string());
     }
-    config.map.insert(key.to_string(), value.to_string());
 
     // ── Step 7: Atomic write via temp file + rename ───────────────────────
     let tmp_path = build_tmp_path(path);
@@ -475,7 +597,10 @@ pub(crate) fn set_grub_value_with_prewrite(
     // does not roll back the user's intended change. The failsafe entry is
     // best-effort from the user's perspective, but we propagate the error so
     // callers can log / surface it if the output directory is inaccessible.
-    info!(key, "GRUB config updated — refreshing failsafe entry");
+    info!(
+        change_count = changes.len(),
+        "GRUB config updated — refreshing failsafe entry"
+    );
     failsafe::refresh_failsafe_entry(failsafe_cfg)?;
 
     // ── Step 9: Regenerate /boot/grub/grub.cfg via grub-mkconfig ─────────
@@ -486,7 +611,7 @@ pub(crate) fn set_grub_value_with_prewrite(
     //
     // run_grub_mkconfig is called AFTER the failsafe refresh so both
     // safeguards are in place before the live boot config is regenerated.
-    info!(key, grub_cfg = ?grub_cfg_path, "triggering grub-mkconfig");
+    info!(change_count = changes.len(), grub_cfg = ?grub_cfg_path, "triggering grub-mkconfig");
     grub_rebuild::run_grub_mkconfig(grub_cfg_path)?;
 
     Ok(())

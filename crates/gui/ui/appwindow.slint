@@ -120,6 +120,14 @@ export component AppWindow inherits Window {
     in property <int> grub_menu_selected_index: -1;
     in property <string> grub_default_path: "";
     in property <int> grub_menu_pending_count: 0;
+    in property <string> grub_settings_status: "idle";
+    in property <string> grub_settings_error: "";
+    in property <string> grub_settings_etag: "";
+    in property <int> grub_settings_timeout: 5;
+    in property <string> grub_settings_timeout_style: "menu";
+    in property <bool> grub_settings_detect_other_os: true;
+    in property <bool> grub_settings_recovery_entries: true;
+    in property <int> grub_settings_pending_count: 0;
     in property <string> toast_message: "";
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
@@ -182,6 +190,13 @@ export component AppWindow inherits Window {
     callback stage_grub_default();
     callback discard_grub_default();
     callback apply_grub_default();
+    callback fetch_grub_settings();
+    callback stage_grub_timeout(string);
+    callback stage_grub_timeout_style(string);
+    callback stage_grub_detect_other_os(bool);
+    callback stage_grub_recovery_entries(bool);
+    callback discard_grub_settings();
+    callback apply_grub_settings();
     callback save_entry(string, string);
     callback dismiss_toast();
     callback rebuild_grub();
@@ -331,6 +346,21 @@ export component AppWindow inherits Window {
 
                 if root.active_tab == 2 : BootloaderPage {
                     active-backend: root.active_backend;
+                    status: root.grub_settings_status;
+                    error-message: root.grub_settings_error;
+                    config-etag: root.grub_settings_etag;
+                    timeout-seconds: root.grub_settings_timeout;
+                    timeout-style: root.grub_settings_timeout_style;
+                    detect-other-os: root.grub_settings_detect_other_os;
+                    recovery-entries: root.grub_settings_recovery_entries;
+                    pending-count: root.grub_settings_pending_count;
+                    refresh => { root.fetch_grub_settings(); }
+                    timeout-edited(value) => { root.stage_grub_timeout(value); }
+                    timeout-style-selected(value) => { root.stage_grub_timeout_style(value); }
+                    detect-other-os-toggled(value) => { root.stage_grub_detect_other_os(value); }
+                    recovery-entries-toggled(value) => { root.stage_grub_recovery_entries(value); }
+                    discard => { root.discard_grub_settings(); }
+                    apply => { root.apply_grub_settings(); }
                 }
 
                 if root.active_tab == 3 : SecureBootPage {

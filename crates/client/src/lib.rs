@@ -77,6 +77,19 @@ pub struct GrubMenuEntryDto {
     pub is_submenu: bool,
 }
 
+/// Typed GRUB settings shown on the Bootloader page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrubSettingsDto {
+    /// Seconds before the default entry starts.
+    pub timeout_seconds: u32,
+    /// `menu`, `countdown`, or `hidden`.
+    pub timeout_style: String,
+    /// Whether GRUB detects other installed operating systems.
+    pub detect_other_os: bool,
+    /// Whether GRUB generates recovery menu entries.
+    pub generate_recovery_entries: bool,
+}
+
 /// A systemd-boot loader entry as returned by the daemon.
 ///
 /// `id` is the filename stem (e.g. `"arch"` for `arch.conf`).
@@ -224,8 +237,21 @@ pub trait Manager {
     /// Read the GRUB configuration.
     async fn read_grub_config(&self) -> zbus::Result<(HashMap<String, String>, String)>;
 
+    /// Read typed Bootloader settings and their source ETag.
+    async fn read_grub_settings(&self) -> zbus::Result<(u32, String, bool, bool, String)>;
+
     /// Set a GRUB value.
     async fn set_grub_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Atomically write typed Bootloader settings under one ETag.
+    async fn set_grub_settings(
+        &self,
+        timeout_seconds: u32,
+        timeout_style: &str,
+        detect_other_os: bool,
+        generate_recovery_entries: bool,
+        etag: &str,
+    ) -> zbus::Result<()>;
 
     /// Select a GRUB menu path using both generated-menu and source-config ETags.
     async fn set_grub_default(
@@ -358,8 +384,14 @@ pub trait BootBackend: Send + Sync {
     /// Read the GRUB boot configuration (key-values and ETag).
     async fn read_config(&self) -> zbus::Result<(HashMap<String, String>, String)>;
 
+    /// Read the supported typed GRUB settings and source ETag.
+    async fn read_grub_settings(&self) -> zbus::Result<(GrubSettingsDto, String)>;
+
     /// Set a single GRUB configuration value.
     async fn set_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()>;
+
+    /// Atomically write all supported typed GRUB settings.
+    async fn set_grub_settings(&self, settings: &GrubSettingsDto, etag: &str) -> zbus::Result<()>;
 
     /// Select a GRUB menu path after checking both source versions.
     async fn set_grub_default(
@@ -467,9 +499,37 @@ impl BootBackend for DbusBackend {
         proxy.read_grub_config().await
     }
 
+    async fn read_grub_settings(&self) -> zbus::Result<(GrubSettingsDto, String)> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        let (timeout_seconds, timeout_style, detect_other_os, recovery, etag) =
+            proxy.read_grub_settings().await?;
+        Ok((
+            GrubSettingsDto {
+                timeout_seconds,
+                timeout_style,
+                detect_other_os,
+                generate_recovery_entries: recovery,
+            },
+            etag,
+        ))
+    }
+
     async fn set_value(&self, key: &str, value: &str, etag: &str) -> zbus::Result<()> {
         let proxy = ManagerProxy::new(&self.conn).await?;
         proxy.set_grub_value(key, value, etag).await
+    }
+
+    async fn set_grub_settings(&self, settings: &GrubSettingsDto, etag: &str) -> zbus::Result<()> {
+        let proxy = ManagerProxy::new(&self.conn).await?;
+        proxy
+            .set_grub_settings(
+                settings.timeout_seconds,
+                &settings.timeout_style,
+                settings.detect_other_os,
+                settings.generate_recovery_entries,
+                etag,
+            )
+            .await
     }
 
     async fn set_grub_default(
@@ -624,7 +684,27 @@ impl BootBackend for MockBackend {
         Ok((mock, "mock-etag-12345".to_string()))
     }
 
+    async fn read_grub_settings(&self) -> zbus::Result<(GrubSettingsDto, String)> {
+        Ok((
+            GrubSettingsDto {
+                timeout_seconds: 5,
+                timeout_style: "menu".to_string(),
+                detect_other_os: true,
+                generate_recovery_entries: true,
+            },
+            "mock-etag-12345".to_string(),
+        ))
+    }
+
     async fn set_value(&self, _key: &str, _value: &str, _etag: &str) -> zbus::Result<()> {
+        Ok(())
+    }
+
+    async fn set_grub_settings(
+        &self,
+        _settings: &GrubSettingsDto,
+        _etag: &str,
+    ) -> zbus::Result<()> {
         Ok(())
     }
 

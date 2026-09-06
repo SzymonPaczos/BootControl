@@ -35,7 +35,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use bootcontrol_core::{boot_manager::BootManager, secureboot::MokSigner};
+use bootcontrol_core::{
+    boot_manager::BootManager,
+    grub_settings::{validate_grub_settings, GrubSettings, GrubTimeoutStyle},
+    secureboot::MokSigner,
+};
 
 use crate::{
     audit::{self, message_ids, AuditEvent, Phase},
@@ -234,6 +238,34 @@ impl GrubManager {
             ),
             None => Ok(()),
         }
+    }
+
+    async fn authorize_rewrite_request(
+        &self,
+        header: &zbus::message::Header<'_>,
+        connection: &zbus::Connection,
+        method: &str,
+    ) -> Result<u32, DaemonError> {
+        let sender = header
+            .sender()
+            .ok_or_else(|| DaemonError::PolkitDenied("missing sender in D-Bus message".into()))?
+            .clone();
+        let dbus_proxy = zbus::fdo::DBusProxy::new(connection)
+            .await
+            .map_err(|error| {
+                DaemonError::PolkitDenied(format!("failed to create D-Bus proxy: {error}"))
+            })?;
+        let caller_uid = dbus_proxy
+            .get_connection_unix_user(sender.into())
+            .await
+            .map_err(|error| {
+                DaemonError::PolkitDenied(format!("failed to resolve caller UID: {error}"))
+            })?;
+        self.authorize(&resolve_bus_name(header, method)?, actions::REWRITE_GRUB)
+            .await
+            .map_err(to_daemon_error)?;
+        self.require_writable_host().map_err(to_daemon_error)?;
+        Ok(caller_uid)
     }
 
     fn efivars_reader(&self) -> crate::uefi_vars_linux::EfivarFsReader {
@@ -607,6 +639,179 @@ impl GrubManager {
         let _operation = self.activity.begin_operation();
         info!(path = ?self.grub_path, "D-Bus: ReadGrubConfig");
         grub_manager::read_grub_config(&self.grub_path).map_err(to_daemon_error)
+    }
+
+    /// Read the supported GRUB settings as typed D-Bus values.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// ReadGrubSettings() -> (u, s, b, b, s)
+    /// ```
+    ///
+    /// Returns timeout seconds, timeout style, whether other operating systems
+    /// are detected, whether recovery entries are generated, and the source
+    /// configuration ETag.
+    async fn read_grub_settings(&self) -> Result<(u32, String, bool, bool, String), DaemonError> {
+        let _operation = self.activity.begin_operation();
+        let (settings, etag) =
+            grub_manager::read_grub_settings(&self.grub_path).map_err(to_daemon_error)?;
+        Ok((
+            settings.timeout_seconds,
+            settings.timeout_style.as_str().to_string(),
+            settings.detect_other_os,
+            settings.generate_recovery_entries,
+            etag,
+        ))
+    }
+
+    /// Atomically write all supported typed GRUB settings.
+    ///
+    /// Authorization, validation, flock, ETag verification and a snapshot of
+    /// the locked bytes all precede the single atomic rewrite and rebuild.
+    ///
+    /// ## D-Bus signature
+    ///
+    /// ```text
+    /// SetGrubSettings(u, s, b, b, s) -> ()
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    async fn set_grub_settings(
+        &self,
+        timeout_seconds: u32,
+        timeout_style: String,
+        detect_other_os: bool,
+        generate_recovery_entries: bool,
+        etag: String,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<(), DaemonError> {
+        let _operation = self.activity.begin_operation();
+        let caller_uid = self
+            .authorize_rewrite_request(&header, connection, "SetGrubSettings")
+            .await?;
+        let timeout_style = match timeout_style.as_str() {
+            "menu" => GrubTimeoutStyle::Menu,
+            "countdown" => GrubTimeoutStyle::Countdown,
+            "hidden" => GrubTimeoutStyle::Hidden,
+            value => {
+                return Err(to_daemon_error(
+                    bootcontrol_core::error::BootControlError::MalformedValue {
+                        key: "GRUB_TIMEOUT_STYLE".to_string(),
+                        reason: format!("unsupported timeout style '{value}'"),
+                    },
+                ));
+            }
+        };
+        let settings = GrubSettings {
+            timeout_seconds,
+            timeout_style,
+            detect_other_os,
+            generate_recovery_entries,
+        };
+        validate_grub_settings(&settings).map_err(to_daemon_error)?;
+        let payloads = [
+            ("GRUB_TIMEOUT", timeout_seconds.to_string()),
+            ("GRUB_TIMEOUT_STYLE", timeout_style.as_str().to_string()),
+            ("GRUB_DISABLE_OS_PROBER", (!detect_other_os).to_string()),
+            (
+                "GRUB_DISABLE_RECOVERY",
+                (!generate_recovery_entries).to_string(),
+            ),
+        ];
+        for (key, value) in &payloads {
+            sanitize::check_payload(key, value).map_err(to_daemon_error)?;
+        }
+
+        let job_id = new_job_id();
+        let target_paths = vec![self.grub_path.display().to_string()];
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_settings",
+            phase: Phase::Started,
+            target_paths: target_paths.clone(),
+            etag_before: Some(etag.clone()),
+            etag_after: None,
+            snapshot_id: None,
+            exit_code: None,
+            caller_uid,
+            polkit_action: "org.bootcontrol.rewrite-grub",
+            job_id: job_id.clone(),
+            stderr_tail: String::new(),
+        });
+
+        let files = [self.grub_path.clone()];
+        let mut snapshot_id = None;
+        let result = grub_manager::set_grub_settings_with_prewrite(
+            &self.grub_path,
+            &settings,
+            &etag,
+            &self.failsafe_cfg_path,
+            &self.grub_cfg_path,
+            |locked| {
+                let captured = [snapshot::CapturedFile {
+                    path: self.grub_path.clone(),
+                    bytes: locked.bytes.to_vec(),
+                    mode: locked.mode.clone(),
+                }];
+                let snap_info = snapshot::create_with_captured_files(
+                    snapshot::SnapshotRequest {
+                        root: &self.snapshot_root,
+                        op: "set_grub_settings",
+                        polkit_action: "org.bootcontrol.rewrite-grub",
+                        caller_uid,
+                        etag_before: &etag,
+                        files: &files,
+                        audit_job_id: &job_id,
+                    },
+                    &captured,
+                )
+                .map_err(|error| {
+                    bootcontrol_core::error::BootControlError::EspScanFailed {
+                        reason: format!("snapshot failed: {error}"),
+                    }
+                })?;
+                snapshot_id = Some(snap_info.id.clone());
+                audit::emit(&AuditEvent {
+                    message_id: message_ids::SET_GRUB_VALUE,
+                    operation: "set_grub_settings",
+                    phase: Phase::SnapshotTaken,
+                    target_paths: target_paths.clone(),
+                    etag_before: Some(etag.clone()),
+                    etag_after: None,
+                    snapshot_id: Some(snap_info.id),
+                    exit_code: None,
+                    caller_uid,
+                    polkit_action: "org.bootcontrol.rewrite-grub",
+                    job_id: job_id.clone(),
+                    stderr_tail: String::new(),
+                });
+                Ok(())
+            },
+        )
+        .map_err(to_daemon_error);
+
+        let exit_code = if result.is_ok() { 0 } else { 1 };
+        let stderr_tail = result
+            .as_ref()
+            .err()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        audit::emit(&AuditEvent {
+            message_id: message_ids::SET_GRUB_VALUE,
+            operation: "set_grub_settings",
+            phase: Phase::Completed,
+            target_paths,
+            etag_before: Some(etag),
+            etag_after: None,
+            snapshot_id,
+            exit_code: Some(exit_code),
+            caller_uid,
+            polkit_action: "org.bootcontrol.rewrite-grub",
+            job_id,
+            stderr_tail,
+        });
+        result
     }
 
     /// Set a single key-value pair in the GRUB default configuration file.
