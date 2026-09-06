@@ -5,7 +5,7 @@
 // Settings) per docs/GUI_V2_SPEC_v2.md §3 IA.
 
 import { Tokens, DarkPalette, LightPalette, HighContrastDark, HighContrastLight } from "tokens.slint";
-import { GrubEntry, DiffLine, PreflightCheck } from "types.slint";
+import { GrubEntry, GrubMenuRow, DiffLine, PreflightCheck } from "types.slint";
 import { GhostButton } from "components/ghost_button.slint";
 import { Sidebar } from "components/sidebar.slint";
 import { LoadingBar } from "components/loading_bar.slint";
@@ -20,7 +20,7 @@ import { LogsPage, LogRow } from "pages/logs.slint";
 import { SettingsPage } from "pages/settings.slint";
 
 // Re-export structs and globals so Rust generated bindings expose them.
-export { GrubEntry, DiffLine, PreflightCheck, SnapshotRow, LogRow }
+export { GrubEntry, GrubMenuRow, DiffLine, PreflightCheck, SnapshotRow, LogRow }
 export { Tokens, DarkPalette, LightPalette, HighContrastDark, HighContrastLight }
 
 // ─── Toast notification (top-level overlay — kept inline) ───────────────────
@@ -113,6 +113,11 @@ export component AppWindow inherits Window {
 
     // ── Existing state ───────────────────────────────────────────────────────
     in-out property <[GrubEntry]> entries: [];
+    in property <[GrubMenuRow]> grub_menu_entries: [];
+    in property <string> grub_menu_status: "idle";
+    in property <string> grub_menu_error: "";
+    in property <string> grub_menu_etag: "";
+    in property <int> grub_menu_selected_index: -1;
     in property <string> toast_message: "";
     in property <string> toast_type: "info";
     in property <bool> show_toast: false;
@@ -169,6 +174,9 @@ export component AppWindow inherits Window {
 
     // ── Existing callbacks ───────────────────────────────────────────────────
     callback fetch_entries();
+    callback fetch_grub_menu();
+    callback select_grub_menu_entry(int);
+    callback move_grub_menu_selection(int);
     callback save_entry(string, string);
     callback dismiss_toast();
     callback rebuild_grub();
@@ -301,9 +309,14 @@ export component AppWindow inherits Window {
                 }
 
                 if root.active_tab == 1 : BootEntriesPage {
-                    entries <=> root.entries;
-                    show-loading: root.show_loading;
-                    save-entry(k, v) => { root.save_entry(k, v); }
+                    entries: root.grub_menu_entries;
+                    status: root.grub_menu_status;
+                    error-message: root.grub_menu_error;
+                    menu-etag: root.grub_menu_etag;
+                    selected-index: root.grub_menu_selected_index;
+                    refresh => { root.fetch_grub_menu(); }
+                    select-entry(index) => { root.select_grub_menu_entry(index); }
+                    move-selection(delta) => { root.move_grub_menu_selection(delta); }
                 }
 
                 if root.active_tab == 2 : BootloaderPage {

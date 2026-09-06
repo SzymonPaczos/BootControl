@@ -128,6 +128,31 @@ impl ViewModel {
         self.backend.rebuild_grub_config().await
     }
 
+    /// Read parsed GRUB menu entries and the generated configuration ETag.
+    ///
+    /// # Arguments
+    ///
+    /// This function takes no arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original D-Bus error or a client-side JSON decoding error.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # async fn example(model: &bootcontrol_gui::view_model::ViewModel) -> zbus::Result<()> {
+    /// let (entries, etag) = model.list_grub_entries().await?;
+    /// assert!(!etag.is_empty() || entries.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_grub_entries(
+        &self,
+    ) -> Result<(Vec<bootcontrol_client::GrubMenuEntryDto>, String), zbus::Error> {
+        self.backend.list_grub_entries().await
+    }
+
     /// Back up EFI NVRAM variables. Returns JSON list of backed-up file paths.
     pub async fn backup_nvram(&self) -> Result<String, zbus::Error> {
         self.backend.backup_nvram("").await

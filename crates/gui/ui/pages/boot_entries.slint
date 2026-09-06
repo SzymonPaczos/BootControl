@@ -1,70 +1,243 @@
-// crates/gui/ui/pages/boot_entries.slint
-//
-// V1 ported page: flat key=value list of GRUB / systemd-boot / UKI entries
-// with per-row Save buttons. v2 spec §3.2 reshapes this into an icon-list
-// + Inspector + reorder arrows + per-row destructive actions; that work
-// lands in PR 6. PR 3 is a faithful port to the new file structure.
+// GRUB menu list and read-only Inspector (A1/R6).
 
 import { ScrollView } from "std-widgets.slint";
 import { Tokens } from "../tokens.slint";
-import { GrubEntry } from "../types.slint";
-import { StyledInput } from "../components/styled_input.slint";
-import { PrimaryButton } from "../components/primary_button.slint";
+import { GrubMenuRow } from "../types.slint";
+import { GhostButton } from "../components/ghost_button.slint";
+
+component InspectorValue inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <bool> mono: false;
+    spacing: 3px;
+    Text {
+        text: root.label;
+        color: Tokens.on-surface-faint;
+        font-size: Tokens.font-meta;
+    }
+    Text {
+        text: root.value;
+        color: Tokens.on-surface;
+        font-size: Tokens.font-body-medium;
+        font-family: root.mono ? Tokens.font-family-mono : Tokens.font-family-ui;
+        wrap: word-wrap;
+    }
+}
 
 export component BootEntriesPage inherits Rectangle {
-    in-out property <[GrubEntry]> entries;
-    in property <bool> show-loading;
-    callback save-entry(string, string);
+    in property <[GrubMenuRow]> entries;
+    in property <string> status: "idle";
+    in property <string> error-message: "";
+    in property <string> menu-etag: "";
+    in property <int> selected-index: -1;
+    callback refresh();
+    callback select-entry(int);
+    callback move-selection(int);
 
     vertical-stretch: 1;
     background: Tokens.surface-container;
     border-radius: Tokens.radius-card;
+    border-width: 1px;
+    border-color: Tokens.hairline;
+    clip: true;
 
-    ScrollView {
-        VerticalLayout {
-            padding: Tokens.space-lg;
-            spacing: Tokens.space-sm;
+    list-focus := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.UpArrow {
+                root.move-selection(-1);
+                return accept;
+            }
+            if event.text == Key.DownArrow {
+                root.move-selection(1);
+                return accept;
+            }
+            return reject;
+        }
 
-            for entry[i] in root.entries : Rectangle {
-                height: 60px;
+        if root.status == "loading" : VerticalLayout {
+            alignment: center;
+            spacing: Tokens.space-md;
+            Text {
+                text: "Loading GRUB menu…";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-body-medium;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.status == "error" : VerticalLayout {
+            alignment: center;
+            spacing: Tokens.space-md;
+            Text {
+                text: "GRUB menu could not be loaded";
+                color: Tokens.error;
+                font-size: Tokens.font-title-large;
+                font-weight: Tokens.weight-strong;
+                horizontal-alignment: center;
+            }
+            Text {
+                width: 520px;
+                text: root.error-message;
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-body-medium;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: center;
+                GhostButton {
+                    text: "Retry";
+                    width: 120px;
+                    clicked => { root.refresh(); }
+                }
+            }
+        }
+
+        if root.status == "empty" : VerticalLayout {
+            alignment: center;
+            spacing: Tokens.space-md;
+            Text {
+                text: "No GRUB menu entries";
+                color: Tokens.on-surface;
+                font-size: Tokens.font-title-large;
+                font-weight: Tokens.weight-strong;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: "The generated grub.cfg contains no menuentry or submenu blocks.";
+                color: Tokens.on-surface-muted;
+                font-size: Tokens.font-body-medium;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.status == "idle" : VerticalLayout {
+            alignment: center;
+            Text {
+                text: "Refresh to load the GRUB menu.";
+                color: Tokens.on-surface-muted;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.status == "ready" : HorizontalLayout {
+            Rectangle {
+                horizontal-stretch: 1;
+                background: transparent;
+
+                ScrollView {
+                    VerticalLayout {
+                        padding: Tokens.space-lg;
+                        spacing: Tokens.space-xs;
+                        alignment: start;
+
+                        Text {
+                            text: root.entries.length + " menu items";
+                            color: Tokens.on-surface-faint;
+                            font-size: Tokens.font-meta;
+                        }
+
+                        for entry[i] in root.entries : Rectangle {
+                            height: 58px;
+                            background: root.selected-index == i
+                                ? Tokens.surface-1
+                                : (row-touch.has-hover ? Tokens.surface-container-high : transparent);
+                            border-radius: Tokens.radius-md;
+                            border-width: root.selected-index == i ? 1px : 0px;
+                            border-color: Tokens.accent-info;
+                            accessible-role: button;
+                            accessible-label: (entry.is_submenu ? "Submenu " : "Boot entry ")
+                                + entry.title + ", path " + entry.path;
+
+                            HorizontalLayout {
+                                padding-left: Tokens.space-md + entry.depth * 20px;
+                                padding-right: Tokens.space-md;
+                                spacing: Tokens.space-md;
+                                alignment: center;
+
+                                Image {
+                                    source: entry.is_submenu
+                                        ? @image-url("../../assets/icons/folder-open.svg")
+                                        : @image-url("../../assets/icons/memory.svg");
+                                    width: Tokens.icon-size-sm;
+                                    height: Tokens.icon-size-sm;
+                                    colorize: entry.is_submenu
+                                        ? Tokens.accent-info
+                                        : Tokens.on-surface-muted;
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 2px;
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        text: entry.title;
+                                        color: Tokens.on-surface;
+                                        font-size: Tokens.font-body-medium;
+                                        font-weight: root.selected-index == i
+                                            ? Tokens.weight-strong
+                                            : Tokens.weight-medium;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        text: (entry.is_submenu ? "Submenu" : "Boot entry")
+                                            + " · " + entry.path;
+                                        color: Tokens.on-surface-faint;
+                                        font-size: Tokens.font-meta;
+                                    }
+                                }
+                            }
+                            row-touch := TouchArea {
+                                clicked => {
+                                    list-focus.focus();
+                                    root.select-entry(i);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 320px;
                 background: Tokens.surface;
-                border-radius: Tokens.radius-md;
-                border-width: 1px;
-                border-color: entry.is_modified ? Tokens.warning-soft : Tokens.surface-1;
 
-                animate border-color { duration: Tokens.motion-fast; }
+                Rectangle {
+                    x: 0;
+                    width: 1px;
+                    height: parent.height;
+                    background: Tokens.hairline;
+                }
 
-                HorizontalLayout {
-                    padding-left: Tokens.space-lg;
-                    padding-right: Tokens.space-lg;
-                    spacing: Tokens.space-md;
-                    alignment: center;
+                if root.selected-index >= 0 && root.selected-index < root.entries.length : VerticalLayout {
+                    padding: Tokens.space-lg;
+                    spacing: Tokens.space-lg;
+                    alignment: start;
 
                     Text {
-                        width: 180px;
-                        text: entry.key;
+                        text: "Inspector";
+                        color: Tokens.on-surface;
+                        font-size: Tokens.font-title-large;
+                        font-weight: Tokens.weight-strong;
+                    }
+                    Text {
+                        text: root.entries[root.selected-index].title;
                         color: Tokens.accent-info;
-                        font-size: Tokens.font-body-medium;
-                        font-weight: Tokens.weight-medium;
-                        vertical-alignment: center;
+                        font-size: Tokens.font-title-small;
+                        font-weight: Tokens.weight-strong;
+                        wrap: word-wrap;
                     }
-
-                    StyledInput {
-                        horizontal-stretch: 1;
-                        text: entry.value;
-                        edited(tx) => {
-                            root.entries[i].value = tx;
-                            root.entries[i].is_modified = (tx != root.entries[i].original_value);
-                        }
+                    VerticalLayout {
+                        spacing: Tokens.space-md;
+                        InspectorValue { label: "Type"; value: root.entries[root.selected-index].is_submenu ? "Submenu" : "Boot entry"; }
+                        InspectorValue { label: "Menu path"; value: root.entries[root.selected-index].path; mono: true; }
+                        InspectorValue { label: "Entry ID"; value: root.entries[root.selected-index].id == "" ? "Not provided" : root.entries[root.selected-index].id; mono: true; }
+                        InspectorValue { label: "Depth"; value: "" + root.entries[root.selected-index].depth; }
+                        InspectorValue { label: "grub.cfg ETag"; value: root.menu-etag; mono: true; }
                     }
-
-                    PrimaryButton {
-                        text: "Save";
-                        width: 80px;
-                        enabled: entry.is_modified && !root.show-loading;
-                        clicked => {
-                            root.save-entry(entry.key, entry.value);
-                        }
+                    Text {
+                        text: "Use ↑ and ↓ to move the selection.";
+                        color: Tokens.on-surface-faint;
+                        font-size: Tokens.font-meta;
                     }
                 }
             }
