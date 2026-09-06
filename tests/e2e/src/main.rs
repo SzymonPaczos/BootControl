@@ -24,7 +24,7 @@
 //!
 //! # Design constraints (from AGENTS.md)
 //!
-//! - Every test is `#[ignore]` by default — `cargo test --workspace` stays fast.
+//! - Daemon E2E tests are `#[ignore]` by default; pure helper tests run normally.
 //! - No `unwrap()` in helper code — all errors propagate via `?`.
 //! - Tests are Linux-only and will not compile on macOS or Windows.
 

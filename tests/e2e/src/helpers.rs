@@ -407,14 +407,18 @@ fn write_temp_grub(content: &str) -> anyhow::Result<NamedTempFile> {
 /// reflect the current source tree. Subsequent calls are fast because Cargo
 /// only re-links if sources changed (incremental builds).
 ///
+/// # Arguments
+///
+/// None. Cargo inherits the configured target directory and build settings.
+///
 /// # Errors
 ///
-/// Returns an error if `cargo build` exits with a non-zero status.
-fn build_daemon_binary() -> anyhow::Result<PathBuf> {
+/// Returns an error if Cargo cannot run, fails, reports malformed or ambiguous
+/// artifacts, or the reported daemon executable is missing.
+pub(crate) fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     // `CARGO_MANIFEST_DIR` resolves to *this* test crate (`tests/e2e/`), not
     // the workspace root. Walk up two levels (`tests/e2e/` → `tests/` →
-    // workspace root) so the spawned `cargo build` runs in the workspace
-    // and target/ ends up alongside the other crates.
+    // workspace root) so the spawned `cargo build` uses its configuration.
     let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
@@ -427,9 +431,10 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     // expose that feature and rejects the build.
     let features = ["polkit-mock".to_string()];
 
-    let status = Command::new(env!("CARGO"))
+    let output = Command::new(env!("CARGO"))
         .args([
             "build",
+            "--message-format=json",
             "-p",
             "bootcontrold",
             "--bin",
@@ -438,25 +443,25 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
             &features.join(","),
         ])
         .current_dir(&workspace_root)
-        .status()
+        .stderr(Stdio::inherit())
+        .output()
         .context("failed to invoke cargo build")?;
 
-    if !status.success() {
+    if !output.status.success() {
         bail!(
             "cargo build -p bootcontrold --bin bootcontrold --features {} failed \
              with exit code {:?}",
             features.join(","),
-            status.code()
+            output.status.code()
         );
     }
 
-    // The binary lands in target/debug/ relative to the workspace root.
-    let binary = workspace_root
-        .join("target")
-        .join("debug")
-        .join("bootcontrold");
+    // Cargo is authoritative: CARGO_TARGET_DIR and config may put the binary
+    // outside this checkout. Never guess a path that could name a stale build.
+    let messages = std::str::from_utf8(&output.stdout).context("Cargo output is not UTF-8")?;
+    let binary = daemon_artifact(messages)?;
 
-    if !binary.exists() {
+    if !binary.is_file() {
         bail!(
             "expected binary not found after build: {}",
             binary.display()
@@ -464,6 +469,30 @@ fn build_daemon_binary() -> anyhow::Result<PathBuf> {
     }
 
     Ok(binary)
+}
+
+/// Extract the single daemon executable from Cargo's JSON message stream.
+fn daemon_artifact(messages: &str) -> anyhow::Result<PathBuf> {
+    let mut executable = None;
+    for line in messages.lines().filter(|line| !line.trim().is_empty()) {
+        let message: serde_json::Value =
+            serde_json::from_str(line).context("invalid JSON in Cargo build output")?;
+        if message["reason"].as_str() != Some("compiler-artifact")
+            || message["target"]["name"].as_str() != Some("bootcontrold")
+            || !message["target"]["kind"]
+                .as_array()
+                .is_some_and(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("bin")))
+        {
+            continue;
+        }
+        if let Some(path) = message["executable"].as_str() {
+            if executable.is_some() {
+                bail!("Cargo reported multiple bootcontrold executables");
+            }
+            executable = Some(PathBuf::from(path));
+        }
+    }
+    executable.context("Cargo did not report a bootcontrold executable")
 }
 
 /// Poll the D-Bus session bus until `name` appears, or until [`STARTUP_TIMEOUT`]
@@ -491,4 +520,43 @@ async fn wait_for_bus_name(conn: &Connection, name: &str) -> anyhow::Result<()> 
     })
     .await
     .context("timed out waiting for org.bootcontrol.Manager on session bus")?
+}
+
+#[cfg(test)]
+mod artifact_tests {
+    use super::*;
+
+    #[test]
+    fn uses_the_reported_executable_in_a_custom_target_directory() -> anyhow::Result<()> {
+        let messages = concat!(
+            "{\"reason\":\"compiler-artifact\",\"target\":{\"name\":\"dependency\",\"kind\":[\"lib\"]},\"executable\":null}\n",
+            "{\"reason\":\"compiler-artifact\",\"target\":{\"name\":\"another-bin\",\"kind\":[\"bin\"]},\"executable\":\"/other/program\"}\n",
+            "{\"reason\":\"compiler-artifact\",\"target\":{\"name\":\"bootcontrold\",\"kind\":[\"bin\"]},\"executable\":\"/shared target/custom-profile/bootcontrold\"}\n",
+            "{\"reason\":\"build-finished\",\"success\":true}\n",
+        );
+        assert_eq!(
+            daemon_artifact(messages)?,
+            PathBuf::from("/shared target/custom-profile/bootcontrold")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn never_guesses_a_path_when_no_daemon_executable_was_reported() {
+        for messages in [
+            "",
+            r#"{"reason":"build-finished","success":true}"#,
+            r#"{"reason":"compiler-artifact","target":{"name":"bootcontrold","kind":["lib"]},"executable":"/some/library"}"#,
+            r#"{"reason":"compiler-artifact","target":{"name":"bootcontrold","kind":["bin"]},"executable":null}"#,
+        ] {
+            assert!(daemon_artifact(messages).is_err(), "{messages}");
+        }
+    }
+
+    #[test]
+    fn malformed_or_ambiguous_build_output_is_rejected() {
+        assert!(daemon_artifact("not JSON").is_err());
+        let artifact = r#"{"reason":"compiler-artifact","target":{"name":"bootcontrold","kind":["bin"]},"executable":"/shared/bootcontrold"}"#;
+        assert!(daemon_artifact(&format!("{artifact}\n{artifact}\n")).is_err());
+    }
 }

@@ -19,6 +19,7 @@ tempfile = { workspace = true }
 nix      = { workspace = true, features = ["signal", "process"] }
 anyhow   = { workspace = true }
 which    = { workspace = true }
+serde_json = { workspace = true }
 
 # ── Integration test binary ──────────────────────────────────────────────────
 # Run with: cargo test -p bootcontrol-e2e --test e2e -- --ignored

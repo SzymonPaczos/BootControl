@@ -13,6 +13,19 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — E2E: ścieżka binarki z artefaktu Cargo
+
+Rzeczywisty pre-push w odłączonym worktree ujawnił błąd: build korzystał ze
+współdzielonego CARGO_TARGET_DIR, a runner szukał daemona w checkout/target/debug.
+Pięć E2E odmówiło startu, więc push został prawidłowo zatrzymany.
+Runner odczytuje teraz compiler-artifact/executable z JSON zwracanego przez
+cargo build. Ta sama funkcja jest używana przy ponownym starcie daemona w MOK.
+Nie zgaduje ścieżki i odrzuca brakujące, niepoprawne oraz niejednoznaczne dane.
+Trzy testy parsera przechodzą, w tym ścieżka w innym katalogu i zawierająca spacje.
+Weryfikacja całej integracji odbywa się ponownie przez obowiązkowy pre-push.
+Logi lokalne: /tmp/bootcontrol-final-push.log (pierwszy błąd),
+/tmp/bootcontrol-e2e-artifact-green.log (testy parsera).
+
 ## 2026-09-06 — Dokumentacja czterech aktywnych akcji Polkit
 
 `AGENTS.md` i `docs/UX_BRIEF.md` wymieniają cztery aktywne akcje i odróżniają

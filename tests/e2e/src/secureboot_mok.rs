@@ -79,7 +79,7 @@ pub async fn test_mok_signing_boot_flow() -> Result<()> {
     // I will restart the daemon with the correct environment.
     shutdown_daemon(handle).await?;
 
-    let binary_path = fs::canonicalize("target/debug/bootcontrold")?;
+    let binary_path = build_daemon_binary()?;
     let grub_file = tempfile::NamedTempFile::new()?;
     let failsafe_dir = tempfile::TempDir::new()?;
     let snapshot_dir = tempfile::TempDir::new()?;
