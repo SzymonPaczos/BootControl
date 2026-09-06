@@ -103,7 +103,9 @@ component ToastNotification inherits Rectangle {
 // ─── Main window ─────────────────────────────────────────────────────────────
 
 export component AppWindow inherits Window {
-    title: "BootControl";
+    in property <bool> demo-mode: false;
+    in property <string> backend-error: "";
+    title: root.demo-mode ? "BootControl — Demo Mode" : "BootControl";
     width: 1100px;
     height: 780px;
     background: Tokens.surface;
@@ -387,4 +389,19 @@ export component AppWindow inherits Window {
         is_visible: root.show_toast;
         dismiss => { root.dismiss_toast(); }
     }
+    if root.backend-error != "": Rectangle {
+        background: Tokens.surface;
+        TouchArea {}
+        Text {
+            x: 32px;
+            width: parent.width - 64px;
+            height: parent.height;
+            text: root.backend-error;
+            wrap: word-wrap;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            color: Tokens.on-surface;
+        }
+    }
+
 }

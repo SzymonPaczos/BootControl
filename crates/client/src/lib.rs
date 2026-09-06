@@ -753,45 +753,54 @@ pub async fn connect_bus() -> zbus::Result<Connection> {
     }
 }
 
-/// Resolve the correct [`BootBackend`] implementation for the current host.
+/// Whether this process explicitly uses demo data, or runs on an unsupported host.
 ///
-/// Decision matrix:
+/// # Arguments
 ///
-/// | `BOOTCONTROL_DEMO` set | host OS  | result            |
-/// |------------------------|----------|-------------------|
-/// | yes                    | any      | [`MockBackend`]   |
-/// | no                     | non-Linux| [`MockBackend`]   |
-/// | no                     | Linux    | [`DbusBackend`] if bus connection succeeds, else [`MockBackend`] (graceful fallback for macOS dev / no-daemon environments) |
+/// None. Reads `BOOTCONTROL_DEMO` and the compiled target platform.
 ///
-/// Never panics, never returns `Result` — the worst case is a silent
-/// downgrade to `MockBackend` so frontends always have *something* to
-/// render. The fallback path on `connect_bus` failure is intentional
-/// (Demo Mode behaviour on Linux without the daemon installed).
+/// # Examples
+///
+/// ```
+/// let demo = bootcontrol_client::is_demo_mode();
+/// assert_eq!(demo, std::env::var("BOOTCONTROL_DEMO").is_ok()
+///     || cfg!(not(target_os = "linux")));
+/// ```
+pub fn is_demo_mode() -> bool {
+    std::env::var("BOOTCONTROL_DEMO").is_ok() || cfg!(not(target_os = "linux"))
+}
+
+/// Resolve the backend, verifying that the real daemon answers before use.
+///
+/// Linux uses D-Bus unless Demo Mode is explicitly enabled. Connection and
+/// daemon errors are propagated; they never select mock data automatically.
+/// Unsupported hosts retain the existing explicitly labelled demo interface.
+///
+/// # Arguments
+///
+/// None. Reads `BOOTCONTROL_DEMO` and the bus configuration via [`connect_bus`].
+///
+/// # Errors
+///
+/// Returns the original [`zbus::Error`] if connecting to the bus or calling
+/// `GetActiveBackend` fails, including a missing daemon or denied activation.
 ///
 /// # Examples
 ///
 /// ```no_run
-/// # use bootcontrol_client::resolve_backend;
-/// # async fn run() {
-/// // `BOOTCONTROL_DEMO=1` forces MockBackend regardless of platform.
-/// std::env::set_var("BOOTCONTROL_DEMO", "1");
-/// let backend = resolve_backend().await;
-/// // Use `backend.read_config().await` like any other BootBackend.
-/// let _ = backend;
+/// # async fn run() -> zbus::Result<()> {
+/// let backend = bootcontrol_client::resolve_backend().await?;
+/// let _ = backend.read_config().await?;
+/// # Ok(())
 /// # }
 /// ```
-pub async fn resolve_backend() -> std::sync::Arc<dyn BootBackend> {
-    let is_demo = std::env::var("BOOTCONTROL_DEMO").is_ok();
-    let target_os = std::env::consts::OS;
-
-    if is_demo || target_os != "linux" {
-        std::sync::Arc::new(MockBackend)
-    } else {
-        match connect_bus().await {
-            Ok(conn) => std::sync::Arc::new(DbusBackend::new(conn)),
-            Err(_) => std::sync::Arc::new(MockBackend),
-        }
+pub async fn resolve_backend() -> zbus::Result<std::sync::Arc<dyn BootBackend>> {
+    if is_demo_mode() {
+        return Ok(std::sync::Arc::new(MockBackend));
     }
+    let backend = DbusBackend::new(connect_bus().await?);
+    backend.get_active_backend().await?;
+    Ok(std::sync::Arc::new(backend))
 }
 
 /// Extract a human-readable string from a [`zbus::Error`].

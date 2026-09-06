@@ -91,6 +91,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     register_bundled_fonts();
 
     let ui = AppWindow::new()?;
+    let backend = match bootcontrol_client::resolve_backend().await {
+        Ok(backend) => backend,
+        Err(error) => {
+            let message = format!(
+                "Cannot connect to BootControl daemon: {}",
+                bootcontrol_client::dbus_error_message(&error)
+            );
+            eprintln!("{message}");
+            ui.set_backend_error(message.into());
+            // No operation callbacks or demo data are installed on this path.
+            ui.run()?;
+            return Err(error.into());
+        }
+    };
+    ui.set_demo_mode(bootcontrol_client::is_demo_mode());
 
     let (tx, mut rx) = mpsc::channel::<UiMessage>(32);
     let tx_clone = tx.clone();
@@ -405,14 +420,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Initialize Backend (D-Bus on Linux, Mock on others or if BOOTCONTROL_DEMO=1)
-    let backend = bootcontrol_client::resolve_backend().await;
     let mut view_model = ViewModel::new(backend);
 
     // PR 6b: Populate Demo Mode stub data so Overview / Snapshots / Logs
     // pages render realistic content without a daemon. Demo Mode is detected
     // via the same env var resolve_backend() uses (BOOTCONTROL_DEMO) plus
     // the macOS / no-systemd fallback path.
-    let is_demo = std::env::var("BOOTCONTROL_DEMO").is_ok() || cfg!(not(target_os = "linux"));
+    let is_demo = bootcontrol_client::is_demo_mode();
     if is_demo {
         populate_demo_data(&ui);
 
@@ -988,4 +1002,36 @@ fn save_log_rows_as_jsonl(rows: &[LogRow]) -> Result<Option<String>, String> {
     }
     std::fs::write(&path, out).map_err(|e| e.to_string())?;
     Ok(Some(path.display().to_string()))
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn disconnected_window_has_no_demo_entries_and_can_show_the_error() {
+        struct Headless;
+        impl slint::platform::Platform for Headless {
+            fn create_window_adapter(
+                &self,
+            ) -> Result<std::rc::Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError>
+            {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        slint::platform::software_renderer::RepaintBufferType::NewBuffer,
+                    ),
+                )
+            }
+        }
+        // Native style queries may initialize Qt even with a custom renderer.
+        std::env::set_var("QT_QPA_PLATFORM", "offscreen");
+        slint::platform::set_platform(Box::new(Headless)).unwrap();
+        let ui = AppWindow::new().unwrap();
+        ui.set_backend_error("Cannot connect to BootControl daemon".into());
+        assert_eq!(ui.get_entries().row_count(), 0);
+        assert!(!ui.get_demo_mode());
+        assert!(!ui.get_backend_error().is_empty());
+        ui.set_demo_mode(true);
+        assert!(ui.get_demo_mode());
+    }
 }

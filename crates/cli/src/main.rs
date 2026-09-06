@@ -230,6 +230,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let cli = Cli::parse();
+    if !matches!(cli.command, Commands::Rescue) && bootcontrol_client::is_demo_mode() {
+        eprintln!("Demo Mode: simulated data; changes are not written to disk.");
+    }
 
     match cli.command {
         Commands::Rescue => {
@@ -241,7 +244,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::GetConfig => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             let active_backend = backend
                 .get_active_backend()
                 .await
@@ -298,7 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::GetEtag => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             let active_backend = backend
                 .get_active_backend()
                 .await
@@ -317,7 +320,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::GetBackend => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             let name = backend
                 .get_active_backend()
                 .await
@@ -326,13 +329,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Set { key, value, etag } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             backend.set_value(&key, &value, &etag).await?;
             println!("Successfully set {}={}", key, value);
         }
 
         Commands::Rebuild => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             backend
                 .rebuild_grub_config()
                 .await
@@ -341,7 +344,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Boot { action } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             match action {
                 BootAction::List => {
                     let entries = backend
@@ -415,7 +418,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Cmdline { action } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             match action {
                 CmdlineAction::Get => {
                     let (params, etag) = backend
@@ -446,7 +449,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Snapshot { action } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             match action {
                 SnapshotAction::List => {
                     let snaps = backend
@@ -478,7 +481,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Nvram { action } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             match action {
                 NvramAction::Backup { target_dir } => {
                     let json = backend
@@ -491,7 +494,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Mok { action } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             match action {
                 MokAction::Sign { uki_path } => {
                     backend
@@ -504,7 +507,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Efi { action } => {
-            let backend = resolve_backend().await;
+            let backend = resolve_backend().await?;
             match action {
                 EfiAction::ListEntries => {
                     let json = backend

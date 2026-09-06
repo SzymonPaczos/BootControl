@@ -47,7 +47,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let backend = resolve_backend().await;
+    let backend = resolve_backend().await.map_err(|e| {
+        format!(
+            "Cannot connect to BootControl daemon: {}",
+            dbus_error_message(&e)
+        )
+    })?;
 
     info!("loading initial boot configuration");
     let app = match load_app(backend.as_ref()).await {

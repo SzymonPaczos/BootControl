@@ -109,7 +109,14 @@ fn render_header(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             "  BootControl TUI",
             Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  •  /etc/default/grub", Style::default().fg(HEADER_FG)),
+        Span::styled(
+            if app.backend_name.contains("(mock)") {
+                "  •  Demo Mode — simulated data".to_string()
+            } else {
+                format!("  •  {}", app.backend_name)
+            },
+            Style::default().fg(HEADER_FG),
+        ),
         Span::styled(
             format!("  [etag: {etag_short}…]"),
             Style::default().fg(Color::DarkGray),
@@ -291,5 +298,20 @@ mod tests {
         terminal
             .draw(|f| render(f, &app))
             .expect("unicode values must not panic");
+    }
+    #[test]
+    fn demo_backend_is_visible_in_the_header() {
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        let mut app = make_app(&[("GRUB_TIMEOUT", "5")]);
+        app.backend_name = "grub (mock)".into();
+        terminal.draw(|f| render(f, &app)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(text.contains("Demo Mode"));
     }
 }
