@@ -119,8 +119,8 @@ mod tests {
     #[test]
     fn detect_driver_returns_none_when_no_tool_on_path() {
         // Acquire the workspace-wide PATH lock to prevent concurrent modification.
-        let original_path = std::env::var("PATH").unwrap_or_default();
         let _guard = crate::grub_rebuild::tests::lock_path();
+        let original_path = std::env::var("PATH").unwrap_or_default();
 
         // Point PATH at a temp dir that contains none of the expected binaries.
         let empty_dir = tempfile::tempdir().expect("tempdir");

@@ -439,7 +439,6 @@ pub fn sign_with_default_keys(_signer: &dyn MokSigner) -> Result<(), BootControl
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -449,19 +448,16 @@ mod tests {
     // PATH serialization lock — tests that manipulate PATH must hold this.
     static PATH_LOCK: Mutex<()> = Mutex::new(());
 
-    /// Create a fake shell binary in `dir` named `name` that exits with `exit_code`.
+    /// Link an immutable exit-status stub so concurrent spawns cannot inherit
+    /// a temporary executable's writer and trigger ETXTBSY.
     fn make_fake_binary(dir: &TempDir, name: &str, exit_code: i32) -> PathBuf {
         let path = dir.path().join(name);
-        let mut f = std::fs::File::create(&path).expect("create fake binary");
-        writeln!(f, "#!/bin/sh").expect("write shebang");
-        writeln!(f, "exit {exit_code}").expect("write exit");
-        f.flush().expect("flush");
-
-        let mut perms = f.metadata().expect("metadata").permissions();
-        perms.set_mode(0o755);
-        f.set_permissions(perms).expect("set permissions");
-        drop(f);
-
+        let stub = match exit_code {
+            0 => "/bin/true",
+            1 => "/bin/false",
+            _ => panic!("unsupported test exit code"),
+        };
+        std::os::unix::fs::symlink(stub, &path).expect("link exit-status stub");
         path
     }
 

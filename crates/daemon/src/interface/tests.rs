@@ -87,14 +87,19 @@ impl Fixture {
         )
         .with_snapshot_root(snapshots.clone());
         manager.test_hooks = Some(auth.clone());
-        let mut bus = BusProcess(
-            Command::new("dbus-daemon")
-                .args(["--session", "--nofork", "--nopidfile", "--print-address=1"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::inherit())
-                .spawn()
-                .unwrap(),
-        );
+        let mut bus = {
+            // Other daemon tests temporarily replace PATH with stub directories.
+            // Join their lock during spawn, then release it before any await.
+            let _path_guard = crate::grub_rebuild::tests::lock_path();
+            BusProcess(
+                Command::new("dbus-daemon")
+                    .args(["--session", "--nofork", "--nopidfile", "--print-address=1"])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    .unwrap(),
+            )
+        };
         let mut address = String::new();
         BufReader::new(bus.0.stdout.take().unwrap())
             .read_line(&mut address)

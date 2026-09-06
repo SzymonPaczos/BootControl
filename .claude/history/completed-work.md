@@ -13,6 +13,18 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — Izolacja fixture D-Bus i programów testowych
+
+Pełny pre-push ujawnił wyścig PATH: 25 testów D-Bus nie mogło uruchomić
+dbus-daemon, gdy równoległe testy ustawiały PATH na katalog stubów.
+Uruchomienie magistrali korzysta teraz ze wspólnej blokady PATH, zwalnianej
+przed await. Test initramfs zachowuje pierwotny PATH dopiero po zajęciu blokady.
+Podczas weryfikacji zaobserwowano także ETXTBSY w testowym sbsign; fixture
+została zastąpiona linkami do niezmiennych /bin/true i /bin/false zamiast
+zapisywanego programu. Pozostają te same asercje sukcesu i błędu.
+`cargo test -p bootcontrold --all-features --lib`: 233/233 PASS.
+Log: /tmp/bootcontrol-test-isolation-green.log. Zmiany dotyczą tylko testów.
+
 ## 2026-09-06 — E2E: ścieżka binarki z artefaktu Cargo
 
 Rzeczywisty pre-push w odłączonym worktree ujawnił błąd: build korzystał ze
