@@ -51,6 +51,17 @@ impl Service {
     fn read_kernel_cmdline(&self) -> (Vec<String>, String) {
         (vec!["quiet".into()], "cmdline-etag".into())
     }
+
+    fn list_grub_entries(&self) -> (String, String) {
+        (
+            r#"[
+                {"title":"Linux","id":"linux","path":"0","depth":0,"is_submenu":false},
+                {"title":"Advanced options","id":null,"path":"1","depth":0,"is_submenu":true}
+            ]"#
+            .into(),
+            "menu-etag".into(),
+        )
+    }
 }
 
 struct Bus(Child);
@@ -164,4 +175,16 @@ async fn successful_backend_switch_replaces_all_backend_specific_state() {
     assert_eq!(fixture.view_model.cmdline_params, ["quiet"]);
     assert!(fixture.view_model.loader_entries.is_empty());
     assert_eq!(fixture.view_model.etag, "cmdline-etag");
+}
+
+#[tokio::test]
+async fn grub_menu_rows_and_version_reach_the_gui_through_dbus() {
+    let fixture = Fixture::start("grub").await;
+
+    let (entries, etag) = fixture.view_model.list_grub_entries().await.unwrap();
+
+    assert_eq!(etag, "menu-etag");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].title, "Linux");
+    assert!(entries[1].is_submenu);
 }

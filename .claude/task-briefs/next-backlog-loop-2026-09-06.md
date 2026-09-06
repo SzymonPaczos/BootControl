@@ -1,6 +1,6 @@
 # Następna pętla backlogu — 2026-09-06
 
-**Status:** w realizacji. R1–R5 wykonane (`ee32148`, `e646425`, `4bef11f`, `fd334c0`, `bc87533`); bieżące zadanie: R6.
+**Status:** w realizacji. R1–R6 wykonane (`ee32148`, `e646425`, `4bef11f`, `fd334c0`, `bc87533`, `c2f19f9`); bieżące zadanie: R7.
 **Punkt startowy:** `main` = `origin/main` = `fd1f5f6`.
 **Polecenie właściciela:** realizować kolejne zadania backlogu w pętli;
 zweryfikowane wyniki przenosić do `history/completed-work.md`.
@@ -45,7 +45,7 @@ przedstaw dokładną przyczynę i kontynuuj niezależną pracę lokalną.
 | R3 ✅ | Lifecycle: ochrona aktywnej operacji przed idle-exit; podzakres pozycji „asynchroniczne operacje” | Kontrolowana operacja trwająca dłużej niż timeout kończy się bez ubicia daemona; po jej końcu daemon wychodzi po pełnym okresie bezczynności. Test także błędu, anulowania i nakładających się wywołań | Wykonane w `4bef11f`; JobId/sd_notify pozostają otwarte |
 | R4 ✅ | GRUB: snapshot i zapis pod jedną ochroną współbieżności; podzakres ETag/snapshot, Phase 3.5 snapshot integration | Snapshot odpowiada dokładnie zastępowanym bajtom; blokada/stary ETag odrzuca żądanie bez zmiany celu, a błąd snapshotu przerywa zapis. Test wymuszonego przeplotu, zachowania komentarzy i restore | Wykonane w `fd334c0`; kontrakty pozostałych backendów nadal otwarte |
 | R5 ✅ | Boot Entries A1 — adapter klienta: DTO i ListGrubEntries w BootBackend/DbusBackend/MockBackend | Przechodzi odczyt rzeczywistego D-Bus: tytuł, ID, ścieżka submenu, depth, is_submenu i ETag menu. Niepoprawny JSON i błąd odczytu są błędami; Demo Mode ma zgodne dane | Wykonane w `bc87533` |
-| R6 | Boot Entries A1 — lista i Inspector w GUI | Widok pokazuje wpisy menu GRUB, poprawnie rozróżnia submenu; ma loading/empty/error/success, wybór i obsługę klawiatury. Sprawdzony obraz GUI i działanie na danych D-Bus oraz demo | R1, R5 |
+| R6 ✅ | Boot Entries A1 — lista i Inspector w GUI | Widok pokazuje wpisy menu GRUB, poprawnie rozróżnia submenu; ma loading/empty/error/success, wybór i obsługę klawiatury. Sprawdzony obraz GUI i działanie na danych D-Bus oraz demo | Wykonane w `c2f19f9` |
 | R7 | Boot Entries A1 — staged wybór domyślnego wpisu GRUB i Apply/Cancel | Przed Apply nie ma zapisu; Cancel zachowuje pliki; podgląd i zatwierdzenie dotyczą wybranego wpisu; zmienione menu/config odrzucają zapis. Błędy Polkit/ETag są widoczne, sukces odświeża stan | R2, R4, R6; najpierw kontrakt daemonowy sprawdzający wersję menu i configu, jeśli obecne API nie wystarcza |
 | R8 | Bootloader A2 — typowane ustawienia GRUB w miejscu placeholdera | Osobny mały krok dla kontraktu danych, potem kontrolki dla obsługiwanych pól: odczyt, walidacja, staged diff, Apply/Cancel i odświeżenie. Testy wartości niepoprawnych, komentarzy, odmowy Polkit i konfliktu ETag | Po A1; typed getters wymagają inwentaryzacji i testu kontraktu przed kodem |
 

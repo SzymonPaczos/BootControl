@@ -9,6 +9,14 @@ export struct GrubEntry {
     is_modified: bool,
 }
 
+export struct GrubMenuRow {
+    title: string,
+    id: string,
+    path: string,
+    depth: int,
+    is_submenu: bool,
+}
+
 // Diff hunk line for DiffPreview component (PR 4).
 // `side`: "context" | "add" | "remove"
 export struct DiffLine {

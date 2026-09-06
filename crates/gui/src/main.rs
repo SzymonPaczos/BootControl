@@ -2,6 +2,7 @@ slint::include_modules!();
 
 mod theme;
 
+use bootcontrol_gui::boot_entries::{BootEntriesModel, BootEntriesStatus};
 use bootcontrol_gui::confirmation::{ConfirmationMode, ConfirmationPreview, ConfirmationSession};
 use bootcontrol_gui::view_model::ViewModel;
 use slint::Model;
@@ -15,6 +16,9 @@ const BUNDLED_FONTS: &[&str] = &["Inter-VariableFont.ttf", "JetBrainsMono-Regula
 
 enum UiMessage {
     FetchEntries,
+    FetchGrubMenu,
+    SelectGrubMenuEntry(usize),
+    MoveGrubMenuSelection(isize),
     SaveEntry(String, String),
     PrepareRebuildConfirmation,
     CancelConfirmation,
@@ -118,6 +122,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tx = tx.clone();
         move || {
             let _ = tx.blocking_send(UiMessage::FetchEntries);
+            let _ = tx.blocking_send(UiMessage::FetchGrubMenu);
+        }
+    });
+
+    ui.on_fetch_grub_menu({
+        let tx = tx.clone();
+        move || {
+            let _ = tx.blocking_send(UiMessage::FetchGrubMenu);
+        }
+    });
+
+    ui.on_select_grub_menu_entry({
+        let tx = tx.clone();
+        move |index| {
+            if let Ok(index) = usize::try_from(index) {
+                let _ = tx.blocking_send(UiMessage::SelectGrubMenuEntry(index));
+            }
+        }
+    });
+
+    ui.on_move_grub_menu_selection({
+        let tx = tx.clone();
+        move |delta| {
+            let _ = tx.blocking_send(UiMessage::MoveGrubMenuSelection(delta as isize));
         }
     });
 
@@ -431,6 +459,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial fetch — pull GRUB entries and the snapshot list together so
     // both pages have live data on first paint.
     let _ = tx_clone.send(UiMessage::FetchEntries).await;
+    let _ = tx_clone.send(UiMessage::FetchGrubMenu).await;
     let _ = tx_clone.send(UiMessage::FetchSnapshots).await;
 
     // Spawn async backend task
@@ -442,6 +471,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ConfirmationMode::Live
         };
         let mut confirmation_session = ConfirmationSession::default();
+        let mut boot_entries = BootEntriesModel::default();
         while let Some(msg) = rx.recv().await {
             match msg {
                 UiMessage::FetchEntries => {
@@ -502,6 +532,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let _ = tx_clone.send(UiMessage::FetchEntries).await;
                         }
                     }
+                }
+                UiMessage::FetchGrubMenu => {
+                    boot_entries.begin_load();
+                    render_boot_entries(&ui_handle_async, &boot_entries);
+                    match view_model.list_grub_entries().await {
+                        Ok((entries, etag)) => boot_entries.finish_load(entries, etag),
+                        Err(error) => {
+                            boot_entries.fail_load(bootcontrol_client::dbus_error_message(&error))
+                        }
+                    }
+                    render_boot_entries(&ui_handle_async, &boot_entries);
+                }
+                UiMessage::SelectGrubMenuEntry(index) => {
+                    boot_entries.select(index);
+                    render_boot_entries(&ui_handle_async, &boot_entries);
+                }
+                UiMessage::MoveGrubMenuSelection(delta) => {
+                    boot_entries.move_selection(delta);
+                    render_boot_entries(&ui_handle_async, &boot_entries);
                 }
                 UiMessage::PrepareRebuildConfirmation => {
                     let preview = confirmation_session.prepare_rebuild(
@@ -857,6 +906,37 @@ fn show_confirmation_preview(ui: &slint::Weak<AppWindow>, preview: ConfirmationP
         ui.set_confirmation_preflight(slint::ModelRc::new(slint::VecModel::from(preflight)));
         ui.set_confirmation_preflight_all_pass(preview.can_confirm);
         ui.set_show_confirmation(true);
+    });
+}
+
+fn render_boot_entries(ui: &slint::Weak<AppWindow>, model: &BootEntriesModel) {
+    let entries = model
+        .entries()
+        .iter()
+        .map(|entry| GrubMenuRow {
+            title: entry.title.as_str().into(),
+            id: entry.id.as_deref().unwrap_or_default().into(),
+            path: entry.path.as_str().into(),
+            depth: i32::try_from(entry.depth).unwrap_or(i32::MAX),
+            is_submenu: entry.is_submenu,
+        })
+        .collect::<Vec<_>>();
+    let status = match model.status() {
+        BootEntriesStatus::Idle => "idle",
+        BootEntriesStatus::Loading => "loading",
+        BootEntriesStatus::Empty => "empty",
+        BootEntriesStatus::Ready => "ready",
+        BootEntriesStatus::Error => "error",
+    };
+    let etag = model.etag().to_string();
+    let error = model.error().to_string();
+    let selected = model.selected_index();
+    let _ = ui.upgrade_in_event_loop(move |ui| {
+        ui.set_grub_menu_entries(slint::ModelRc::new(slint::VecModel::from(entries)));
+        ui.set_grub_menu_status(status.into());
+        ui.set_grub_menu_error(error.into());
+        ui.set_grub_menu_etag(etag.into());
+        ui.set_grub_menu_selected_index(selected);
     });
 }
 

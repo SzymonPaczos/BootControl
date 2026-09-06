@@ -58,7 +58,8 @@ Confirmation Sheet. Pozostaje wybór UKI i protokół potwierdzania.
 
 Parser `grub.cfg`, `ListGrubEntries` i adapter klienta są już scalone
 (`cf7ddaf`, `34668c3`, `bc87533`), podobnie warstwa wizualna Stacja (`c5fb3f3`).
-Pozostaje podłączenie listy do GUI, Inspector oraz staged changes; Bootloader nadal jest
+Lista GRUB i Inspector z pełnymi stanami odczytu są podłączone do GUI (`c2f19f9`).
+W A1 pozostaje staged wybór domyślnego wpisu z Apply/Cancel; Bootloader nadal jest
 placeholderem. Settings ma nowy układ, lecz wartości nadal prezentuje
 statycznym tekstem i wymaga kontrolek edycji. Zatwierdzona kolejność: A1 Boot Entries → A2
 Bootloader → A3 szybkie poprawki. Briefy:

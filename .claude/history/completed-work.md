@@ -13,6 +13,18 @@ through `git log`.
 
 ---
 
+## 2026-09-06 — R6: GUI pokazuje wpisy GRUB i Inspector
+
+Boot Entries odczytuje przez D-Bus rzeczywiste menu GRUB i ETag, rozróżnia
+wpisy od submenu, zachowuje ich hierarchię oraz pokazuje szczegóły wybranego
+wiersza w Inspectorze. Widok obsługuje stany loading, empty, error i success,
+Retry, wybór myszą oraz klawisze góra/dół; Demo Mode korzysta z tego samego
+kontraktu. Implementacja: `c2f19f9`. Pełny `cargo test -p bootcontrol-gui`:
+22 testy i doctesty PASS, 3 istniejące smoke testy ignored; Clippy czysty.
+Widok 1100×780 sprawdzony na Xvfb po korekcie pionowego układu listy. Staged
+wybór domyślnego wpisu i Apply/Cancel pozostają w R7. Task-Ref:
+`next-backlog-loop-2026-09-06/R6`.
+
 ## 2026-09-06 — R5: klient obsługuje `ListGrubEntries`
 
 `BootBackend`, `DbusBackend` i `MockBackend` udostępniają wspólne
