@@ -1,0 +1,154 @@
+{
+  "run_id": "bootcontrol-20261106",
+  "repo": "SzymonPaczos/BootControl",
+  "target": ".",
+  "source_ref": {
+    "commit": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+    "dirty": false
+  },
+  "profile": "standard",
+  "scope_paths": [
+    "crates/core",
+    "crates/daemon",
+    "crates/client",
+    "crates/cli",
+    "crates/tui",
+    "crates/gui",
+    "packaging",
+    "scripts",
+    ".githooks",
+    "containers",
+    "tests"
+  ],
+  "budget": null,
+  "execution_policy": "sandboxed-source-and-local-only",
+  "selected_companions": [
+    "DESKTOP-MOBILE-AND-LOCAL-IPC.md",
+    "MEMORY-SAFETY-AND-BINARY.md",
+    "DATA-ISOLATION-AND-LIFECYCLE.md",
+    "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md",
+    "SUPPLY-CHAIN-AND-RELEASE.md",
+    "PROTOCOLS-RPC-AND-MESSAGING.md"
+  ],
+  "prior_run_paths": [],
+  "shared_file_owners": [
+    "project audit parent"
+  ],
+  "run_status": "incomplete",
+  "scope_exclusions": {
+    "crates/gui-spike": "accessibility/UI research prototypes; not installed product path",
+    "docs and .claude historical prose": "context only, not proof or deployed authority",
+    "UI cosmetics and reference art": "no trust-sensitive execution boundary in this scope",
+    "external dependency implementation": "root orchestrator supplies SCA/OSV/KEV/secret receipts separately; no third-party code hunt",
+    "live firmware or deployed machine": "never probed; source and separately constrained executor only"
+  },
+  "prior_run_note": "No compatible prior JSON coverage/findings ledgers found; historical prose is context, not carried proof.",
+  "source_publication_proof": {
+    "proof_file": "public-source-proof.json",
+    "anonymous_visibility": "public",
+    "commit_public": true,
+    "readme_sha256": "1a2887baf698e7732ed600a26cfba5964007ec0b113c79dbe7db8c8f26975a37",
+    "packet": "committed public source only; Git metadata, secret filename patterns, ignored data, host profiles, and private adoption edits excluded"
+  },
+  "authorization_events": [
+    {
+      "action": "launch-recon.py BootControl c",
+      "outcome": "rejected_before_execution",
+      "reason": "Automatic approval review initially lacked proof that source export to Claude/Fable was authorized or public. No workaround attempted; no model call occurred."
+    },
+    {
+      "action": "same launch-recon.py BootControl c",
+      "outcome": "approved_with_new_evidence",
+      "reason": "Root supplied anonymous GitHub public repository/commit proof and byte-identical public README hash; same call resubmitted directly with that evidence."
+    }
+  ],
+  "agent_invocations": [
+    {
+      "agent_id": "recon-a",
+      "phase": "1a",
+      "state": "completed",
+      "transport": "PASS",
+      "cost_usd": 1.18919125
+    },
+    {
+      "agent_id": "recon-b",
+      "phase": "1b",
+      "state": "failed",
+      "transport": "BLOCKED",
+      "cost_usd": null,
+      "reason": "process failed or cleanup incomplete; failed raw transport retained"
+    },
+    {
+      "agent_id": "recon-b-r2",
+      "phase": "1b",
+      "state": "completed",
+      "transport": "PASS",
+      "cost_usd": 1.49697825
+    },
+    {
+      "agent_id": "recon-c",
+      "phase": "1c",
+      "state": "completed",
+      "transport": "PASS",
+      "budget_usd": 4,
+      "timeout_seconds": 240,
+      "cost_usd": 1.70333425
+    },
+    {
+      "agent_id": "recon-d",
+      "phase": "1d",
+      "state": "not_started",
+      "reason": "explicit endpoint-consent question pending; no external call"
+    }
+  ],
+  "cost_policy": {
+    "strict_total_agent_budget": null,
+    "per_call_usd_cap": 4,
+    "per_call_seconds_cap": 240,
+    "known_completed_cost_usd": 4.38950375,
+    "failed_call_cost": "unknown, not assumed zero",
+    "pre_hunt_reserves": "one immediate post-wave critic + separate final-clean critic + two fresh validation calls per surviving candidate"
+  },
+  "pre_hunt_estimate": {
+    "seeded_in_scope_units": 23,
+    "proposed_hunter_assignments": 8,
+    "post_wave_critic_reserved": 1,
+    "distinct_final_clean_critic_reserved": 1,
+    "candidate_validation_reserve": "2 fresh calls per candidate; no strict total cap",
+    "four_baseline_recon_status": "a,b-r2,c complete; d not started",
+    "remaining_budget_covers_plan": "No strict invocation budget was set; no call permitted until endpoint consent."
+  },
+  "endpoint_consent": "required explicit owner response pending; do not start d/hunters/critics/verifiers",
+  "phase_status": {
+    "1_reconnaissance": "3 baseline roles complete; d not_started pending endpoint consent",
+    "2_hunting": "not_started;25-unit provisional ledger valid;8 complete required-block hunter prompts prepared",
+    "3_candidate_validation": "not_started; fresh independent verifiers reserved",
+    "4_structured_findings": "not_started; no findings asserted",
+    "5_final_record_verification": "not_started; fresh independent role per retained record required",
+    "6_reporting": "explicit incomplete checkpoint artifacts produced; not a completed audit or project A4 acceptance"
+  },
+  "frozen_executor_receipt": {
+    "limited_bootcontrol_result": "10 audit-wrapper meta-tests passed in bounded OS container; explicit current adoption overlays were used, so not a native Rust app/security confirmation for frozen bd28",
+    "native_rust": "no compiler; app-native decisive runtime facts unverified",
+    "usage": "context/capabilities only, not promoted local security evidence",
+    "public_summary": "execution-scope.json"
+  },
+  "incomplete_reason": "external_model_endpoint_consent_pending",
+  "resumable": true,
+  "resume_requirements": [
+    "Receive explicit owner approval for the exact public BootControl snapshot to Claude/Anthropic via claude-fable-5-1, relayed by root; absence of response is not consent.",
+    "Run missing baseline recon-d first through the same restricted adapter; retain transport failures.",
+    "Reopen never-assigned deferred units as planned without fabricating attempts; regenerate architecture and method prompts from all four recon facts.",
+    "Run all hunter groups, immediate critic and distinct final critic, then fresh candidate and final-record verifiers; write reports from independently decided records."
+  ],
+  "public_checkpoint": {
+    "source_ref": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+    "scope": "sanitized source-only reconnaissance and unfinished coverage plan",
+    "raw_transcripts_included": false,
+    "private_launchers_included": false,
+    "target_path_convention": "relative to frozen repository root",
+    "model_transport_meaning": "PASS means completed fact research with checked readonly tools, never a secure target",
+    "resume_instructions": "resume.md",
+    "recon_artifact_root": "recon"
+  }
+}

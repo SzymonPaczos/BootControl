@@ -1,0 +1,163 @@
+{
+  "role": "recon-c",
+  "facts": [
+    {
+      "topic": "entry surface",
+      "fact": "D-Bus interface org.bootcontrol.Manager exposes about 30 async methods; GRUB-related ones are ReadGrubConfig, ReadGrubSettings, SetGrubSettings, SetGrubValue, SetGrubDefault, GetEtag, ListGrubEntries and RebuildGrubConfig. Read methods take no authorization.",
+      "refs": [
+        "crates/daemon/src/interface.rs:610",
+        "crates/daemon/src/interface.rs:638",
+        "crates/daemon/src/interface.rs:1249",
+        "crates/daemon/src/interface.rs:1294"
+      ]
+    },
+    {
+      "topic": "authorization chain",
+      "fact": "Write methods resolve caller UID via GetConnectionUnixUser, call authorize with REWRITE_GRUB using the sender bus name, then require_writable_host. The UID is used only for audit and snapshot metadata, not for the Polkit subject.",
+      "refs": [
+        "crates/daemon/src/interface.rs:243",
+        "crates/daemon/src/interface.rs:869",
+        "crates/daemon/src/interface.rs:895",
+        "crates/daemon/src/interface.rs:2218"
+      ]
+    },
+    {
+      "topic": "polkit backend",
+      "fact": "authorize_with_polkit validates action against KNOWN_ACTIONS then, under polkit-mock feature, returns Ok for any caller; otherwise calls CheckAuthorization with a system-bus-name subject and AllowUserInteraction.",
+      "refs": [
+        "crates/daemon/src/polkit.rs:100",
+        "crates/daemon/src/polkit.rs:110",
+        "crates/daemon/src/polkit.rs:157"
+      ]
+    },
+    {
+      "topic": "untrusted input SetGrubValue",
+      "fact": "SetGrubValue accepts caller-chosen key, value and etag strings. Only sanitize::check_payload (substring blacklist re-exported from core security) screens them before they reach the file rewrite; no key-name allowlist or character-class restriction is visible in the daemon layer.",
+      "refs": [
+        "crates/daemon/src/interface.rs:852",
+        "crates/daemon/src/interface.rs:908",
+        "crates/daemon/src/sanitize.rs:24",
+        "crates/core/src/security.rs:44",
+        "crates/core/src/security.rs:129"
+      ]
+    },
+    {
+      "topic": "sink file rewrite",
+      "fact": "set_grub_values_with_prewrite opens the config, flocks non-blocking, reads via locked fd, verifies etag, parses with parse_grub_config, replaces the last matching KEY= line or appends, then writes a sibling .bootcontrol.tmp and renames over the target.",
+      "refs": [
+        "crates/daemon/src/grub_manager.rs:486",
+        "crates/daemon/src/grub_manager.rs:544",
+        "crates/daemon/src/grub_manager.rs:577",
+        "crates/daemon/src/grub_manager.rs:591",
+        "crates/daemon/src/grub_manager.rs:700"
+      ]
+    },
+    {
+      "topic": "value serialization",
+      "fact": "build_assignment_line wraps value in double quotes only if it contains space, tab or is empty; otherwise writes KEY=value verbatim. No escaping of quotes, newlines, dollar, backtick or semicolons occurs at this layer; is_assignment_for_key matches on trimmed KEY= prefix.",
+      "refs": [
+        "crates/daemon/src/grub_manager.rs:654",
+        "crates/daemon/src/grub_manager.rs:644"
+      ]
+    },
+    {
+      "topic": "temp file creation",
+      "fact": "write_file_atomically uses File::create on the predictable path <target>.bootcontrol.tmp in the target's directory, without O_EXCL, explicit mode, or symlink checks; mode of the original is captured only for snapshot metadata.",
+      "refs": [
+        "crates/daemon/src/grub_manager.rs:629",
+        "crates/daemon/src/grub_manager.rs:673",
+        "crates/daemon/src/grub_manager.rs:559"
+      ]
+    },
+    {
+      "topic": "sink process execution",
+      "fact": "run_grub_mkconfig resolves grub-mkconfig or grub2-mkconfig via which on inherited PATH and runs it with -o <output_path>; the child inherits the daemon environment. Called after every successful GRUB write and by RebuildGrubConfig directly.",
+      "refs": [
+        "crates/daemon/src/grub_rebuild.rs:54",
+        "crates/daemon/src/grub_rebuild.rs:63",
+        "crates/daemon/src/grub_manager.rs:615",
+        "crates/daemon/src/interface.rs:1340"
+      ]
+    },
+    {
+      "topic": "error leakage",
+      "fact": "grub-mkconfig stderr is embedded whole into the EspScanFailed reason returned over D-Bus, and audit Completed events store the error string as stderr_tail.",
+      "refs": [
+        "crates/daemon/src/grub_rebuild.rs:78",
+        "crates/daemon/src/interface.rs:990"
+      ]
+    },
+    {
+      "topic": "SetGrubDefault path",
+      "fact": "SetGrubDefault reads the generated grub.cfg under the config lock, checks menu_etag, requires selected_path to match a non-submenu entry, then writes GRUB_DEFAULT via the generic path; selected_path is also passed through check_payload.",
+      "refs": [
+        "crates/daemon/src/interface.rs:1077",
+        "crates/daemon/src/grub_manager.rs:411",
+        "crates/daemon/src/grub_manager.rs:434"
+      ]
+    },
+    {
+      "topic": "file inputs parsed",
+      "fact": "Daemon parses /etc/default/grub (parse_grub_config bails on complex bash constructs) and /boot/grub/grub.cfg (parse_menu_entries) for unauthenticated read methods; the parsed grub.cfg titles and ids are serialized to JSON for clients.",
+      "refs": [
+        "crates/daemon/src/grub_manager.rs:82",
+        "crates/daemon/src/grub_manager.rs:193",
+        "crates/core/src/grub.rs:393",
+        "crates/daemon/src/interface.rs:1254"
+      ]
+    },
+    {
+      "topic": "env configuration",
+      "fact": "main.rs honors BOOTCONTROL_BUS, BOOTCONTROL_GRUB_PATH, BOOTCONTROL_FAILSAFE_PATH, BOOTCONTROL_SNAPSHOT_ROOT, BOOTCONTROL_IDLE_TIMEOUT_SECS, and under polkit-mock plus session bus BOOTCONTROL_UKI_DIR and BOOTCONTROL_ENTRY_TOKEN_PATH to override managed paths and UKI policy.",
+      "refs": [
+        "crates/daemon/src/main.rs:95",
+        "crates/daemon/src/main.rs:108",
+        "crates/daemon/src/main.rs:134",
+        "crates/daemon/src/main.rs:147",
+        "crates/daemon/src/main.rs:247"
+      ]
+    },
+    {
+      "topic": "snapshot and restore surface",
+      "fact": "Each GRUB write snapshots locked bytes under snapshot_root before mutation; RestoreSnapshot is contained to managed_paths derived from configured paths, which are env-overridable at startup.",
+      "refs": [
+        "crates/daemon/src/interface.rs:950",
+        "crates/daemon/src/interface.rs:598",
+        "crates/daemon/src/interface.rs:1985"
+      ]
+    },
+    {
+      "topic": "other write sinks",
+      "fact": "Beyond GRUB, the interface writes systemd-boot loader entries, kernel cmdline params, EFI boot order and BootNext, NVRAM backups, and signs UKIs; these are separate sinks sharing the same authorization helper pattern.",
+      "refs": [
+        "crates/daemon/src/interface.rs:1679",
+        "crates/daemon/src/interface.rs:1807",
+        "crates/daemon/src/interface.rs:2117",
+        "crates/daemon/src/interface.rs:1486",
+        "crates/daemon/src/interface.rs:1372"
+      ]
+    }
+  ],
+  "starting_paths": [
+    "crates/daemon/src/interface.rs",
+    "crates/daemon/src/grub_manager.rs",
+    "crates/daemon/src/grub_rebuild.rs",
+    "crates/core/src/security.rs",
+    "crates/core/src/grub.rs",
+    "crates/core/src/grub_cfg.rs",
+    "crates/daemon/src/polkit.rs",
+    "crates/daemon/src/main.rs",
+    "crates/daemon/src/snapshot.rs",
+    "crates/daemon/src/failsafe.rs",
+    "packaging/dbus/org.bootcontrol.Manager.conf",
+    "packaging/polkit/org.bootcontrol.policy",
+    "packaging/systemd/bootcontrold.service"
+  ],
+  "gaps": [
+    "interface.rs lines 1356-2260 (NVRAM, UKI signing, loader, cmdline, snapshot restore, EFI boot order methods) were inventoried by signature only, not read in full",
+    "core grub.rs parser and security.rs blacklist bodies not fully read; whether newline or quote characters in values are rejected before write is unverified",
+    "packaging D-Bus policy, polkit policy and systemd unit hardening not read",
+    "failsafe.rs and snapshot.rs write paths not read",
+    "CI workflows and Cargo feature gating of polkit-mock in release packaging not inspected"
+  ]
+}

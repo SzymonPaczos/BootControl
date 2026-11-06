@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # audit.sh — cotygodniowy audyt jakości (warstwa statyczna).
 # Liczy metryki, dopisuje sekcję na górę .claude/audit-log.md. BEZ LLM.
-# Pełna procedura: .claude/rules/audit.md
+# Pełna procedura: .claude/conventions/bootcontrol-audit.md
 #
 # Uruchom w głównym working tree (nie worktree):
 #   bash .claude/audit.sh
@@ -19,6 +19,28 @@ section=""
 add() { section+="$1"$'\n'; }
 
 CRATES="core daemon client cli tui gui"
+AUDIT_FAILED=0
+# Toolkit preflight reports its own gap; independent checks below still run.
+TOOLKIT="${CLAUDE_TOOLKIT:-}"
+if [ -z "$TOOLKIT" ]; then
+    for cand in "$HOME/Projects/dev/claude-toolkit" "$HOME/DevProjects/claude-toolkit"; do
+        [ -d "$cand" ] && { TOOLKIT="$cand"; break; }
+    done
+fi
+TOOLKIT_PREFLIGHT="BLOCKED (trusted toolkit not located)"
+if [ -n "$TOOLKIT" ] && [ -f "$TOOLKIT/scripts/toolkit-sync.sh" ]; then
+    TOOLKIT_CHECK_TMP="$(mktemp)"
+    if bash "$TOOLKIT/scripts/toolkit-sync.sh" check "$REPO_ROOT" >"$TOOLKIT_CHECK_TMP" 2>&1; then
+        TOOLKIT_PREFLIGHT="PASS (copies and adoption record checked)"
+    else
+        TOOLKIT_CHECK_RC=$?
+        TOOLKIT_PREFLIGHT="BLOCKED (toolkit-sync check exit $TOOLKIT_CHECK_RC; inspect copies/adoption record)"
+        AUDIT_FAILED=1
+    fi
+    rm -f "$TOOLKIT_CHECK_TMP"
+else
+    AUDIT_FAILED=1
+fi
 
 add "## Audyt $DATE"
 add ""
@@ -26,6 +48,10 @@ add "_Warstwa statyczna (skrypt). Warstwa głęboka (osąd agenta) — sekcja ni
 add ""
 
 # === 1. Toolchain & basic build sanity =========================================
+add "### Toolkit preflight"
+add "TOOLKIT_STATE: $TOOLKIT_PREFLIGHT"
+add "- Niezależne kontrole poniżej pozostają wykonywane; otwarta adopcja nie jest PASS."
+add ""
 add "### Toolchain"
 add "- rustc: \`$(rustc --version 2>/dev/null || echo 'BRAK')\`"
 add "- cargo: \`$(cargo --version 2>/dev/null || echo 'BRAK')\`"
@@ -40,15 +66,16 @@ add ""
 #
 # Porażka dowolnej mechanicznej bramki daje niezerowy exit. Wpis audytu i tak
 # zostaje zapisany — blokada nie może kasować dowodu, że audyt się odbył.
-AUDIT_FAILED=0
 add "### Build gate: \`cargo build -p bootcontrold\` (fail-closed)"
 if [ "${SKIP_BUILD_GATE:-0}" = "1" ]; then
-    add "- ⚠️ **POMINIĘTY** przez \`SKIP_BUILD_GATE=1\` — escape hatch awaryjny (\`rules/rules-as-gates.md\` §7), nie stan normalny. Wynik audytu w tym obszarze jest **nieznany**, nie zielony."
+    add "- ⚠️ **POMINIĘTY** przez \`SKIP_BUILD_GATE=1\` — escape hatch awaryjny (\`conventions/rules-as-gates.md\` §7), nie stan normalny. Wynik audytu w tym obszarze jest **nieznany**, nie zielony."
     echo "audit.sh: OSTRZEŻENIE — build gate daemona POMINIĘTY (SKIP_BUILD_GATE=1)." >&2
+    AUDIT_FAILED=1
 elif [ "$(uname -s)" != "Linux" ]; then
     add "- ⚠️ **n/a** — host \`$(uname -s)\`, nie Linux. Daemon kompiluje się tu do pustki, więc zielony wynik nic nie znaczy. **To nie jest pass** — pełny audyt wymaga przebiegu natywnie na Linuksie."
+    AUDIT_FAILED=1
 elif ! command -v cargo >/dev/null 2>&1; then
-    add "- ❌ **BLOKADA** — brak \`cargo\`, gate nie może się wykonać. Fail-closed: brak narzędzia to awaria gate'a, nie cichy pass (\`rules/ci-cd.md\` §1). Instalacja: https://rustup.rs"
+    add "- ❌ **BLOKADA** — brak \`cargo\`, gate nie może się wykonać. Fail-closed: brak narzędzia to awaria gate'a, nie cichy pass (\`conventions/ci-cd.md\` §1). Instalacja: https://rustup.rs"
     AUDIT_FAILED=1
 else
     BUILD_TMP="$(mktemp)"
@@ -181,14 +208,14 @@ for c in $CRATES; do
     add "| $c | $UNSAFE |"
 done
 add ""
-add "_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([rules/audit.md](rules/audit.md) §Bezpieczeństwo)._"
+add "_Każdy unsafe wymaga SAFETY: komentarza tuż obok ([conventions/bootcontrol-audit.md](conventions/bootcontrol-audit.md) §Bezpieczeństwo)._"
 add ""
 
 # === 7. Testy ==================================================================
 # Liczby pochodzą z enumeracji wykonywanej przez libtest/rustdoc (`--list`),
 # nie z grepa po źródłach. Dzięki temu cfg platformy, brak targetu lib i testy
 # naprawdę widziane przez runner wpływają na wynik. Minima zmierzono
-# 2026-09-05; są podłogą i mogą iść wyłącznie w górę.
+# 2026-09-05; są odziedziczonym baseline, nie automatycznym nakazem jego zwiększania.
 TEST_MIN_core=239
 TEST_MIN_daemon=235
 TEST_MIN_client=28
@@ -247,7 +274,7 @@ for c in $CRATES; do
 done
 add ""
 if [ -n "$RATCHET_BREACH" ]; then
-    add "**⚠ RATCHET/RUNNER BREACH**: $RATCHET_BREACH — patrz \`rules/audit.md\` Krok 4."
+    add "**⚠ RATCHET/RUNNER BREACH**: $RATCHET_BREACH — patrz \`conventions/bootcontrol-audit.md\` i aktualny weekly-audit."
     add ""
 fi
 
@@ -285,10 +312,10 @@ fi
 add ""
 
 # === 10. decisions.md sanity =================================================
-add "### Rejestr decyzji (\`.claude/rules/decisions.md\`)"
-if [ -f .claude/rules/decisions.md ]; then
-    ACTIVE_COUNT=$(awk '/^## Decyzje aktywne/,/^## Decyzje wycofane/' .claude/rules/decisions.md | grep -cE "^### [0-9]{4}-[0-9]{2}-[0-9]{2}")
-    WYCOFANE=$(awk '/^## Decyzje wycofane/,0' .claude/rules/decisions.md | grep -cE "^### [0-9]{4}-[0-9]{2}-[0-9]{2}")
+add "### Rejestr decyzji (\`.claude/decisions-register.md\`)"
+if [ -f .claude/decisions-register.md ]; then
+    ACTIVE_COUNT=$(awk '/^## Decyzje aktywne/,/^## Decyzje wycofane/' .claude/decisions-register.md | grep -cE "^### [0-9]{4}-[0-9]{2}-[0-9]{2}")
+    WYCOFANE=$(awk '/^## Decyzje wycofane/,0' .claude/decisions-register.md | grep -cE "^### [0-9]{4}-[0-9]{2}-[0-9]{2}")
     add "- decyzje aktywne: $ACTIVE_COUNT"
     add "- decyzje wycofane: $WYCOFANE"
 else
@@ -443,22 +470,22 @@ add "- toolkit.lock: ${LOCK_VER:-BRAK — projekt nigdy nie stemplowany}"
 if [ -n "$TOOLKIT" ] && [ -d "$TOOLKIT" ]; then
     TOOLKIT_SKILLS=$(find "$TOOLKIT/skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
     MASTER_VER=$(tr -d '[:space:]' < "$TOOLKIT/VERSION" 2>/dev/null || echo "?")
-    add "- skills w masterze: $TOOLKIT_SKILLS (\`$TOOLKIT\`)"
+    add "- skills w masterze: $TOOLKIT_SKILLS"
     if [ "$LOCK_VER" = "$MASTER_VER" ]; then
         add "- wersja mastera: $MASTER_VER — zgodna z lockiem"
     else
         add "- wersja mastera: $MASTER_VER vs lock ${LOCK_VER:-brak} — **ROZJAZD**, uruchom Krok 00"
     fi
-    add "- Krok 00: \`bash $TOOLKIT/scripts/toolkit-sync.sh check .\` (nie \`git pull\` w trakcie audytu)"
+    add "- Krok 00: \`bash <toolkit>/scripts/toolkit-sync.sh check .\`; wynik w TOOLKIT_STATE."
 else
     add "- toolkit: **niezlokalizowany** — ustaw \`CLAUDE_TOOLKIT=<ścieżka>\`; bez tego Krok 00 jest niewykonany, a nie zaliczony"
 fi
 add ""
 
 # === FOOTER ==================================================================
-add "**Do przeglądu agentem** (warstwa głęboka — patrz \`rules/audit.md\` Krok 2):"
+add "**Do przeglądu agentem** (warstwa głęboka — patrz \`conventions/bootcontrol-audit.md\`):"
 add "bezpieczeństwo, slop, jakość testów, architektura, drift, skille/MCP. Lista"
-add "P0/P1/P2 dopisywana ręcznie do tej samej sekcji po Krok 2."
+add "Findingi z WPLYW i dowodem są zapisywane także jako rekordy backlogu; kolejność ustala właściciel."
 add ""
 
 # === Output i append ==========================================================
@@ -466,7 +493,7 @@ echo "$section"
 
 # Append na górę audit-log.md (po headerze).
 if [ ! -f "$LOG" ]; then
-    printf '# Audit Log — BootControl\n\nHistoria cotygodniowych audytów. Najnowszy na górze.\nPełna procedura: [`.claude/rules/audit.md`](rules/audit.md).\n\n---\n\n' > "$LOG"
+    printf '# Audit Log — BootControl\n\nHistoria cotygodniowych audytów. Najnowszy na górze.\nPełna procedura: [`.claude/conventions/bootcontrol-audit.md`](conventions/bootcontrol-audit.md).\n\n---\n\n' > "$LOG"
 fi
 
 tmp="$(mktemp)"

@@ -1,0 +1,16 @@
+{
+  "verdict": "PASS",
+  "reviewed_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+  "reason": "model review with verified read-only trace; not a replacement for CI or owner gates",
+  "read_paths": [
+    "crates/daemon/src/grub_manager.rs",
+    "crates/daemon/src/grub_rebuild.rs",
+    "crates/daemon/src/interface.rs",
+    "crates/daemon/src/sanitize.rs"
+  ],
+  "model": "claude-fable-5-1",
+  "cost_usd": 1.70333425,
+  "agent_id": "recon-c",
+  "scope": "research transport only; not a security verdict",
+  "raw_trace_published": false
+}

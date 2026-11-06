@@ -1,0 +1,103 @@
+{
+  "status": "INCOMPLETE",
+  "source_ref": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+  "privacy_review": "Selected JSON/Markdown parent records only; no private host paths, emails, secret values, executable launchers or raw model transcripts. Runtime /etc and /boot paths are public product resources, not host profile disclosures.",
+  "facts_note": "Sanitized recon observations remain partial/unverified; explicit local hook-bypass switch omitted without changing the fact. See recon/README.md.",
+  "files": [
+    {
+      "path": "FINDINGS-DETAIL.md",
+      "sha256": "cfb54df87430f0f13d81eb215fafefaeddd4074055916e5a8a9b7ea45f33c32c",
+      "bytes": 370
+    },
+    {
+      "path": "NEEDS-VALIDATION.md",
+      "sha256": "be8bd6ec8e9707fe0041e8e28c24bdab3e987304d1f845d495cf38af456155c2",
+      "bytes": 1967
+    },
+    {
+      "path": "REPORT.md",
+      "sha256": "fe1895091a913b0ef0f95455da91959f52aac74d305bcde9afb63081100c067e",
+      "bytes": 4731
+    },
+    {
+      "path": "architecture.md",
+      "sha256": "abd1b95caa1322066d1db316fc4fa44040abd372247f205cfaef3dead999fa1a",
+      "bytes": 4498
+    },
+    {
+      "path": "coverage-ledger.json",
+      "sha256": "c506d82ea56e7488cfd35d4c12277a119c344d058556638f4b72b2feb2a05466",
+      "bytes": 226680
+    },
+    {
+      "path": "execution-scope.json",
+      "sha256": "4e3d5b86855569fcbac5c38d2db4519228ba391c3f6cdcd0e5426d8f37b95756",
+      "bytes": 1586
+    },
+    {
+      "path": "findings.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3
+    },
+    {
+      "path": "method-manifest.json",
+      "sha256": "7de3a3c52afd9f24e5daa583516f10b0f89a96cb5230d53842a000ed8ff34068",
+      "bytes": 650
+    },
+    {
+      "path": "public-source-proof.json",
+      "sha256": "de015e18465eefd753a784412c002620af28469b53a10911a13decae3cb0529f",
+      "bytes": 815
+    },
+    {
+      "path": "recon/README.md",
+      "sha256": "3925ae0c4a994d4cb2d00c75394fc52555a75767eb2b40e6e0f428d92b102166",
+      "bytes": 1122
+    },
+    {
+      "path": "recon/recon-a/facts.json",
+      "sha256": "10c01f75eb5821f96362a032b6c8a43ed8bb374c8bb48176aac41401000390ab",
+      "bytes": 10565
+    },
+    {
+      "path": "recon/recon-a/transport-summary.json",
+      "sha256": "268686d8ec1f6a3c0b48293527c82ed4a0ca1b64776f77758ff4e4989a2079ec",
+      "bytes": 761
+    },
+    {
+      "path": "recon/recon-b/transport-summary.json",
+      "sha256": "e959061c28b1b7c7c514640c48e3aa9197a020a065fb09f91674cd7cd43543e7",
+      "bytes": 332
+    },
+    {
+      "path": "recon/recon-b-r2/facts.json",
+      "sha256": "821d82d058258ae98c2264a36619a8478a483272045ed251fd2c8b05f1b119ab",
+      "bytes": 8184
+    },
+    {
+      "path": "recon/recon-b-r2/transport-summary.json",
+      "sha256": "15f7588d8aa6baf45c74738e41c56dc5add9afdd14ca9d5737f0158a30de859a",
+      "bytes": 763
+    },
+    {
+      "path": "recon/recon-c/facts.json",
+      "sha256": "91d04f840e31952f12ee42d990e2ce3364baae9b8956cdbecbe1347bfc71bcdc",
+      "bytes": 8112
+    },
+    {
+      "path": "recon/recon-c/transport-summary.json",
+      "sha256": "e8e5b12ad0457d21e21a91c5afbdb692b6b018421cc2557815427c24fa0ee646",
+      "bytes": 540
+    },
+    {
+      "path": "resume.md",
+      "sha256": "b39a2a6193f48e676b9cb8fba6d7e84439ad9b3da99739f38dcabc4b48eb5710",
+      "bytes": 4559
+    },
+    {
+      "path": "run-metadata.json",
+      "sha256": "893ea55805143c12e9d2551ea5b4067dfab37049d8d0a8ee6b60390192f58e85",
+      "bytes": 6703
+    }
+  ]
+}

@@ -1,0 +1,212 @@
+{
+  "role": "recon-a",
+  "facts": [
+    {
+      "topic": "product",
+      "fact": "BootControl is a Rust bootloader manager for Linux (GRUB 2, systemd-boot/UKI, Secure Boot MOK, UEFI BootOrder/BootNext) positioned as a replacement for Grub Customizer; v0.1.0 alpha, GPL-3.0.",
+      "refs": [
+        "README.md:3",
+        "README.md:6",
+        "README.md:79",
+        "Cargo.toml:15"
+      ]
+    },
+    {
+      "topic": "users/operators",
+      "fact": "Three unprivileged frontends (CLI bootcontrol/clap, TUI/ratatui, GUI/slint) talk over the system D-Bus to a single root daemon bootcontrold; only the daemon runs as root via systemd/D-Bus activation.",
+      "refs": [
+        "README.md:28",
+        "README.md:36",
+        "packaging/systemd/bootcontrold.service:8",
+        "packaging/dbus/org.bootcontrol.Manager.service:3"
+      ]
+    },
+    {
+      "topic": "trust-sensitive actions",
+      "fact": "The D-Bus interface org.bootcontrol.Manager exposes writes: set_grub_settings, set_grub_value, set_grub_default, rebuild_grub_config, backup_nvram, sign_and_enroll_uki, set_loader_default, rename_loader_entry, add/remove_kernel_param, restore_snapshot, set_boot_order, set_boot_next, clear_boot_next; reads include read_grub_config, list_loader_entries, list_efi_boot_entries, get_boot_order.",
+      "refs": [
+        "crates/daemon/src/interface.rs:610",
+        "crates/daemon/src/interface.rs:679",
+        "crates/daemon/src/interface.rs:1294",
+        "crates/daemon/src/interface.rs:1486",
+        "crates/daemon/src/interface.rs:1985",
+        "crates/daemon/src/interface.rs:2168"
+      ]
+    },
+    {
+      "topic": "authorization model",
+      "fact": "Four per-intent Polkit actions (rewrite-grub, write-bootloader, enroll-mok, restore-snapshot); enroll-mok requires auth_admin every time, others auth_admin_keep for active sessions. D-Bus bus policy lets any user call the interface, root only owns the name. Daemon refuses to start on the system bus if the policy file fails validate_policy_file.",
+      "refs": [
+        "packaging/polkit/org.bootcontrol.policy:21",
+        "packaging/polkit/org.bootcontrol.policy:52",
+        "packaging/dbus/org.bootcontrol.Manager.conf:11",
+        "crates/daemon/src/main.rs:217",
+        "ARCHITECTURE.md:51"
+      ]
+    },
+    {
+      "topic": "daemon entrypoint and env overrides",
+      "fact": "bootcontrold main reads BOOTCONTROL_BUS (session vs system), BOOTCONTROL_GRUB_PATH, BOOTCONTROL_FAILSAFE_PATH, BOOTCONTROL_SNAPSHOT_ROOT, BOOTCONTROL_IDLE_TIMEOUT_SECS; BOOTCONTROL_UKI_DIR/ENTRY_TOKEN_PATH only under polkit-mock feature on session bus. Non-Linux builds produce a stub that exits 1.",
+      "refs": [
+        "crates/daemon/src/main.rs:24",
+        "crates/daemon/src/main.rs:36",
+        "crates/daemon/src/main.rs:94",
+        "crates/daemon/src/main.rs:246"
+      ]
+    },
+    {
+      "topic": "external process execution by root daemon",
+      "fact": "Daemon shells out to grub-mkconfig/grub2-mkconfig, dracut, kernel-install, mkinitcpio, rpm-ostree, sbsign, mokutil, and `sh` in failsafe generation, resolved via which or constants.",
+      "refs": [
+        "crates/daemon/src/grub_rebuild.rs:54",
+        "crates/daemon/src/initramfs/mod.rs:82",
+        "crates/daemon/src/rpm_ostree.rs:49",
+        "crates/daemon/src/secureboot/mok.rs:318",
+        "crates/daemon/src/secureboot/mok.rs:374",
+        "crates/daemon/src/failsafe.rs:555"
+      ]
+    },
+    {
+      "topic": "write locations",
+      "fact": "Write targets: /etc/default/grub, /etc/bootcontrol/failsafe.cfg, /var/lib/bootcontrol/snapshots/, /boot/efi, /boot/grub, /boot/loader, /etc/kernel, efivars NVRAM; systemd unit uses ProtectSystem=full with ReadWritePaths for those boot/etc dirs plus StateDirectory/ConfigurationDirectory=bootcontrol.",
+      "refs": [
+        "crates/daemon/src/main.rs:67",
+        "crates/daemon/src/main.rs:71",
+        "crates/daemon/src/main.rs:130",
+        "packaging/systemd/bootcontrold.service:18",
+        "packaging/systemd/bootcontrold.service:22",
+        "README.md:70"
+      ]
+    },
+    {
+      "topic": "languages/build model",
+      "fact": "Cargo workspace (resolver 2, edition 2021) with crates core, daemon, cli, tui, gui, gui-spike, client and tests/e2e; key deps zbus 5 (tokio), zbus_polkit 5.1, nix 0.29, sha2, serde_json, which 7. Daemon feature polkit-mock compiles out the real Polkit client.",
+      "refs": [
+        "Cargo.toml:2",
+        "Cargo.toml:21",
+        "crates/daemon/Cargo.toml:15",
+        "crates/daemon/Cargo.toml:28"
+      ]
+    },
+    {
+      "topic": "offline build/test commands (do not run)",
+      "fact": "Documented commands: `cargo build --workspace`; `cargo test --workspace`; `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`; `cargo test --workspace --all-features`; E2E: `BOOTCONTROL_BUS=session dbus-run-session -- cargo test -p bootcontrol-e2e --all-features --test e2e -- --ignored --test-threads=1`; optional `cargo check --target x86_64-pc-windows-gnu --workspace --exclude bootcontrol-e2e`; demo: `BOOTCONTROL_DEMO=1 cargo run -p bootcontrol-cli -- get-config`.",
+      "refs": [
+        "README.md:125",
+        "README.md:177",
+        "scripts/ci-local.sh:34",
+        "scripts/ci-local.sh:37",
+        "scripts/ci-local.sh:40",
+        "scripts/ci-local.sh:49",
+        "scripts/ci-local.sh:118",
+        "README.md:137"
+      ]
+    },
+    {
+      "topic": "workflow controls",
+      "fact": "No cloud CI; gating is via opt-in local git hooks (.githooks pre-commit, pre-push, commit-msg) running scripts/ci-local.sh, which first runs python3 scripts/test-pre-push.py; hooks can be bypassed by the local operator. Cross-distro containers (ubuntu, fedora, arch) via scripts/test-in-distro.sh.",
+      "refs": [
+        "README.md:142",
+        "README.md:158",
+        "scripts/ci-local.sh:31",
+        "scripts/test-in-distro.sh:1",
+        "containers/ubuntu/Containerfile:1"
+      ]
+    },
+    {
+      "topic": "deployment/packaging",
+      "fact": "Packaging artifacts: polkit policy, D-Bus system.d conf, D-Bus activation service, systemd service+socket, /etc/grub.d/40_bootcontrol hook, rpm spec, AUR PKGBUILD, .desktop, policy.toml.example, man pages; manual install copies the daemon to /usr/bin/bootcontrold.",
+      "refs": [
+        "README.md:200",
+        "README.md:217",
+        "packaging/rpm/bootcontrol.spec:1",
+        "packaging/aur/PKGBUILD:1",
+        "packaging/policy.toml.example:1",
+        "docs/man/bootcontrold.8:1"
+      ]
+    },
+    {
+      "topic": "demo mode / client backend selection",
+      "fact": "Client resolve_backend returns MockBackend when BOOTCONTROL_DEMO is set or the target is not Linux; README states Linux bus failures are errors, never silent demo fallback.",
+      "refs": [
+        "crates/client/src/lib.rs:966",
+        "crates/client/src/lib.rs:995",
+        "README.md:131"
+      ]
+    },
+    {
+      "topic": "safety mechanisms claimed in docs",
+      "fact": "Docs claim ETag + flock/tmp/fsync/rename atomic writes, kernel-param blacklist sanitizer, complex-Bash bail-out, pre-write snapshots, GRUB failsafe menuentry, atomic-distro preflight; systemd-boot BootCounting is explicitly not implemented, and async JobId layer remains open.",
+      "refs": [
+        "ARCHITECTURE.md:72",
+        "ARCHITECTURE.md:118",
+        "ARCHITECTURE.md:129",
+        "ARCHITECTURE.md:98",
+        "README.md:247",
+        "crates/daemon/src/sanitize.rs:1",
+        "crates/daemon/src/snapshot.rs:1"
+      ]
+    },
+    {
+      "topic": "comparable software",
+      "fact": "Sources name Grub Customizer as the comparable/replaced tool and reference efibootmgr-like UEFI BootOrder/BootNext management plus rpm-ostree kargs delegation.",
+      "refs": [
+        "README.md:16",
+        "ARCHITECTURE.md:10",
+        "ARCHITECTURE.md:164",
+        "ARCHITECTURE.md:198"
+      ]
+    },
+    {
+      "topic": "non-product paths",
+      "fact": "crates/gui-spike holds accessibility experiments (q3_live_region, q4_focus_trap, etc.) and .claude/ holds agent history/task briefs; neither is a product execution path. No third_party directory exists in the snapshot.",
+      "refs": [
+        "crates/gui-spike/README.md:1",
+        "crates/gui-spike/src/bin/q4_focus_trap.rs:1",
+        ".claude/task-briefs/release-readiness.md:1"
+      ]
+    }
+  ],
+  "starting_paths": [
+    "crates/daemon/src/interface.rs",
+    "crates/daemon/src/polkit.rs",
+    "crates/daemon/src/policy_check.rs",
+    "crates/daemon/src/sanitize.rs",
+    "crates/daemon/src/snapshot.rs",
+    "crates/daemon/src/failsafe.rs",
+    "crates/daemon/src/grub_rebuild.rs",
+    "crates/daemon/src/secureboot/mok.rs",
+    "crates/daemon/src/secureboot/nvram.rs",
+    "crates/daemon/src/uefi_vars_linux.rs",
+    "crates/daemon/src/uki_manager.rs",
+    "crates/daemon/src/initramfs/mod.rs",
+    "crates/daemon/src/rpm_ostree.rs",
+    "crates/daemon/src/immutable_distro.rs",
+    "crates/core/src/grub.rs",
+    "crates/core/src/grub_cfg.rs",
+    "crates/core/src/security.rs",
+    "crates/core/src/uefi_vars.rs",
+    "crates/core/src/backends/uki.rs",
+    "crates/client/src/lib.rs",
+    "crates/cli/src/rescue.rs",
+    "packaging/polkit/org.bootcontrol.policy",
+    "packaging/dbus/org.bootcontrol.Manager.conf",
+    "packaging/systemd/bootcontrold.service",
+    "packaging/grub.d/40_bootcontrol",
+    "packaging/rpm/bootcontrol.spec",
+    "packaging/aur/PKGBUILD",
+    "scripts/ci-local.sh",
+    ".githooks/pre-push",
+    "docs/threat-model.md"
+  ],
+  "gaps": [
+    "Snapshot has no Git metadata, so the accepted SHA cannot be verified against the tree.",
+    "Cargo.lock present but not inspected for exact resolved dependency versions or advisories.",
+    "No local runtime facts: no evidence of which distro, kernel, Polkit or D-Bus versions the daemon has been deployed on; nothing was executed.",
+    "Polkit authorize() implementation (crates/daemon/src/polkit.rs) and KNOWN_ACTIONS not yet read; mapping of each D-Bus method to its action ID unverified.",
+    "packaging/policy.toml.example purpose and whether daemon reads a runtime policy file not yet established.",
+    "Snapshot root directory permissions, efivars write path, and NVRAM backup destination handling (crates/daemon/src/secureboot/nvram.rs) not yet read.",
+    "Windows UEFI backend is scaffold-only per README; no Windows-side code path reviewed.",
+    "Hook test scripts (scripts/test-pre-push.py, test-toolkit-push-gates.py, release.sh) not read; their write locations unknown."
+  ]
+}

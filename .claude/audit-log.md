@@ -1,7 +1,7 @@
 # Audit Log — BootControl
 
 Historia cotygodniowych audytów. Najnowszy na górze.
-Pełna procedura: [`.claude/rules/audit.md`](rules/audit.md).
+Pełna procedura: [`.claude/rules/audit.md`](conventions/bootcontrol-audit.md).
 
 ---
 

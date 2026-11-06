@@ -1,0 +1,1 @@
+{"tasks":[{"label":"setup","type":"shell","command":"echo start","runOptions":{"runOn":"folderOpen"}}]}

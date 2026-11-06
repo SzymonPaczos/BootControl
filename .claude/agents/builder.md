@@ -20,9 +20,13 @@ nie raport koncepcyjny.
    zapisać je do backlogu przed zamknięciem node'a.
 5. Uruchom wskazane gate'y. Brak narzędzia/DB to `BLOCKED`, nie `PASS`.
 6. Commituj Conventional Commit według `change-provenance.md`. Body zawiera
-   `Intent`, `Task-Ref` i `Gates` z realnymi wynikami; bez `AI-Contribution`
-   ani `Co-Authored-By` (D-006). Nie merguj, nie pushuj i nie wdrażaj bez
+   `Intent`, `Task-Ref` i `Gates` z realnymi wynikami; atrybucja AI jest
+   opcjonalna (D-019). Nie merguj, nie pushuj i nie wdrażaj bez
    osobnej zgody.
+7. Po zamknięciu noda dopisz do ledgeru postępu linię
+   `<node>: complete <sha>` (`multi-agent-delivery.md` §2.3). Pełny raport
+   zapisz do pliku wskazanego w briefie; w odpowiedzi zwróć status, commity
+   i jedną linię o testach.
 
 Output:
 
@@ -33,7 +37,7 @@ COMMITS:
 GATES:
 FILES_CHANGED:
 RISKS_OR_HANDOFF:
-DISCOVERED_TASKS: <task + source + suggested priority> | none
+DISCOVERED_TASKS: <task + source + suggested queue position/dependency> | none
 PROVENANCE: <Intent + Task-Ref>
 ```
 

@@ -1,0 +1,47 @@
+{
+  "project": "BootControl",
+  "toolkit_sha": "879edc6f6fcf08762adcd1c34244c582bb690535",
+  "syntax": {
+    "shell": 55,
+    "python": 61,
+    "json": 23
+  },
+  "syntax_errors": [],
+  "whole_skill_directories": {
+    "teksty-ui": {
+      "files": 1,
+      "exact_master": true
+    },
+    "audyt-naprawczy": {
+      "files": 1,
+      "exact_master": true
+    },
+    "petla-dostarczenia": {
+      "files": 1,
+      "exact_master": true
+    },
+    "toolkit-conventions": {
+      "files": 237,
+      "exact_master": true
+    },
+    "security-audit": {
+      "files": 24,
+      "exact_master": true
+    },
+    "plan-naprawy": {
+      "files": 1,
+      "exact_master": true
+    },
+    "weekly-audit": {
+      "files": 3,
+      "exact_master": true
+    }
+  },
+  "always_loaded_bytes": 7098,
+  "reviewer_master_prefix": true,
+  "sync_check_exit": 1,
+  "sync_check_reason": "in-progress adoption, zero undisclosed copy mismatches; declared Reviewer/preamble local extensions retain old lock baselines",
+  "production_changes": [],
+  "metadata_test_wrapper_change": true,
+  "source_snapshot": "bd28f2d0ce55b5a869c097e60429a41bf4240e63"
+}
