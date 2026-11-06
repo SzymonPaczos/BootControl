@@ -1,0 +1,253 @@
+{
+  "run_id": "bootcontrol-20261106",
+  "repo": "SzymonPaczos/BootControl",
+  "target": ".",
+  "source_ref": {
+    "commit": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+    "dirty": false
+  },
+  "profile": "standard",
+  "scope_paths": [
+    "crates/core",
+    "crates/daemon",
+    "crates/client",
+    "crates/cli",
+    "crates/tui",
+    "crates/gui",
+    "packaging",
+    "scripts",
+    ".githooks",
+    "containers",
+    "tests"
+  ],
+  "budget": null,
+  "execution_policy": "sandboxed-source-and-local-only",
+  "selected_companions": [
+    "DESKTOP-MOBILE-AND-LOCAL-IPC.md",
+    "MEMORY-SAFETY-AND-BINARY.md",
+    "DATA-ISOLATION-AND-LIFECYCLE.md",
+    "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md",
+    "SUPPLY-CHAIN-AND-RELEASE.md",
+    "PROTOCOLS-RPC-AND-MESSAGING.md"
+  ],
+  "prior_run_paths": [],
+  "shared_file_owners": [
+    "project audit parent"
+  ],
+  "run_status": "incomplete",
+  "scope_exclusions": {
+    "crates/gui-spike": "accessibility/UI research prototypes; not installed product path",
+    "docs and .claude historical prose": "context only, not proof or deployed authority",
+    "UI cosmetics and reference art": "no trust-sensitive execution boundary in this scope",
+    "external dependency implementation": "root orchestrator supplies SCA/OSV/KEV/secret receipts separately; no third-party code hunt",
+    "live firmware or deployed machine": "never probed; source and separately constrained executor only"
+  },
+  "prior_run_note": "No compatible prior JSON coverage/findings ledgers found; historical prose is context, not carried proof.",
+  "source_publication_proof": {
+    "proof_file": "public-source-proof.json",
+    "anonymous_visibility": "public",
+    "commit_public": true,
+    "readme_sha256": "1a2887baf698e7732ed600a26cfba5964007ec0b113c79dbe7db8c8f26975a37",
+    "packet": "committed public source only; Git metadata, secret filename patterns, ignored data, host profiles, and private adoption edits excluded"
+  },
+  "authorization_events": [
+    {
+      "action": "launch-recon.py BootControl c",
+      "outcome": "rejected_before_execution",
+      "reason": "Automatic approval review initially lacked proof that source export to Claude/Fable was authorized or public. No workaround attempted; no model call occurred."
+    },
+    {
+      "action": "same launch-recon.py BootControl c",
+      "outcome": "approved_with_new_evidence",
+      "reason": "Root supplied anonymous GitHub public repository/commit proof and byte-identical public README hash; same call resubmitted directly with that evidence."
+    },
+    {
+      "action": "resume full standard Boot audit CLI phases",
+      "outcome": "explicit_owner_consent_received",
+      "reason": "Exact public BootControl bd28f2d0ce55b5a869c097e60429a41bf4240e63 source to Claude/Anthropic via claude-fable-5-1 for full audit; root relayed direct answer to explicit provider questions."
+    }
+  ],
+  "agent_invocations": [
+    {
+      "agent_id": "recon-a",
+      "phase": "1a",
+      "state": "completed",
+      "transport": "PASS",
+      "cost_usd": 1.18919125
+    },
+    {
+      "agent_id": "recon-b",
+      "phase": "1b",
+      "state": "failed",
+      "transport": "BLOCKED",
+      "cost_usd": null,
+      "reason": "process failed or cleanup incomplete; failed raw transport retained"
+    },
+    {
+      "agent_id": "recon-b-r2",
+      "phase": "1b",
+      "state": "completed",
+      "transport": "PASS",
+      "cost_usd": 1.49697825
+    },
+    {
+      "agent_id": "recon-c",
+      "phase": "1c",
+      "state": "completed",
+      "transport": "PASS",
+      "budget_usd": 4,
+      "timeout_seconds": 240,
+      "cost_usd": 1.70333425
+    },
+    {
+      "agent_id": "recon-d",
+      "phase": "1d",
+      "state": "completed",
+      "reason": "explicit owner provider consent received",
+      "transport": "PASS",
+      "cost_usd": 1.4462905000000001
+    },
+    {
+      "agent_id": "hunt-auth-w1",
+      "phase": "2",
+      "state": "completed_partial",
+      "budget_usd": 4,
+      "timeout_seconds": 240,
+      "started_at_utc": "2026-11-06T09:55:17.576157+00:00",
+      "coverage_ids": [
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23mutating%20D-Bus%20methods::packaging%2Fpolkit%2Forg.bootcontrol.policy%23four%20per-intent%20actions::crates%2Fdaemon%23authorization::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Privileged%20helper%20as%20confused%20deputy",
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23org.bootcontrol.Manager%20writes::crates%2Fdaemon%2Fsrc%2Fpolkit.rs%23system-bus-name%20authorization::crates%2Fdaemon%23authorization::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23IPC%20peer-authentication%20gaps",
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23read%20methods::crates%2Fdaemon%2Fsrc%2Finterface.rs%23privileged%20file%20disclosure::crates%2Fdaemon%23reads::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Credential-store%20and%20local-secret%20boundary%20mismatch",
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23write%20request%20resource%20selectors::crates%2Fdaemon%2Fsrc%2Finterface.rs%23per-intent%20resource%20binding::crates%2Fdaemon%23authorization::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Claimed%20principal%20versus%20channel%20identity"
+      ],
+      "transport": "PASS",
+      "cost_usd": 2.987919,
+      "reason": "model review with verified read-only trace; not a replacement for CI or owner gates",
+      "completed_at_utc": "2026-11-06T10:00:54.394034+00:00"
+    },
+    {
+      "agent_id": "hunt-auth-r1-w1",
+      "phase": "2",
+      "state": "completed",
+      "budget_usd": 4,
+      "timeout_seconds": 240,
+      "started_at_utc": "2026-11-06T10:01:44.102814+00:00",
+      "coverage_ids": [
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23mutating%20D-Bus%20methods::packaging%2Fpolkit%2Forg.bootcontrol.policy%23four%20per-intent%20actions::crates%2Fdaemon%23authorization::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Privileged%20helper%20as%20confused%20deputy"
+      ],
+      "transport": "PASS",
+      "cost_usd": 1.76869625,
+      "reason": "model review with verified read-only trace; not a replacement for CI or owner gates",
+      "completed_at_utc": "2026-11-06T10:04:26.127715+00:00"
+    },
+    {
+      "agent_id": "hunt-grub-w1",
+      "phase": "2",
+      "state": "completed",
+      "budget_usd": 4,
+      "timeout_seconds": 240,
+      "started_at_utc": "2026-11-06T10:04:26.292227+00:00",
+      "coverage_ids": [
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23SetGrubSettings%20and%20SetGrubDefault::crates%2Fdaemon%2Fsrc%2Fgrub_manager.rs%23flock%20atomic%20rename::crates%2Fdaemon%23grub-transaction::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Local%20file%20ownership%20and%20TOCTOU",
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23SetGrubValue::crates%2Fdaemon%2Fsrc%2Fgrub_manager.rs%23build_assignment_line::crates%2Fdaemon%23grub-serialization::ATTACK-CLASSES.md%23Injection"
+      ],
+      "transport": "PASS",
+      "cost_usd": 3.0208375,
+      "reason": "model review with verified read-only trace; not a replacement for CI or owner gates",
+      "completed_at_utc": "2026-11-06T10:08:30.133572+00:00"
+    },
+    {
+      "agent_id": "hunt-restore-w1",
+      "phase": "2",
+      "state": "completed_transport_unharvested",
+      "budget_usd": 4,
+      "timeout_seconds": 240,
+      "started_at_utc": "2026-11-06T10:08:45.129105+00:00",
+      "coverage_ids": [
+        "crates%2Fdaemon%2Fsrc%2Finterface.rs%23RestoreSnapshot::crates%2Fdaemon%2Fsrc%2Fsnapshot.rs%23managed%20paths%20and%20manifest::crates%2Fdaemon%23snapshot-restore::DATA-ISOLATION-AND-LIFECYCLE.md%23Import%20and%20restore%20authority%20expansion",
+        "crates%2Fdaemon%2Fsrc%2Fsnapshot.rs%23restore%20captured%20state::crates%2Fdaemon%2Fsrc%2Fsnapshot.rs%23current%20ETag%20and%20transaction::crates%2Fdaemon%23snapshot-lifecycle::DATA-ISOLATION-AND-LIFECYCLE.md%23Restore%20reintroduces%20invalid%20state"
+      ],
+      "transport": "PASS",
+      "cost_usd": 2.04202575,
+      "payload_accepted": false,
+      "reason": "Native parent coordination interrupted by platform guard; existing payload not inspected or promoted"
+    }
+  ],
+  "cost_policy": {
+    "strict_total_agent_budget": null,
+    "per_call_usd_cap": 4,
+    "per_call_seconds_cap": 240,
+    "known_completed_cost_usd": 15.65527275,
+    "failed_call_cost": "unknown, not assumed zero",
+    "pre_hunt_reserves": "one immediate post-wave critic + separate final-clean critic + two fresh validation calls per surviving candidate"
+  },
+  "pre_hunt_estimate": {
+    "seeded_in_scope_units": 23,
+    "proposed_hunter_assignments": 8,
+    "post_wave_critic_reserved": 1,
+    "distinct_final_clean_critic_reserved": 1,
+    "candidate_validation_reserve": "2 fresh calls per candidate; no strict total cap",
+    "four_baseline_recon_status": "a,b-r2,c,d complete; one initial b failed transport retained",
+    "remaining_budget_covers_plan": "No strict total call budget;8hunters plus immediate/distinctfinalcritics and two freshverifiers per candidate reserved; percall4USD/240s."
+  },
+  "endpoint_consent": "granted_explicit_owner",
+  "phase_status": {
+    "1_reconnaissance": "all four baseline roles complete; initial b failure retained",
+    "2_hunting": "interrupted after partial accepted source results; latest restore transport complete but payload unharvested",
+    "3_candidate_validation": "NOT_STARTED; one unvalidated proposal retained only in private pool/ledger",
+    "4_structured_findings": "empty findings structure only; no proposal promoted",
+    "5_final_record_verification": "NOT_STARTED",
+    "6_reporting": "terminal INCOMPLETE checkpoint: platform_guard_interruption"
+  },
+  "frozen_executor_receipt": {
+    "limited_bootcontrol_result": "10 audit-wrapper meta-tests passed in bounded OS container; explicit current adoption overlays were used, so not a native Rust app/security confirmation for frozen bd28",
+    "native_rust": "no compiler; app-native decisive runtime facts unverified",
+    "usage": "context/capabilities only, not promoted local security evidence",
+    "public_summary": "execution-scope.json"
+  },
+  "resumable": false,
+  "resume_requirements": [
+    "Do not retry the flagged operation, rephrase it to bypass the guard, or reroute it.",
+    "Owner provider consent exists but is not an override of the platform guard. No owner override is requested.",
+    "Root may complete unaffected project work; this audit checkpoint does not close project A4."
+  ],
+  "owner_consent": {
+    "received": true,
+    "scope": "Exact public BootControl bd28f2d0ce55b5a869c097e60429a41bf4240e63 source to Claude/Anthropic via claude-fable-5-1 for full audit; root relayed direct answer to explicit provider questions.",
+    "received_at_utc": "2026-11-06T09:49:56.298193+00:00"
+  },
+  "parent_rejections": [
+    {
+      "agent_id": "hunt-auth-w1",
+      "units": [
+        {
+          "coverage_id": "crates%2Fdaemon%2Fsrc%2Finterface.rs%23mutating%20D-Bus%20methods::packaging%2Fpolkit%2Forg.bootcontrol.policy%23four%20per-intent%20actions::crates%2Fdaemon%23authorization::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Privileged%20helper%20as%20confused%20deputy",
+          "reason": "unit reviewed_paths differs from exact owned-check path union; original result not repaired"
+        }
+      ]
+    }
+  ],
+  "incomplete_reason": "platform_guard_interruption",
+  "platform_guard_stop": {
+    "recorded_at_utc": "2026-11-06T10:17:57.785997+00:00",
+    "last_parent_accepted_role": "hunt-grub-w1",
+    "affected_phase": "2_hunting/native_parent_coordination",
+    "latest_attempt": "hunt-restore-w1",
+    "latest_transport": "PASS",
+    "latest_process_exit_code": 0,
+    "latest_cleanup_complete": true,
+    "latest_payload_harvested": false,
+    "validated_candidate_records": 0,
+    "unvalidated_candidate_count": 1,
+    "no_retry_or_reroute": true,
+    "scope": "Status/bookkeeping only after guard interruption; no new model calls, security analysis or PoCs"
+  },
+  "public_checkpoint": {
+    "kind": "sanitized status metadata only",
+    "stop_reason": "platform_guard_interruption",
+    "candidate_identifiers": "opaque stable hashes; private original identifiers retained",
+    "source_check_details": "retained privately; no operational source conclusions or candidate payloads published",
+    "raw_traces_or_launchers_included": false,
+    "instructions": "resume.md"
+  }
+}

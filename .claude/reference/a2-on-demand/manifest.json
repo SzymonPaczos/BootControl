@@ -1,0 +1,9 @@
+{
+  "state": "reference-only-unverified-end-to-end",
+  "source": "ADP-2026-11-06-01/A2",
+  "files": {
+    "toolkit-on-demand.py": "fca2f0deee704e54676bc199edd49be45edf40b8b6b1cb5c06f6594034e44bb3",
+    "README.md": "7b9c99d5628b24f08486b2875a47fc14e88219fdc0bec1aeea866ecf6423a612",
+    "a2-readonly.json": "e0f6e2a878c8d38085e12d215056f2d57248d6a56f703890294e63ec1fea18ba"
+  }
+}

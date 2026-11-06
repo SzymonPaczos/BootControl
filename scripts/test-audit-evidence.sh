@@ -7,14 +7,27 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 
 REPO="$TMP_ROOT/repo"
 BIN="$TMP_ROOT/bin"
-mkdir -p "$REPO/.claude/rules" "$BIN"
+mkdir -p "$REPO/.claude/rules" "$BIN" "$TMP_ROOT/toolkit/scripts" "$TMP_ROOT/toolkit/skills"
 for crate in core daemon client cli tui gui; do
     mkdir -p "$REPO/crates/$crate/src"
 done
 cp "$ROOT/.claude/audit.sh" "$REPO/.claude/audit.sh"
 printf '# Audit Log\n\n---\n' > "$REPO/.claude/audit-log.md"
-printf '## Decyzje aktywne\n\n## Decyzje wycofane\n' > "$REPO/.claude/rules/decisions.md"
+printf '## Decyzje aktywne\n\n## Decyzje wycofane\n' > "$REPO/.claude/decisions-register.md"
 printf 'fn main() { validate_policy_file(); }\n' > "$REPO/crates/daemon/src/main.rs"
+
+# Fixture-only platform/toolkit controls; no real compiler or toolkit is invoked.
+printf '2026.11.07\n' > "$TMP_ROOT/toolkit/VERSION"
+cat > "$TMP_ROOT/toolkit/scripts/toolkit-sync.sh" <<'EOF'
+#!/usr/bin/env bash
+[ "${1:-}" = check ] || exit 64
+exit "${FORCE_TOOLKIT_FAILURE:-0}"
+EOF
+cat > "$BIN/uname" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "${AUDIT_TEST_OS:-Linux}"
+EOF
+chmod +x "$BIN/uname"
 
 cat > "$BIN/rustc" <<'EOF'
 #!/usr/bin/env bash
@@ -123,7 +136,7 @@ chmod +x "$BIN/cargo" "$BIN/cargo-udeps" "$BIN/rustc"
 run_audit() {
     local output="$1"
     shift
-    env PATH="$BIN:$PATH" CLAUDE_TOOLKIT="$TMP_ROOT/missing-toolkit" "$@" \
+    env PATH="$BIN:$PATH" CLAUDE_TOOLKIT="$TMP_ROOT/toolkit" "$@" \
         bash "$REPO/.claude/audit.sh" > "$output" 2>&1
 }
 
@@ -182,4 +195,39 @@ if run_audit "$udeps_error" FORCE_UDEPS_ERROR=1; then
 fi
 grep -Fq 'cargo-udeps: ❌ exec error (exit 2)' "$udeps_error"
 
-echo 'audit evidence meta-tests: 6/6 passed'
+# Missing/incomplete adoption blocks the overall result without cancelling
+# independent checks or converting their results into a fictitious PASS.
+preflight="$TMP_ROOT/preflight.out"
+if run_audit "$preflight" FORCE_TOOLKIT_FAILURE=1; then
+    echo 'expected incomplete toolkit adoption to block the overall audit' >&2
+    exit 1
+fi
+grep -Fq 'TOOLKIT_STATE: BLOCKED (toolkit-sync check exit 1;' "$preflight"
+grep -Fq 'clippy: ✅ 0 findings' "$preflight"
+grep -Fq '| core | 239 | 0 | 47 | 239 ✅ / 47 ✅ |' "$preflight"
+
+missing="$TMP_ROOT/missing-toolkit.out"
+if run_audit "$missing" CLAUDE_TOOLKIT="$TMP_ROOT/missing-toolkit"; then
+    echo 'expected an unavailable toolkit preflight to block the overall audit' >&2
+    exit 1
+fi
+grep -Fq 'TOOLKIT_STATE: BLOCKED (trusted toolkit not located)' "$missing"
+grep -Fq '| core | 239 | 0 | 47 | 239 ✅ / 47 ✅ |' "$missing"
+
+nonlinux="$TMP_ROOT/nonlinux.out"
+if run_audit "$nonlinux" AUDIT_TEST_OS=Darwin; then
+    echo 'expected unavailable native Linux evidence to block the overall audit' >&2
+    exit 1
+fi
+grep -Fq 'host `Darwin`, nie Linux' "$nonlinux"
+grep -Fq '| core | 239 | 0 | 47 | 239 ✅ / 47 ✅ |' "$nonlinux"
+
+skipbuild="$TMP_ROOT/skipbuild.out"
+if run_audit "$skipbuild" SKIP_BUILD_GATE=1; then
+    echo 'expected a skipped daemon build to block the overall audit' >&2
+    exit 1
+fi
+grep -Fq 'build gate daemona POMINIĘTY' "$skipbuild"
+grep -Fq '| core | 239 | 0 | 47 | 239 ✅ / 47 ✅ |' "$skipbuild"
+
+echo 'audit evidence meta-tests: 10/10 passed'

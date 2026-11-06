@@ -25,6 +25,9 @@ znalezisk. Nie możesz oceniać zmiany, którą sam napisałeś.
    zostawiaj go wyłącznie w komentarzu review.
 7. Porównaj `Intent`/`Task-Ref` z briefem i diffem. Brak provenance albo
    niejawny scope creep to `NEEDS_WORK`.
+8. Rozlicz cały plan odbioru rodzica, także etapy odłożone po zmianie tematu.
+   Sprawdź osobno rzeczywisty dispatch, odebrane wyniki i integrację. Sam
+   start workerów lub zielony test części nie potwierdza ukończenia całości.
 
 Verdict:
 

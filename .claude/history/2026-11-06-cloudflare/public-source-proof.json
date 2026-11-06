@@ -1,0 +1,17 @@
+{
+  "repo": "SzymonPaczos/BootControl",
+  "visibility": "public",
+  "private": false,
+  "anonymous_api_status": 200,
+  "public_commit": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+  "public_commit_status": 200,
+  "readme_bytes_equal_frozen_snapshot": true,
+  "readme_sha256": "1a2887baf698e7732ed600a26cfba5964007ec0b113c79dbe7db8c8f26975a37",
+  "authenticated": false,
+  "sources": [
+    "https://api.github.com/repos/SzymonPaczos/BootControl",
+    "https://api.github.com/repos/SzymonPaczos/BootControl/git/commits/bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+    "https://raw.githubusercontent.com/SzymonPaczos/BootControl/bd28f2d0ce55b5a869c097e60429a41bf4240e63/README.md"
+  ],
+  "scope": "Only committed public source; no Git metadata, ignored files or host profiles are included in read-only model packets."
+}

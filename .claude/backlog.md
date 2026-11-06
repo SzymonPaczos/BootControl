@@ -1,232 +1,444 @@
 # Backlog — BootControl
 
-Jedyne źródło prawdy dla otwartej pracy. Pozycja znika po wykonaniu i
-zweryfikowaniu; zamknięcia trafiają do
-[`history/completed-work.md`](history/completed-work.md). Duże fazy
-strategiczne pozostają w [`ROADMAP.md`](../ROADMAP.md), a stan działających
-funkcji w [`status.md`](status.md).
+Jedyne źródło otwartej pracy. Kontrakt: conventions/backlog-contract.md.
+Czytaj wybrany rekord przez ID i spis treści. Kolejność jest decyzją właściciela;
+migracja nie zamyka ani nie repriorytetyzuje wcześniejszych pozycji.
+
+## Spis treści
+- ADP-2026-11-06-01 — adopcja, integracja i audyt
+- MIG-2026-11-06-01 — Evidence pipeline nie spełnia całego baseline'u jakości testów
+- MIG-2026-11-06-02 — Release readiness — sześć bramek do publicznej bety
+- MIG-2026-11-06-03 — Brak mechanicznego strażnika plików control-plane
+- MIG-2026-11-06-04 — GUI Secure Boot ma niedokończone wejścia i confirmation flow
+- MIG-2026-11-06-05 — GUI v2 — strony Boot Entries i Bootloader (Tor A)
+- MIG-2026-11-06-06 — Raport „Boot environment"
+- MIG-2026-11-06-07 — Porządny GitHub i animowana strona
+- MIG-2026-11-06-08 — `toolkit.local` nie chroni treści lokalnego rozszerzenia
+- MIG-2026-11-06-09 — ETag i snapshoty pozostałych write-pathów
+- MIG-2026-11-06-10 — OVMF harness ma realnie potwierdzać boot i enrollment
+- MIG-2026-11-06-11 — `test-in-distro` nie obejmuje openSUSE i Silverblue
+- MIG-2026-11-06-12 — Lifecycle daemona — asynchroniczne operacje
+- MIG-2026-11-06-13 — `ci-local.sh`: `--locked` i skan zależności
+- MIG-2026-11-06-14 — `crates/gui-spike` — decyzja o archiwizacji
+- MIG-2026-11-06-15 — „Faza A" — niejasne mapowanie PR #1/#2
+- MIG-2026-11-06-16 — `cargo audit`: dziesięć ostrzeżeń tranzytywnych
+- MIG-2026-11-06-17 — Pozostałe findingi security/control-plane z audytu 2026-08-22
+- MIG-2026-11-06-18 — CLI/TUI — decyzje projektowe
+- MIG-2026-11-06-19 — Drift `docs/threat-model.md`
+- MIG-2026-11-06-20 — Runbook disclosure / `SECURITY.md`
+- MIG-2026-11-06-21 — Przyjąć `test-execution-economy.md`?
+- MIG-2026-11-06-22 — Wykorzystać GitHub Pro do hosted CI?
+- MIG-2026-11-06-23 — `toolkit-sync.sh check` jako blokujący preflight audytu?
+- MIG-2026-11-06-24 — Podłączyć `DOCS_SOURCE`?
+- MIG-2026-11-06-25 — Adoptować nowe skille z mastera?
+- MIG-2026-11-06-26 — Dodać hook `UserPromptSubmit`?
+- MIG-2026-11-06-27 — Dodać `.claude/architecture.md` i post-commit timestamp?
+
+- QLT-2026-11-06-01 — README podaje Rust1.77+ zamiast pinu1.98.0
+- QLT-2026-11-06-02 — Instrukcja daemona obiecuje testy macOS i brak prawdziwego D-Bus
+- QLT-2026-11-06-03 — Audit dopuszcza produkcyjne panic mimo projektowego zakazu
+
+## Do wykonania (kolejność = decyzja właściciela)
+
+### ADP-2026-11-06-01 — adopcja, rzeczywista integracja i audyt
+
+WPLYW: high
+STATUS: w trakcie
+ZRODLO: rozmowa 2026-11-06
+DOWOD: lock2026.11.07/source879edc6; A1 oraz audyt źródeł A3 odebrane, integracja A2 i security A4 otwarte
+BRAMKA_ZAMYKAJACA: odstepstwo: pełny plan A1–A4/P5 i dowody w briefie
+PRZEGLAD: 2026-11-13
+BRIEF: task-briefs/ADP-2026-11-06-01.md
+
+NASTEPNY_KROK: odtworzyć pełne bramki i A2 na Linux (brak ps w obrazie); A4 przerwane przez platform guard mimo otrzymanej zgody. P5 opublikowane w draft PR29; rodzic pozostaje otwarty.
+
+
+### MIG-2026-11-06-01 — Evidence pipeline nie spełnia całego baseline'u jakości testów
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-01.md
 
-Priorytety: **P0** krytyczne · **P1** ważne · **P2** porządkowe.
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-Wykonana pętla: [`task-briefs/repair-loop-2026-09-06.md`](task-briefs/repair-loop-2026-09-06.md).
-Stan po pętli napraw 2026-09-06; dowody zamknięć w historii wykonanej pracy.
-Kolejna wykonana iteracja: [backlog-loop-2026-09-06.md](task-briefs/backlog-loop-2026-09-06.md)
-— zamknięte błędy interfejsów, ścieżki NVRAM, LICENSE i drift Polkit.
+
+### MIG-2026-11-06-02 — Release readiness — sześć bramek do publicznej bety
 
-Wykonany plan R1–R8:
-[next-backlog-loop-2026-09-06.md](task-briefs/next-backlog-loop-2026-09-06.md).
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-02.md
 
-## P0 — krytyczne
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-_(brak otwartych pozycji po pętli 2026-09-06; ograniczenia pokrycia opisuje
-[macierz testów D-Bus](../docs/testing/write-boundaries.md))_
 
-## P1 — ważne
+### MIG-2026-11-06-04 — GUI Secure Boot ma niedokończone wejścia i confirmation flow
 
-### Evidence pipeline nie spełnia całego baseline'u jakości testów
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-04.md
 
-Brakuje meta-testów wszystkich producentów dowodu, rejestru wyjątków z
-ratchetem, metryki flakiness bez retry, deterministycznych waitów,
-systematycznego PBT i pilota mutation testing.
-**Źródło:** audyt 2026-09-04 i `test-quality-baseline.md` 2026.09.05.
-**Status:** otwarte.
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-### Release readiness — sześć bramek do publicznej bety
 
-Otwarte są: G2 recovery w VM (hook failsafe już scalony), G3 write-path na sprzęcie, G4 instalacja paczek E2E,
-G5 `SECURITY.md`, G6 tag i artefakty oraz G7 materiał ogłoszeniowy. Kryteria są w
-[`task-briefs/release-readiness.md`](task-briefs/release-readiness.md).
-**Źródło:** plan 2026-07-12. **Status:** sześć bramek otwartych.
+### MIG-2026-11-06-05 — GUI v2 — strony Boot Entries i Bootloader (Tor A)
 
-### Brak mechanicznego strażnika plików control-plane
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-05.md
 
-Zmiany w `.githooks/`, `scripts/ci-local.sh`, `.claude/audit.sh`, regułach,
-agentach i policy mogą zostać połączone ze zmianą produktu bez osobnego review.
-Gate powinien wykrywać chronione ścieżki w zakresie pushowanych commitów i
-wymuszać oddzielny commit/review.
-**Źródło:** Red Team 2026-07-12. **Status:** czeka na decyzję właściciela.
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-### GUI Secure Boot ma niedokończone wejścia i confirmation flow
 
-MOK enrollment nadal przekazuje pustą ścieżkę zamiast wybranego UKI.
-`backup_nvram("")` poprawnie wybiera domyślny katalog daemona; ten fragment
-dawnego zgłoszenia nie był usterką. Obie akcje wymagają wspólnego
-Confirmation Sheet. Pozostaje wybór UKI i protokół potwierdzania.
-**Źródło:** recenzja i audyt UX 2026-07-12. **Status:** otwarte.
+### MIG-2026-11-06-06 — Raport „Boot environment"
 
-### GUI v2 — strony Boot Entries i Bootloader (Tor A)
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-06.md
 
-Parser `grub.cfg`, `ListGrubEntries`, adapter klienta, lista, Inspector i staged
-wybór domyślnego wpisu z dwoma ETagami są wykonane (`bc87533`, `c2f19f9`,
-`6a92868`). Bootloader ma typowane kontrolki czasu i stylu menu, wykrywania
-innych systemów oraz wpisów recovery, z lokalnym stagingiem, dokładnym diffem
-i jednym atomowym zapisem (`14b5e54`). W A2 pozostają surowa edycja, kernel
-cmdline, obsługa systemd-boot/UKI oraz wykrywanie initramfs. A3 i edytowalne
-Settings nadal są otwarte. Briefy:
-[`gui-v2-boot-entries.md`](task-briefs/gui-v2-boot-entries.md) i
-[`gui-ux-redesign.md`](task-briefs/gui-ux-redesign.md).
-**Źródło:** audyt UX i decyzja 2026-07-12. **Status:** A1 wykonane; typowany
-wycinek A2 wykonany; pozostały zakres A2 i A3 otwarty.
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-### Raport „Boot environment"
 
-Frontend powinien pokazać wykryte bootloadery i ścieżki, aktywny backend oraz
-uzasadnienie wyboru. Zakres obejmuje CLI `detect`, GUI Overview i nagłówek TUI.
-**Źródło:** decyzja zakresu 2026-07-12. **Status:** zatwierdzone.
+### MIG-2026-11-06-07 — Porządny GitHub i animowana strona
 
-### Porządny GitHub i animowana strona
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-07.md
 
-Przed betą: opis/topics, materiały wizualne README, CONTRIBUTING, issue
-templates, ruleset `main`, usunięcie placeholderów i releases. Landing page po
-ustabilizowaniu GUI A1/A2.
-**Źródło:** decyzja zakresu 2026-07-12. **Status:** zatwierdzone.
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-### `toolkit.local` nie chroni treści lokalnego rozszerzenia
 
-Aktualny `toolkit-sync.sh check` pomija porównanie hashy po rozpoznaniu
-zadeklarowanego override'u. Zmiana pliku może więc nadal zakończyć się exit 0.
-Naprawa należy do źródłowego `claude-toolkit`: pin treści override'u i test
-negatywny „mutacja bajtu → exit 1".
-**Źródło:** audyt 2026-08-22; ponownie zweryfikowane na toolkicie 2026.09.05.
-**Status:** otwarte w masterze toolkitu.
+### MIG-2026-11-06-08 — `toolkit.local` nie chroni treści lokalnego rozszerzenia
 
-## P2 — porządkowe
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-08.md
 
-### ETag i snapshoty pozostałych write-pathów
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-Nie wszystkie write-pathy mają jednolity kontrakt ETag/snapshot; w szczególności
-operacje efivars wymagają formalnego rozstrzygnięcia względem decyzji o
-stateless daemonie. Transakcja snapshot+flock dla `SetGrubValue` jest zamknięta
-w R4 (`fd334c0`). Nowe testy D-Bus dowodzą autoryzacji i istniejących odmów,
-nie wdrożenia brakujących kontraktów pozostałych backendów.
-Dokładny zakres: [macierz testów](../docs/testing/write-boundaries.md).
-**Źródło:** recenzja 2026-07-12. **Status:** pozostały write-pathy poza GRUB.
 
-### OVMF harness ma realnie potwierdzać boot i enrollment
+### MIG-2026-11-06-09 — ETag i snapshoty pozostałych write-pathów
 
-Harness MOK opiera się na `sleep` i ubiciu QEMU bez asercji serialu/statusu.
-Potrzebny bootowalny payload i obserwowalny warunek sukcesu lub odrzucenia.
-**Źródło:** recenzja 2026-07-12. **Status:** otwarte.
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-09.md
 
-### `test-in-distro` nie obejmuje openSUSE i Silverblue
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-Runner obsługuje Ubuntu, Fedorę i Arch, podczas gdy Phase 8 deklarowała pięć
-dystrybucji. Należy dodać dwa środowiska albo formalnie zawęzić macierz.
-**Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
 
-### Lifecycle daemona — asynchroniczne operacje
+### MIG-2026-11-06-10 — OVMF harness ma realnie potwierdzać boot i enrollment
 
-Idle-exit 60 s jest scalony (`2297b2f`), unit używa `Type=dbus` i nie ma
-`WantedBy=multi-user.target`. Ochrona aktywnych wywołań przed idle-exit jest
-scalona w R3 (`4bef11f`), wraz z testem operacji dłuższej niż timeout.
-Pozostają asynchroniczne `JobId` i uzgodnienie roli `sd_notify`.
-**Źródło:** recenzja 2026-07-12. **Status:** czeka na decyzję właściciela.
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-10.md
 
-### `ci-local.sh`: `--locked` i skan zależności
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-Lokalny pipeline nie używa `--locked` i nie ma ratchetowanego kroku
-`cargo audit`/`cargo deny`. Skan tygodniowy istnieje, ale nie zastępuje bramki
-zmian zależności.
-**Źródło:** Red Team 2026-07-12. **Status:** otwarte.
 
-### `crates/gui-spike` — decyzja o archiwizacji
+### MIG-2026-11-06-13 — `ci-local.sh`: `--locked` i skan zależności
 
-Historyczny verification crate nadal jest członkiem workspace mimo zapisanych
-wyników w `docs/slint-a11y-findings.md`. Wybór: pozostawić, usunąć albo
-przenieść do historii i wyjąć z workspace.
-**Źródło:** inwentaryzacja 2026-05-23. **Status:** czeka na decyzję właściciela.
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-13.md
 
-### „Faza A" — niejasne mapowanie PR #1/#2
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-ROADMAP nie definiuje jednoznacznie celu strumienia ani mapowania pierwszych
-dwóch PR-ów. Po decyzji trzeba uzupełnić Goal, Exit criteria i tabelę PR-ów.
-**Źródło:** audyt 2026-05-23. **Status:** czeka na decyzję właściciela.
 
-### `cargo audit`: dziesięć ostrzeżeń tranzytywnych
+### MIG-2026-11-06-16 — `cargo audit`: dziesięć ostrzeżeń tranzytywnych
 
-Pomiar 2026-09-05 wykazał 5 ostrzeżeń unmaintained i 5 unsound. Pozostaje
-ocena osiągalności i dostępnych migracji.
-**Źródło:** audyt 2026-08-22, odświeżone 2026-09-05. **Status:** otwarte.
+WPLYW: high
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: exact-version OSV2026-11-06:15issue groups; current security report/JSON and updated existing brief
+BRAMKA_ZAMYKAJACA: odstepstwo: no active/soundness advisory matches after compatible migration; actual Linux build/tests and explicit maintenance-risk review, detailed in brief
+PRZEGLAD: 2026-11-07
+BRIEF: task-briefs/MIG-2026-11-06-16.md
 
-### Pozostałe findingi security/control-plane z audytu 2026-08-22
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-- `.claude/settings.json` dopuszcza szerokie `Bash(cargo clean *)`.
-- Reviewerzy nie mają niezależnego, zapisywanego dowodu wykonania bramek.
-- Testowe env override'y immutable distro oraz ścieżek MOK są dostępne w
-  produkcyjnej binarce i wymagają ograniczenia do jawnego trybu testowego.
 
-**Status:** otwarte; wymagają osobnych decyzji lub małych, rozdzielonych zmian.
+### MIG-2026-11-06-17 — Pozostałe findingi security/control-plane z audytu 2026-08-22
 
-## Inbox — do triage'u
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-17.md
 
-### CLI/TUI — decyzje projektowe
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-Do rozstrzygnięcia: wspólny protokół potwierdzeń dla działań destrukcyjnych,
-taksonomia komend CLI, stabilny output `--json` oraz docelowo pełna konsola TUI
-po becie. Szczegóły:
-[`history/2026-07-12-cli-tui-design-review.md`](history/2026-07-12-cli-tui-design-review.md).
-**Status:** częściowo rozstrzygnięte; reszta czeka na właściciela.
 
-### Drift `docs/threat-model.md`
+## Inbox
 
-Pozostała fałszywa deklaracja odrzucania `module_blacklist=`, którego
-sanitizer nie ma. Rozjazd podmiotu Polkit zamknięty przez `c3fcee8`: kod
-używa teraz nazwy oryginalnego nadawcy D-Bus (`SystemBusName`).
-Preferowany kierunek wymaga decyzji: poprawić dokument do kodu czy rozszerzyć
-politykę sanitizera.
-**Źródło:** audyt 2026-08-22/23. **Status:** czeka na triage.
+### MIG-2026-11-06-19 — Drift `docs/threat-model.md`
 
-### Runbook disclosure / `SECURITY.md`
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Inbox — do triage'u; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-19.md
 
-Repo nie ma kanału disclosure ani prywatnego runbooka triage podatności.
-Publiczna wersja `SECURITY.md` jest już bramką G5 release readiness.
-**Źródło:** audyt 2026-07-12. **Status:** czeka na decyzję właściciela.
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-## Decyzje adopcyjne toolkitu
 
-### Przyjąć `test-execution-economy.md`?
+### QLT-2026-11-06-01 — README podaje Rust1.77+ zamiast pinu1.98.0
 
-Nowej konwencji nie należy kopiować ręcznie; adopcja wymaga osobnej decyzji i
-mechanizmu toolkitu.
-**Źródło:** adopcja 2026-09-04. **Status:** czeka na decyzję właściciela.
+WPLYW: low
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: README.md:116 vs rust-toolchain.toml:16; odczyt źródeł, nie wynik kompilacji
+BRAMKA_ZAMYKAJACA: python3 -c 'from pathlib import Path; assert "Rust toolchain (1.98.0)" in Path("README.md").read_text()'
+PRZEGLAD: 2026-11-13
+BRIEF: —
 
-### Wykorzystać GitHub Pro do hosted CI?
+Odczyt potwierdza sprzeczność; check danych jest obecnie czerwony. Nie wykonano testów aplikacji. Dotychczasowe MIG nie zawierają tego konkretnego warunku.
 
-Aktywna decyzja utrzymuje local-first. Hosted Actions, required checks i
-harmonogram audytu wymagają osobnej specyfikacji i zmiany decyzji.
-**Źródło:** decyzja właściciela 2026-09-04. **Status:** czeka na decyzję.
+### QLT-2026-11-06-02 — Instrukcja daemona obiecuje testy macOS i brak prawdziwego D-Bus
 
-### `toolkit-sync.sh check` jako blokujący preflight audytu?
+WPLYW: medium
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: crates/daemon/CLAUDE.md:66 vs daemon/src/lib.rs:11, tests/e2e/src/main.rs:34 i interface/tests.rs (private D-Bus)
+BRAMKA_ZAMYKAJACA: ! rg -n 'Unit tests run on macOS and Linux|They never touch real D-Bus' crates/daemon/CLAUDE.md
+PRZEGLAD: 2026-11-13
+BRIEF: —
 
-Audyt raportuje rozjazd, ale nie blokuje. Po naprawie integralności
-`toolkit.local` można dodać negatywny test i ratchet do trybu blokującego.
-**Źródło:** adopcja 2026-08-21. **Status:** otwarte, zależne.
+Odczyt potwierdza sprzeczność; check danych jest obecnie czerwony. Nie wykonano testów aplikacji. Dotychczasowe MIG nie zawierają tego konkretnego warunku.
 
-### Podłączyć `DOCS_SOURCE`?
+### QLT-2026-11-06-03 — Audit dopuszcza produkcyjne panic mimo projektowego zakazu
 
-Bez źródła dokumentacji wersjonowane twierdzenia o zależnościach pozostają
-oznaczone jako `n/a`. Potrzebna decyzja o serwerze dokumentacji lub świadomej
-akceptacji braku.
-**Źródło:** adopcja 2026-08-21. **Status:** czeka na decyzję.
+WPLYW: high
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: .claude/audit.sh:174-175 dopuszcza client2/2 i frontend5/5/1; rules/decisions.md:24 zakazuje unwrap/expect/panic produkcyjnie
+BRAMKA_ZAMYKAJACA: ! rg -n 'MAX_(UNWRAP|EXPECT|PANIC)=[1-9][0-9]*' .claude/audit.sh
+PRZEGLAD: 2026-11-13
+BRIEF: —
 
-### Adoptować nowe skille z mastera?
+Odczyt potwierdza sprzeczność; check danych jest obecnie czerwony. Nie wykonano testów aplikacji. Dotychczasowe MIG nie zawierają tego konkretnego warunku.
 
-Każdy nowy skill jest przyjęciem instrukcji, więc wymaga osobnej oceny przez
-`toolkit-sync.sh contrib`, a nie ręcznego kopiowania.
-**Źródło:** adopcja 2026-08-21. **Status:** czeka na decyzję.
+## Czeka na decyzję właściciela
 
-### Dodać hook `UserPromptSubmit`?
+### MIG-2026-11-06-03 — Brak mechanicznego strażnika plików control-plane
 
-Hook przypomina o specyfikacji i zielonym świetle przed pracą wykonawczą, ale
-wprowadza hałas do każdego promptu.
-**Źródło:** `NEW-PROJECT.md` §9.3. **Status:** czeka na decyzję.
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P1 — ważne; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-03.md
 
-### Dodać `.claude/architecture.md` i post-commit timestamp?
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
 
-Projekt ma pełne top-level `ARCHITECTURE.md`; trzeba zdecydować, czy utrzymywać
-również skrót dla agenta i automatycznie odświeżać jego timestamp.
-**Źródło:** `NEW-PROJECT.md` §3.9. **Status:** czeka na decyzję.
 
-## Zablokowane
+### MIG-2026-11-06-11 — `test-in-distro` nie obejmuje openSUSE i Silverblue
 
-_(brak)_
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-11.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-12 — Lifecycle daemona — asynchroniczne operacje
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-12.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-14 — `crates/gui-spike` — decyzja o archiwizacji
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-14.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-15 — „Faza A" — niejasne mapowanie PR #1/#2
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji P2 — porządkowe; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-15.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-18 — CLI/TUI — decyzje projektowe
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Inbox — do triage'u; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-18.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-20 — Runbook disclosure / `SECURITY.md`
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Inbox — do triage'u; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-20.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-21 — Przyjąć `test-execution-economy.md`?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-21.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-22 — Wykorzystać GitHub Pro do hosted CI?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-22.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-23 — `toolkit-sync.sh check` jako blokujący preflight audytu?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-23.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-24 — Podłączyć `DOCS_SOURCE`?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-24.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-25 — Adoptować nowe skille z mastera?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-25.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-26 — Dodać hook `UserPromptSubmit`?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-26.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.
+
+
+### MIG-2026-11-06-27 — Dodać `.claude/architecture.md` i post-commit timestamp?
+
+WPLYW: —
+STATUS: otwarte
+ZRODLO: review bd28f2d0ce55b5a869c097e60429a41bf4240e63
+DOWOD: zastany otwarty wpis backlogu w sekcji Decyzje adopcyjne toolkitu; szczegóły w briefie
+BRAMKA_ZAMYKAJACA: odstepstwo: migracja zachowuje zakres; integrator ustali mierzalną bramkę przed realizacją
+PRZEGLAD: 2026-12-06
+BRIEF: task-briefs/MIG-2026-11-06-27.md
+
+NASTEPNY_KROK: zweryfikować aktualność i wszystkie warunki odziedziczonego zadania; nie zamknięto podczas adopcji.

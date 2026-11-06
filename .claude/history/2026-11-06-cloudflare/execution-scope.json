@@ -1,0 +1,46 @@
+{
+  "project": "BootControl",
+  "frozen_head": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+  "manifest_sha256": "f88d7684eb191372caa84b7b09da82293a19df128550082a33f6c51e99a851da",
+  "overlays": {
+    ".claude/audit.sh": {
+      "sha256": "a6ec43f4eced312cbc6050ee0c304553d213862c968b0dda790b1007f680cd9a",
+      "source": "explicit-current-overlay"
+    },
+    ".claude/decisions-register.md": {
+      "sha256": "b4ad63a1d7399f69ce14a385cb0e9636ee43125116d422d0d67b97d42c019032",
+      "source": "explicit-current-overlay"
+    },
+    ".claude/rules/decisions.md": {
+      "sha256": "0fceddfca30275e12634f21daef01d545d7fc3804dbad7fdd1dcedab791578c6",
+      "source": "explicit-current-overlay"
+    },
+    "scripts/test-audit-evidence.sh": {
+      "sha256": "76d7cc236b9606e26d3bfb4161c0a4036b9914e6a5a9f41480bf92dd102705a9",
+      "source": "explicit-current-overlay"
+    }
+  },
+  "result": {
+    "label": "bootcontrol-audit-mocks",
+    "exit_code": 0,
+    "passed": 10,
+    "wall_seconds": 1.97,
+    "timeout": false,
+    "all_processes_gone_before_promotion": true
+  },
+  "isolation_summary": {
+    "user": "65534",
+    "network": "none",
+    "readonly": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "security_opt": [
+      "no-new-privileges"
+    ],
+    "memory": 2147483648,
+    "pids_limit": 64
+  },
+  "native_rust": "not executed: compiler absent from approved isolated executor",
+  "scope_limit": "Audit-wrapper metatests with explicit adoption overlays, not native application/security confirmation of frozen source. Full raw receipts retained privately, not published here."
+}

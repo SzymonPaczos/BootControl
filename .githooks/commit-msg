@@ -35,6 +35,6 @@ for field in Intent Task-Ref Gates; do
 done
 
 if [ "$warned" -eq 1 ]; then
-  echo "WARN: commit accepted without full provenance (report stage) — see .claude/rules/change-provenance.md" >&2
+  echo "WARN: commit accepted without full provenance (report stage) — see .claude/conventions/change-provenance.md" >&2
 fi
 exit 0

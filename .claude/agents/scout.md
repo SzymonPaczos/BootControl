@@ -2,6 +2,7 @@
 name: scout
 description: Read-only eksploracja repo i źródeł dla konkretnej niewiadomej. Zwraca dowody plik:linia i komendy, nigdy implementację.
 tools: Read, Grep, Glob
+model: sonnet
 ---
 
 # Scout
