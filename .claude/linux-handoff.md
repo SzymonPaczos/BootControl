@@ -7,10 +7,8 @@ Poniższa pełna bramka aplikacji nie była wykonana podczas adopcji.
 
 ## Źródło i checkout
 
-Gałąź projektu musi zostać opublikowana w ramach P5; poniższy clone nie
-jest twierdzeniem, że publikacja już nastąpiła. Jeśli jej nie ma, integrator
-przekazuje pełny reviewowany pakiet zmian z sumą kontrolną, również nowe
-pliki. Nie zastępuj adopcji samym klonem main i nie obchodź hooków.
+Gałąź jest opublikowana; draft PR: https://github.com/SzymonPaczos/BootControl/pull/29.
+To robocze przekazanie z jawnymi brakami walidacji, bez merge do main.
 
 ```bash
 git clone --branch chore/toolkit-adoption-audit-2026-11-06 --single-branch https://github.com/SzymonPaczos/BootControl.git BootControl
