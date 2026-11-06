@@ -1,6 +1,5 @@
-# Confirmed finding detail — incomplete run
+# Finding detail — incomplete workflow
 
-No confirmed medium/high/critical record was independently established. Hunting and
-both validation phases have not run because explicit external-model endpoint consent
-is pending. There is no reproduction or severity to publish. This empty detail file
-is required workflow output, not evidence that BootControl is secure.
+No independently validated finding exists. The workflow stopped at Phase2 because
+of platform_guard_interruption. The unvalidated proposal has not been promoted.
+No candidate analysis, reproduction instructions, severity or PoC is included here.

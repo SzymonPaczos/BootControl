@@ -50,7 +50,7 @@ BRAMKA_ZAMYKAJACA: odstepstwo: pełny plan A1–A4/P5 i dowody w briefie
 PRZEGLAD: 2026-11-13
 BRIEF: task-briefs/ADP-2026-11-06-01.md
 
-NASTEPNY_KROK: odtworzyć bramki i integrację A2 na Linux, uzyskać zgodę dla dalszego A4; P5 opublikowane w draft PR29 jako handoff; rodzic pozostaje otwarty.
+NASTEPNY_KROK: odtworzyć pełne bramki i A2 na Linux (brak ps w obrazie); A4 przerwane przez platform guard mimo otrzymanej zgody. P5 opublikowane w draft PR29; rodzic pozostaje otwarty.
 
 
 ### MIG-2026-11-06-01 — Evidence pipeline nie spełnia całego baseline'u jakości testów

@@ -1,0 +1,10 @@
+{
+  "verdict": "PASS",
+  "reviewed_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+  "cost_usd": 2.04202575,
+  "model": "claude-fable-5-1",
+  "agent_id": "hunt-restore-w1",
+  "payload_included": false,
+  "meaning": "transport status only; not a finding or target security verdict",
+  "payload_harvested": false
+}

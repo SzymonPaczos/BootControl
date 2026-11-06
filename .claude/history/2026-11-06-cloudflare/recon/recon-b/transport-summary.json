@@ -2,10 +2,9 @@
   "verdict": "BLOCKED",
   "reviewed_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
   "reason": "review process failed or did not complete cleanup",
-  "read_paths": null,
   "model": null,
   "cost_usd": null,
   "agent_id": "recon-b",
-  "scope": "research transport only; not a security verdict",
+  "scope": "transport status only; no security conclusion",
   "raw_trace_published": false
 }

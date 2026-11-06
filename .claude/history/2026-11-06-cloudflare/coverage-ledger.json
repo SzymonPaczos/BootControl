@@ -174,7 +174,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "release"
   },
@@ -303,7 +303,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "frontends"
   },
@@ -450,7 +450,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "backends"
   },
@@ -600,7 +600,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "signing"
   },
@@ -733,7 +733,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "backends"
   },
@@ -923,7 +923,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "backends"
   },
@@ -1044,7 +1044,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "lifecycle"
   },
@@ -1165,7 +1165,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "lifecycle"
   },
@@ -1286,7 +1286,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "lifecycle"
   },
@@ -1407,7 +1407,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "lifecycle"
   },
@@ -1551,7 +1551,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "backends"
   },
@@ -1741,9 +1741,14 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
-    "planned_assignment_group": "restore"
+    "planned_assignment_group": "restore",
+    "interrupted_assignment": {
+      "agent_id": "hunt-restore-w1",
+      "transport": "completed but unharvested",
+      "reason": "platform_guard_interruption"
+    }
   },
   {
     "coverage_id": "crates%2Fdaemon%2Fsrc%2Finterface.rs%23SetGrubSettings%20and%20SetGrubDefault::crates%2Fdaemon%2Fsrc%2Fgrub_manager.rs%23flock%20atomic%20rename::crates%2Fdaemon%23grub-transaction::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Local%20file%20ownership%20and%20TOCTOU",
@@ -1946,14 +1951,38 @@
     "prior_status": "none",
     "attempts": [],
     "wave": 1,
-    "status": "deferred",
-    "agent_id": null,
-    "reviewed_paths": [],
-    "local_checks": [],
-    "result_fingerprints": [],
-    "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+    "status": "covered",
+    "agent_id": "hunt-grub-w1",
+    "reviewed_paths": [
+      "crates/daemon/src/failsafe.rs",
+      "crates/daemon/src/grub_manager.rs",
+      "crates/daemon/src/interface.rs"
     ],
+    "local_checks": [
+      {
+        "agent_id": "hunt-grub-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/interface.rs",
+          "crates/daemon/src/grub_manager.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-grub-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/failsafe.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
     "planned_assignment_group": "grub"
   },
   {
@@ -2079,13 +2108,56 @@
     "prior_status": "none",
     "attempts": [],
     "wave": 1,
-    "status": "deferred",
-    "agent_id": null,
-    "reviewed_paths": [],
-    "local_checks": [],
-    "result_fingerprints": [],
+    "status": "candidate",
+    "agent_id": "hunt-grub-w1",
+    "reviewed_paths": [
+      "crates/core/src/grub.rs",
+      "crates/core/src/security.rs",
+      "crates/daemon/src/grub_manager.rs",
+      "crates/daemon/src/grub_rebuild.rs",
+      "crates/daemon/src/interface.rs",
+      "crates/daemon/src/sanitize.rs"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "hunt-grub-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/interface.rs",
+          "crates/daemon/src/sanitize.rs",
+          "crates/core/src/security.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-grub-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/grub_manager.rs",
+          "crates/core/src/grub.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-grub-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/grub_rebuild.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [
+      "ref-c16f7f5fea1d277af8cb"
+    ],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: Phase3 candidate validation and Phase5 final-record verification not started; this remains an unvalidated proposal, not a finding"
     ],
     "planned_assignment_group": "grub"
   },
@@ -2293,7 +2365,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "signing"
   },
@@ -2423,7 +2495,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "backends"
   },
@@ -2550,14 +2622,53 @@
     "prior_status": "none",
     "attempts": [],
     "wave": 1,
-    "status": "deferred",
-    "agent_id": null,
-    "reviewed_paths": [],
-    "local_checks": [],
-    "result_fingerprints": [],
-    "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+    "status": "covered",
+    "agent_id": "hunt-auth-r1-w1",
+    "reviewed_paths": [
+      "crates/daemon/src/interface.rs",
+      "crates/daemon/src/main.rs",
+      "crates/daemon/src/policy_check.rs",
+      "crates/daemon/src/polkit.rs",
+      "packaging/dbus/org.bootcontrol.Manager.conf",
+      "packaging/polkit/org.bootcontrol.policy"
     ],
+    "local_checks": [
+      {
+        "agent_id": "hunt-auth-r1-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/interface.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-auth-r1-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/polkit.rs",
+          "crates/daemon/src/policy_check.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-auth-r1-w1",
+        "reviewed_paths": [
+          "packaging/polkit/org.bootcontrol.policy",
+          "packaging/dbus/org.bootcontrol.Manager.conf",
+          "crates/daemon/src/main.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
     "planned_assignment_group": "auth"
   },
   {
@@ -2739,14 +2850,41 @@
     "prior_status": "none",
     "attempts": [],
     "wave": 1,
-    "status": "deferred",
-    "agent_id": null,
-    "reviewed_paths": [],
-    "local_checks": [],
-    "result_fingerprints": [],
-    "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+    "status": "covered",
+    "agent_id": "hunt-auth-w1",
+    "reviewed_paths": [
+      "crates/daemon/src/interface.rs",
+      "crates/daemon/src/polkit.rs",
+      "crates/daemon/src/main.rs",
+      "packaging/dbus/org.bootcontrol.Manager.conf"
     ],
+    "local_checks": [
+      {
+        "agent_id": "hunt-auth-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/interface.rs",
+          "crates/daemon/src/polkit.rs",
+          "packaging/dbus/org.bootcontrol.Manager.conf"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-auth-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/main.rs",
+          "crates/daemon/src/polkit.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
     "planned_assignment_group": "auth"
   },
   {
@@ -2930,14 +3068,41 @@
     "prior_status": "none",
     "attempts": [],
     "wave": 1,
-    "status": "deferred",
-    "agent_id": null,
-    "reviewed_paths": [],
-    "local_checks": [],
-    "result_fingerprints": [],
-    "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+    "status": "covered",
+    "agent_id": "hunt-auth-w1",
+    "reviewed_paths": [
+      "crates/daemon/src/interface.rs",
+      "crates/daemon/src/grub_manager.rs",
+      "crates/daemon/src/secureboot/nvram.rs",
+      "docs/threat-model.md"
     ],
+    "local_checks": [
+      {
+        "agent_id": "hunt-auth-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/interface.rs",
+          "crates/daemon/src/grub_manager.rs",
+          "docs/threat-model.md"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-auth-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/secureboot/nvram.rs",
+          "crates/daemon/src/interface.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
     "planned_assignment_group": "auth"
   },
   {
@@ -3119,14 +3284,38 @@
     "prior_status": "none",
     "attempts": [],
     "wave": 1,
-    "status": "deferred",
-    "agent_id": null,
-    "reviewed_paths": [],
-    "local_checks": [],
-    "result_fingerprints": [],
-    "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+    "status": "covered",
+    "agent_id": "hunt-auth-w1",
+    "reviewed_paths": [
+      "crates/daemon/src/interface.rs",
+      "crates/daemon/src/polkit.rs",
+      "packaging/polkit/org.bootcontrol.policy"
     ],
+    "local_checks": [
+      {
+        "agent_id": "hunt-auth-w1",
+        "reviewed_paths": [
+          "crates/daemon/src/interface.rs",
+          "crates/daemon/src/polkit.rs"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      },
+      {
+        "agent_id": "hunt-auth-w1",
+        "reviewed_paths": [
+          "packaging/polkit/org.bootcontrol.policy"
+        ],
+        "invariant": "Pre-interruption source-only check; detailed content retained privately.",
+        "method": "source",
+        "result": "Status metadata only; no independent candidate decision or security conclusion is published.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
     "planned_assignment_group": "auth"
   },
   {
@@ -3249,9 +3438,14 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
-    "planned_assignment_group": "restore"
+    "planned_assignment_group": "restore",
+    "interrupted_assignment": {
+      "agent_id": "hunt-restore-w1",
+      "transport": "completed but unharvested",
+      "reason": "platform_guard_interruption"
+    }
   },
   {
     "coverage_id": "crates%2Fgui%2Fsrc%2Fconfirmation.rs%23pending%20mutation::crates%2Fclient%2Fsrc%2Flib.rs%23versioned%20action%20binding::crates%2Fgui%23confirmation::DESKTOP-MOBILE-AND-LOCAL-IPC.md%23Pending-action%20and%20user-presence%20confusion",
@@ -3381,7 +3575,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "frontends"
   },
@@ -3624,7 +3818,7 @@
     "local_checks": [],
     "result_fingerprints": [],
     "unresolved": [
-      "external_model_endpoint_consent_pending: fourth baseline recon and all hunters/critics/verifiers have not run"
+      "platform_guard_interruption: no accepted unit result; no retry, rephrasing or rerouting attempted"
     ],
     "planned_assignment_group": "release"
   }

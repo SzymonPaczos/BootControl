@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-06",
+  "project": "BootControl",
+  "source_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+  "status": "PARTIAL; A2 remains OPEN",
+  "native_notification_mode": "Explicit delegated subscriber polls durable outbox and forwards per-result to actual ROOT. No native background API, daemon/autostart or arbitrary chat push.",
+  "native_task_id": null,
+  "provider_sessions": [
+    {
+      "node_id": "FAST",
+      "runtime_run_id": "5e33495d4a884987b00a6c014300a618",
+      "handle_kind": "claude_cli_session",
+      "provider_session_id_sha256": "c235854e3f77b298e2033eb5c9241094e9ae15f3be7349d22e2324f1244868af",
+      "native_task_id": null,
+      "reviewed_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+      "runtime_state": "complete",
+      "attempts": 1,
+      "actual_tools": [
+        "Glob",
+        "Grep",
+        "Read"
+      ],
+      "native_init_observed_at": 1793959707.661238,
+      "native_terminal_observed_at": 1793959714.739999,
+      "native_result_subtype": "success",
+      "adapter_exit_code": 0,
+      "accepted_verdict": "PASS",
+      "adapter_block_reason": null,
+      "cli_reported_cost_usd": 0.15902524999999998,
+      "native_handle_receipt_sha256": "7ade056854c1fb1efc39fee3736fc157a7916e3c61a3c2a44a268f52db0ff78a",
+      "master_review_receipt_sha256": "a193c6ea9e1435b5abf934cc2a2922deacc2a08aa01c45b0892f7f2c6e8c8c88",
+      "raw_trace_sha256": "0302a3ebc754d5b1d5d8c143f0c981cbe9b873facca13766d3dc9dd4a245828b"
+    },
+    {
+      "node_id": "REFILL",
+      "runtime_run_id": "591bd8f8863248778bc9e5ba5ee204cf",
+      "handle_kind": "claude_cli_session",
+      "provider_session_id_sha256": "225bf849cdd9c618fa43e3e74b04a75bd9a35a4de3b4bcedac5d2bfa9488846a",
+      "native_task_id": null,
+      "reviewed_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+      "runtime_state": "complete",
+      "attempts": 1,
+      "actual_tools": [
+        "Glob",
+        "Grep",
+        "Read"
+      ],
+      "native_init_observed_at": 1793959719.4088519,
+      "native_terminal_observed_at": 1793959730.2229161,
+      "native_result_subtype": "success",
+      "adapter_exit_code": 0,
+      "accepted_verdict": "PASS",
+      "adapter_block_reason": null,
+      "cli_reported_cost_usd": 0.07940149999999999,
+      "native_handle_receipt_sha256": "cd461d4a05b5bfd49a4e3c7c7d601136f76c777f841c06510c07f0dc308f85be",
+      "master_review_receipt_sha256": "45bbf3db6d38d04cd591043deea2ec5f0244f9adb35c3294d4c449bb6e4fbb50",
+      "raw_trace_sha256": "9db42b619ccfc6fb1c36b6d358c42ec2c34534b92de27a06dda085143faf9eed"
+    },
+    {
+      "node_id": "SLOW",
+      "runtime_run_id": "2db18bb4930740d688cf4bd79efc708e",
+      "handle_kind": "claude_cli_session",
+      "provider_session_id_sha256": "c0debcac1b2fd4d1a9572c6683936c6e3961d1c130f2d0e188fdcde04e50dfb5",
+      "native_task_id": null,
+      "reviewed_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+      "runtime_state": "blocked",
+      "attempts": 1,
+      "actual_tools": [
+        "Glob",
+        "Grep",
+        "Read"
+      ],
+      "native_init_observed_at": 1793959707.597845,
+      "native_terminal_observed_at": 1793959782.650269,
+      "native_result_subtype": "success",
+      "adapter_exit_code": 2,
+      "accepted_verdict": "BLOCKED",
+      "adapter_block_reason": "Expecting value: line 1 column 1 (char 0)",
+      "cli_reported_cost_usd": 1.9552012499999998,
+      "native_handle_receipt_sha256": "21940f2020bdb0e7a530871b7af106efcb517d3f8c1fa6858c093369b54a3f0c",
+      "master_review_receipt_sha256": "2323905cbb989400e9c17bb1b8052fead876c7a034abe3fc1700f254fc0a8e78",
+      "raw_trace_sha256": "981018e95371a85c85ed9b81c4aea920f579ad463344f3f2d58a8471c6290594"
+    }
+  ],
+  "events": [
+    {
+      "sequence": 1,
+      "node_id": "FAST",
+      "run_id": "5e33495d4a884987b00a6c014300a618",
+      "created_at": 1793959715.463552
+    },
+    {
+      "sequence": 2,
+      "node_id": "REFILL",
+      "run_id": "591bd8f8863248778bc9e5ba5ee204cf",
+      "created_at": 1793959730.714709
+    },
+    {
+      "sequence": 3,
+      "node_id": "SLOW",
+      "run_id": "2db18bb4930740d688cf4bd79efc708e",
+      "created_at": 1793959783.07726
+    }
+  ],
+  "root_receipt": {
+    "consumer": "root",
+    "ack_cursor": 3,
+    "delivered_cursor": 3,
+    "all_three_events_received": true,
+    "first_root_received_at": 1793959772.8052568,
+    "root_received_fast_while_slow_nonterminal": true,
+    "fast_event_to_root_persistence_seconds": 57.342,
+    "backend_watch_poll_seconds": 1,
+    "no_one_second_end_to_end_chat_sla_claimed": true,
+    "first_root_receipt_sha256": "b7e27699f0e86d6e43d6be600a7dfcf3a4e31b94a1700e49bda045975c346db5",
+    "remaining_root_receipt_sha256": "68aeea17dee4638d77c18edf7fad154350ac6be8754581b2e576ebe62d2194b3"
+  },
+  "refill": {
+    "real_refill_session_started_while_slow_native_active": true,
+    "fast_finished_before_refill_start": true,
+    "no_synthetic_delay_or_simulated_cli": true
+  },
+  "restart": {
+    "scenario": "live owned controller SIGKILL then resume, same slow run/session",
+    "all_nodes_single_attempt": true,
+    "native_session_count": 3,
+    "new_sessions_after_resume": 0,
+    "original_slow_block_preserved": true
+  },
+  "model_report_is_not_acceptance": {
+    "blocked_native_zero_exit_report": true,
+    "case": "Native Fable success/exit0 and 8 required files read, but final text was not JSON; master returned BLOCKED, no silent repair/retry."
+  },
+  "git_lifecycle_fixture": {
+    "status": "BLOCKED",
+    "reason": "Original trusted runtime requires ps; cached image has no ps executable. A worker wrapper may have launched, but process-identity initialization blocks before the accepted task command. No Builder commit, merge or cleanup proof accepted.",
+    "runtime_sha256": "5a4e4903481a456042d608bf71b08319d73a0c15e23e815059498223fa5cd53f",
+    "raw_log_sha256": "5bfb8c9041701d5883190795affce4b9eb3f0ecae7826f6a2876876e23e67fe8",
+    "docker_receipt_sha256": "781510062ce2738d8145a6124794606f2416461b0cb84aa15f6a1fdc0825f3a9",
+    "image_id": "sha256:7f1b0a1a50cfbac23da3b16f96bc968fd757b26dc9e54e93813d61768ea9184e",
+    "network": "none",
+    "read_only_root": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "no_new_privileges": [
+      "no-new-privileges"
+    ],
+    "container_removed": true,
+    "resource_controls": "2 CPU; 2GiB RAM without extra swap; UID65534; PID64; 512MiB tmpfs; file8MiB; CPU180s; wall180s",
+    "source_is_ancestor_checked": true,
+    "fixture_baseline_sha": "bd28f2d0ce55b5a869c097e60429a41bf4240e63",
+    "fixture_only_oversized_omissions": [],
+    "hook_registration": "baseline unset/default empty",
+    "worker_kind": "deterministic operational fixture, not provider CLI",
+    "no_fake_ps_no_new_tools_or_images": true,
+    "worker_wrapper_may_have_started": true,
+    "accepted_task_command_executed": false
+  },
+  "portable_candidate": {
+    "implementation": "scripts/toolkit-on-demand.py (proposed, not copied into project yet)",
+    "profile": ".claude/runtime/a2-readonly.json (proposed)",
+    "convention": ".claude/conventions/toolkit-on-demand.md (proposed)",
+    "private_candidate_sha256": "fca2f0deee704e54676bc199edd49be45edf40b8b6b1cb5c06f6594034e44bb3",
+    "configuration": "explicit toolkit/project/state/source/model/consent/task parameters; pinned source helper hashes and validated CLI version; no hardcoded home paths",
+    "validation": "Python syntax + both metadata-only prepare/validate runs + six metadata guard checks; no additional model calls",
+    "actual_provider_calls_through_final_portable_refactor": false
+  },
+  "remaining_acceptance": [
+    "Review and integrate the small portable manual adapter/profile/documentation; preserve inactive-by-default project policy.",
+    "Verify final portable candidate on supported Linux execution environment; no copied-template closure.",
+    "Provide ps in a preapproved sandbox/toolchain or explicitly review another real process-identity backend; no silent ps shim/limit relaxation.",
+    "Run actual deterministic merge/cleanup/timeout/stale-SHA fixtures and retain exact source/pin receipts.",
+    "Keep native session handles distinct from native background task IDs; actual subscriber/main receipt required.",
+    "Full application build/security gates remain separate and unverified by this operational proof.",
+    "Per-project denial of out-of-snapshot read/write was not newly exercised in this run; observed init tool limits and path-checked reads are narrower evidence than an independent negative permission probe."
+  ],
+  "provenance": {
+    "trusted_runtime_sha256": "5a4e4903481a456042d608bf71b08319d73a0c15e23e815059498223fa5cd53f",
+    "trusted_readonly_adapter_sha256": "e73b49b2b350a2d88f8bf27dc30b68f22778d2ed402a9555d1ee67ad80b32c5e",
+    "bridge_sha256": "c8aac797f55a747ac4d27b87a639f6438f7faedb8242dc4f9eed8e9d5510e51b",
+    "policy_sha256": "94d25fa7935f0a93d61581f0fb7d3bfff74b21988e4a1fbe50b9680cd5c62d4d"
+  },
+  "privacy": "Only sanitized outcomes/hashes; no raw prompts/transcripts, credentials, email addresses, host paths or source snippets included.",
+  "all_required_A2_acceptance_satisfied": false,
+  "project_integration_installed": false,
+  "project_or_toolkit_source_modified": false
+}
